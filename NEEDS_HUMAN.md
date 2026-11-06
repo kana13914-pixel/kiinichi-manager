@@ -17,6 +17,8 @@ Claude Codeが自力で完了できない作業をここに追記する。追記
 ```
 | H-00X | YYYY-MM-DD | 何を・なぜ依頼するか（具体的な操作名まで） | roadmap.mdのどのタスクか | 未対応 / 完了 |
 | H-008 | 2026-11-06 | Cloudflareアカウント（無料）を作成してほしい。Web Pushの送信サーバー（Workers）を置くため。有料プラン（Workers Paid）には申し込まないこと。作成後、デプロイ方法（ダッシュボードに貼り付けるか、PCでwranglerを使うか）を相談したい | フェーズ0 Web Push検証 | 完了（2026-11-06）。デプロイはダッシュボードへの貼り付けで行う |
+| H-009 | 2026-11-06 | `docs/cloudflare_setup.md` の手順0〜6でWorkerを設定する（合言葉の作成、Worker作成、`worker/worker.js` の貼り付け、KVバインディング `PUSH_KV`、シークレット `APP_TOKEN`、Cron `* * * * *`）。手順6の3つのURLの表示結果と、WorkerのURL（`…workers.dev`）を教えてほしい。合言葉はチャットに書かない | フェーズ0 Web Push検証 | 未対応 |
+| H-010 | 2026-11-06 | GitHubのリポジトリ otamesi1.01 で `otamesi-upload/otamesi-upload/` フォルダを開き、新しいzipを展開した中身（`app`・`docs`・`tests`・`worker` フォルダなど）を「Upload files」でドラッグ＆ドロップして上書きコミットする。数分後、`…/app/index.html` に「Web Push」の欄が出ればOK | フェーズ0 Web Push検証 | 未対応 |
 ```
 
 ## よくある依頼パターン（参考）

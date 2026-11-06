@@ -61,5 +61,6 @@
 - `docs/spec.md` — 機能・会話設計の仕様
 - `docs/decisions.md` — 決定事項と理由の記録
 - `docs/roadmap.md` — フェーズ別タスクと完了条件
+- `docs/cloudflare_setup.md` — Web Push送信サーバー（Cloudflare Workers）の設定手順
 - `data/dialogue_template.yaml` — セリフ集テンプレート
 - `NEEDS_HUMAN.md` — 人間への依頼キュー
