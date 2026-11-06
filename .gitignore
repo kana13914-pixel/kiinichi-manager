@@ -1,0 +1,6 @@
+# 認証情報・トピック名（ntfyのトピック名はパスワード相当）
+.env
+*.env
+!.env.example
+__pycache__/
+test-results/
