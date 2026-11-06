@@ -30,7 +30,6 @@ class PwaTest(unittest.TestCase):
         cls.pw = sync_playwright().start()
         cls.browser = cls.pw.chromium.launch(
             executable_path="/usr/bin/google-chrome",
-            args=["--autoplay-policy=no-user-gesture-required", "--use-fake-device-for-media-stream"],
         )
 
     @classmethod
@@ -68,6 +67,14 @@ class PwaTest(unittest.TestCase):
         page = self.new_page()
         page.goto(self.base + "index.html?source=ntfy")
         self.assertEqual(page.text_content("#source"), "通知（ntfy）のタップ")
+
+    def test_one_tap_plays_audio_after_opening_from_notification(self):
+        page = self.new_page()
+        page.goto(self.base + "index.html?source=ntfy")
+        self.assertEqual(page.text_content("#audio-status"), "未再生")
+        page.click("#play-voice")  # ボタン1回
+        page.wait_for_selector("#audio-status.ok", timeout=5_000)
+        page.wait_for_function("document.getElementById('audio-status').textContent === '再生完了'", timeout=5_000)
 
 
 if __name__ == "__main__":
