@@ -15,7 +15,7 @@
     - **ブラウザ（PC不要）**：公開したPWAと同じ場所の `…/app/send.html` を開き、トピック名を入れて「通知を送る」
     - **PCのスクリプト**：`python3 scripts/ntfy_send.py init` で `.env` を作り、`APP_URL` を書いてから `send`（Pythonが必要）
   - 実機確認手順（H-001〜H-003 完了後）：
-    1. 公開URL `https://kana13914-pixel.github.io/otamesi1.0/app/index.html` がPCのブラウザで開けることを確認する
+    1. 公開URL `https://kana13914-pixel.github.io/otamesi1.01/otamesi-upload/otamesi-upload/app/index.html` がPCのブラウザで開けることを確認する
     2. iPhoneのSafariで `APP_URL` を開く → 共有ボタン →「ホーム画面に追加」
     3. ホーム画面のアイコンから起動 → 「表示モード：ホーム画面アプリ（standalone）」「開いた経路：ホーム画面のアイコン」「Service Worker：登録済み」と出ること
     4. iPhoneのntfyアプリで「+」→ `.env` の `NTFY_TOPIC` を購読し、通知を許可する
