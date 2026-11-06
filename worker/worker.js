@@ -13,6 +13,8 @@ const DEFAULT_ORIGIN = 'https://kana13914-pixel.github.io';
 const VAPID_SUBJECT = 'https://kana13914-pixel.github.io/';
 const MAX_DELAY_SEC = 3 * 24 * 3600; // 予約は3日先まで
 const MAX_QUEUE = 50;
+// Cronは毎分。予定時刻の30秒前から送ることで、ずれを概ね±30秒に収める（完了条件は±60秒）
+const EARLY_MS = 30 * 1000;
 
 // ---------- 小道具 ----------
 const enc = new TextEncoder();
@@ -121,9 +123,9 @@ async function sendPush(env, message) {
 async function runDue(env, now = Date.now()) {
   const queue = (await env.PUSH_KV.get('queue', 'json')) || [];
   if (!queue.length) return { sent: 0, left: 0 };
-  const due = queue.filter((q) => q.at <= now);
+  const due = queue.filter((q) => q.at - EARLY_MS <= now);
   if (!due.length) return { sent: 0, left: queue.length };
-  const left = queue.filter((q) => q.at > now);
+  const left = queue.filter((q) => q.at - EARLY_MS > now);
   await env.PUSH_KV.put('queue', JSON.stringify(left)); // 先に消して二重送信を防ぐ
   let sent = 0;
   for (const item of due) {

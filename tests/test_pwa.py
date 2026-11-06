@@ -112,6 +112,60 @@ class PwaTest(unittest.TestCase):
         page.reload()
         self.assertEqual(page.input_value("#topic"), t1)
 
+    def test_send_page_web_push_calls_worker_with_token(self):
+        page = self.new_page()
+        calls = []
+
+        def fake_worker(route):
+            calls.append(route.request)
+            if route.request.method == "OPTIONS":
+                route.fulfill(status=204, headers={"Access-Control-Allow-Origin": "*",
+                                                   "Access-Control-Allow-Headers": "Authorization, Content-Type",
+                                                   "Access-Control-Allow-Methods": "GET, POST, OPTIONS"})
+                return
+            route.fulfill(status=200, content_type="application/json",
+                          headers={"Access-Control-Allow-Origin": "*"},
+                          body='{"ok":true,"scheduled":true,"at":1800000000000}')
+
+        page.route("https://kiinichi.example.workers.dev/**", fake_worker)
+        page.goto(self.base + "send.html")
+        page.click("#wp-send")
+        self.assertIn("URL", page.text_content("#wp-status"))  # 未設定ならURL入力を促す
+        page.fill("#wp-worker-url", "https://kiinichi.example.workers.dev/")
+        page.dispatch_event("#wp-worker-url", "change")
+        page.fill("#wp-token", "tok-123")
+        page.dispatch_event("#wp-token", "change")
+        page.select_option("#delay", "5")
+        page.click("#wp-send")
+        page.wait_for_selector("#wp-status.ok", timeout=5_000)
+        self.assertIn("予約しました", page.text_content("#wp-status"))
+        post = [c for c in calls if c.method == "POST"][0]
+        self.assertEqual(post.url, "https://kiinichi.example.workers.dev/api/send")
+        self.assertEqual(post.headers["authorization"], "Bearer tok-123")
+        body = json.loads(post.post_data)
+        self.assertEqual(body["delaySeconds"], 300)
+        self.assertTrue(body["url"].endswith("/index.html?source=webpush"))
+        page.reload()  # 設定は端末に保存される
+        self.assertEqual(page.input_value("#wp-worker-url"), "https://kiinichi.example.workers.dev/")
+
+    def test_index_enable_push_outside_home_screen_explains_why(self):
+        page = self.new_page()
+        page.goto(self.base + "index.html")
+        page.wait_for_selector("#sw-status.ok", timeout=10_000)
+        page.fill("#worker-url", "https://kiinichi.example.workers.dev")
+        page.dispatch_event("#worker-url", "change")
+        page.route("https://kiinichi.example.workers.dev/**", lambda r: r.fulfill(
+            status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"},
+            body='{"publicKey":"BAAA"}'))
+        page.click("#enable-push")
+        page.wait_for_selector("#push-status.ng", timeout=10_000)
+        self.assertIn("失敗", page.text_content("#push-status"))
+
+    def test_webpush_source_is_detected(self):
+        page = self.new_page()
+        page.goto(self.base + "index.html?source=webpush")
+        self.assertEqual(page.text_content("#source"), "通知（Web Push）のタップ")
+
 
 if __name__ == "__main__":
     unittest.main()

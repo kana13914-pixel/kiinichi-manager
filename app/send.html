@@ -42,6 +42,21 @@
     </dl>
   </section>
 
+  <section class="card">
+    <h2>Web Push で送る（ホーム画面のアプリで開く）</h2>
+    <small>ホーム画面のアプリで「通知を有効にする」を済ませてから使います。配信タイミングは上の選択を使います。</small>
+    <label for="wp-worker-url">送信サーバーのURL</label>
+    <input id="wp-worker-url" placeholder="https://…workers.dev" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <label for="wp-token">合言葉（APP_TOKEN）</label>
+    <input id="wp-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button id="wp-send" type="button">Web Pushで送る</button>
+    <button id="wp-status-btn" type="button" style="background:#cfcfcf">送信サーバーの状態を見る</button>
+    <dl style="margin-top:8px">
+      <dt>結果</dt><dd id="wp-status">未送信</dd>
+    </dl>
+  </section>
+
+  <script src="settings.js"></script>
   <script src="send.js"></script>
 </body>
 </html>

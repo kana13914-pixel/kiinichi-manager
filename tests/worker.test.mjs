@@ -120,15 +120,15 @@ test('購読→即時送信：暗号化された本文をブラウザ側の鍵�
   await verifyVapid(init.headers.Authorization, url, vapid.publicKey);
 });
 
-test('予約送信：時刻前は送らず、時刻を過ぎたCron実行で1回だけ送る', async () => {
+test('予約送信：予定の30秒前より前は送らず、以降のCron実行で1回だけ送る', async () => {
   const { env, pushes } = setup();
   const browser = await makeBrowser();
   await worker.fetch(req('/api/subscribe', { method: 'POST', token: env.APP_TOKEN, body: browser.subscription }), env);
   const r = await (await worker.fetch(req('/api/send', { method: 'POST', token: env.APP_TOKEN, body: { delaySeconds: 300 } }), env)).json();
   assert.equal(r.scheduled, true);
   assert.equal(pushes.length, 0);
-  assert.deepEqual(await _internal.runDue(env, r.at - 1000), { sent: 0, left: 1 });
-  assert.deepEqual(await _internal.runDue(env, r.at + 1000), { sent: 1, left: 0 });
+  assert.deepEqual(await _internal.runDue(env, r.at - 31000), { sent: 0, left: 1 }); // 31秒前はまだ
+  assert.deepEqual(await _internal.runDue(env, r.at - 29000), { sent: 1, left: 0 }); // 30秒前以降は送る
   assert.deepEqual(await _internal.runDue(env, r.at + 61000), { sent: 0, left: 0 }); // 二重送信しない
   assert.equal(pushes.length, 1);
   const msg = await decrypt(browser, pushes[0].init.body);
