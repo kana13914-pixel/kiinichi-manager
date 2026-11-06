@@ -76,6 +76,42 @@ class PwaTest(unittest.TestCase):
         page.wait_for_selector("#audio-status.ok", timeout=5_000)
         page.wait_for_function("document.getElementById('audio-status').textContent === '再生完了'", timeout=5_000)
 
+    def test_send_page_posts_scheduled_notification_to_ntfy(self):
+        page = self.new_page()
+        sent = []
+
+        def fake_ntfy(route):
+            sent.append(route.request)
+            route.fulfill(status=200, content_type="application/json",
+                          headers={"Access-Control-Allow-Origin": "*"},
+                          body='{"id":"fake","time":1800000000}')
+
+        page.route("https://ntfy.sh/", fake_ntfy)
+        page.goto(self.base + "send.html")
+        self.assertTrue(page.input_value("#click").endswith("/index.html?source=ntfy"))
+        page.click("#send")  # トピック未入力
+        self.assertIn("トピック名を入力", page.text_content("#send-status"))
+        page.fill("#topic", "test-topic")
+        page.select_option("#delay", "5")
+        page.click("#send")
+        page.wait_for_selector("#send-status.ok", timeout=5_000)
+        self.assertEqual(len(sent), 1)
+        body = json.loads(sent[0].post_data)
+        self.assertEqual(body["topic"], "test-topic")
+        self.assertTrue(body["delay"].isdigit())
+        self.assertIn("予定", body["message"])
+        # application/json を付けるとCORSの事前確認が必要になるため、付けていないことを確認
+        self.assertNotIn("json", sent[0].headers.get("content-type", ""))
+
+    def test_generated_topic_is_random_and_remembered(self):
+        page = self.new_page()
+        page.goto(self.base + "send.html")
+        page.click("#gen-topic")
+        t1 = page.input_value("#topic")
+        self.assertRegex(t1, r"^kiinichi-[0-9a-f]{24}$")
+        page.reload()
+        self.assertEqual(page.input_value("#topic"), t1)
+
 
 if __name__ == "__main__":
     unittest.main()

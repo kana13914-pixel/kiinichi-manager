@@ -1,6 +1,6 @@
 // フェーズ0用の最小Service Worker。オフラインでも画面が開けるよう、静的ファイルをキャッシュする。
 // ファイルを更新したら CACHE_VERSION を上げること（古いキャッシュが残るのを防ぐ）。
-const CACHE_VERSION = 'phase0-v2';
+const CACHE_VERSION = 'phase0-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,8 @@ const ASSETS = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './audio/test-chime.wav',
+  './send.html',
+  './send.js',
 ];
 
 self.addEventListener('install', (event) => {

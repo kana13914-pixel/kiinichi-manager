@@ -11,12 +11,15 @@
   - 人間作業が必要：実機での通知許可操作、サービスのアカウント作成（`NEEDS_HUMAN.md`参照）
   - 実装済み（Claude）：`app/`（最小PWA：manifest、Service Worker、起動状態の表示）、`scripts/ntfy_send.py`（通知送信）。通知サービスはntfyに仮決定（D-008）
   - 自動テスト：`python3 -m unittest discover -s tests -v` → PWAの読み込み・Service Worker登録・通知経由の判定、送信内容（偽サーバー宛て）がすべて OK
+  - 送信手段は2つ。どちらでもよい
+    - **ブラウザ（PC不要）**：公開したPWAと同じ場所の `…/app/send.html` を開き、トピック名を入れて「通知を送る」
+    - **PCのスクリプト**：`python3 scripts/ntfy_send.py init` で `.env` を作り、`APP_URL` を書いてから `send`（Pythonが必要）
   - 実機確認手順（H-001〜H-003 完了後）：
-    1. PCで `python3 scripts/ntfy_send.py init` を実行し `.env` を作る。`.env` の `APP_URL` に公開したPWAのURL（`…/app/index.html`）を書く
+    1. 公開URL `https://kana13914-pixel.github.io/otamesi1.0/app/index.html` がPCのブラウザで開けることを確認する
     2. iPhoneのSafariで `APP_URL` を開く → 共有ボタン →「ホーム画面に追加」
     3. ホーム画面のアイコンから起動 → 「表示モード：ホーム画面アプリ（standalone）」「開いた経路：ホーム画面のアイコン」「Service Worker：登録済み」と出ること
     4. iPhoneのntfyアプリで「+」→ `.env` の `NTFY_TOPIC` を購読し、通知を許可する
-    5. PCで `python3 scripts/ntfy_send.py send` → 期待結果：数秒以内にiPhoneに「キィニチくん（検証）」の通知が届く
+    5. `…/app/send.html` を開き、トピック名を入れ、配信タイミング「今すぐ」で「通知を送る」（PCのスクリプトなら `python3 scripts/ntfy_send.py send`）→ 期待結果：数秒以内にiPhoneに「キィニチくん（検証）」の通知が届く
     6. 通知をタップ → **どこで開くかを記録する**（ntfyアプリ内／Safari／ホーム画面のPWA）。画面に「開いた経路：通知（ntfy）のタップ」と表示されるか、表示モードが standalone かブラウザ内かも記録する
   - 注意：通知が届く先はntfyアプリであり、PWAそのものではない。iOSではURLを開くとSafariで開く可能性が高く、その場合「ホーム画面のPWAで会話を再生する」流れが成立しない。結果は手順6で確認し、`docs/decisions.md` に記録する（判断待ち：NEEDS_HUMAN H-004）
 - [ ] 通知をタップして開いた後、ボタン操作1回で音声が再生されるか確認する
@@ -34,11 +37,11 @@
   - 実装済み（Claude）：`ntfy_send.py send --at 21:30`（時刻指定）／`--in 5m`（何分後）。予約はntfyサーバーが保持して配信するため、PWA・送信元PCとも閉じてよい。本文末尾に「（予定 HH:MM:SS）」を入れ、届いた時刻と比べられるようにした
   - 自動テスト：時刻指定・翌日への繰り越し・何分後指定・不明な書式の素通し・同時指定の拒否を偽サーバーで確認済み（12件 OK）。実サーバーへの送信はこの作業環境から外部通信できないため未実施
   - 実機確認手順：
-    1. PCで `python3 scripts/ntfy_send.py send --in 5m` を実行（表示された「配信予定」を控える）
+    1. `…/app/send.html` で配信タイミング「5分後」を選んで送る（またはPCで `python3 scripts/ntfy_send.py send --in 5m`）。表示された「配信予定」を控える
     2. iPhoneでPWAとntfyアプリをどちらも上スワイプで完全に終了し、画面をロックする
-    3. 送信元PCはスリープしても閉じてもよい
+    3. 送信に使ったブラウザ（Safariを含む）やPCも閉じてよい
     4. 期待結果：本文の「予定 HH:MM:SS」から±60秒以内に通知が届く。ロック画面の通知時刻と比べる
-    5. 時刻指定も確認：`python3 scripts/ntfy_send.py send --at 23:00`（数分先の時刻で）で同様に届くこと
+    5. 「10分後」でも同様に届くこと（PCのスクリプトなら `--at 23:00` のような時刻指定も確認できる）
     6. 結果（遅延秒数、届かなかった場合はその状況）を `docs/decisions.md` に記録する
 
 3点とも成立しない場合、`docs/decisions.md` に結果を記録したうえで作業を止め、`NEEDS_HUMAN.md` に方針転換の判断を依頼する（候補：通知をPushover/ntfyに完全依存する形に割り切る、またはSwiftでのネイティブ化を検討する）。
