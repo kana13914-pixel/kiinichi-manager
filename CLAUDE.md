@@ -12,7 +12,7 @@
 | --- | --- |
 | アプリ形式 | PWA（ホーム画面に追加して起動。App Store配信はしない） |
 | 画面 | HTML / CSS / JavaScript |
-| 通知 | Pushover または ntfy（どちらかは `docs/decisions.md` で選定） |
+| 通知 | PWAのWeb Push（主。送信はCloudflare Workers、予約はCron Trigger）＋ ntfy（予備）。経緯は `docs/decisions.md` D-008〜D-010 |
 | ローカル保存 | localStorage / IndexedDB（主）＋ GAS経由でGoogleスプレッドシートに同期（従） |
 | データ処理 | Google Apps Script（GAS） |
 | 予定管理 | Googleカレンダー連携（GASから読み書き） |
