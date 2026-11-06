@@ -9,6 +9,16 @@
 - [ ] 最小のPWAを作成し、ホーム画面に追加した状態で通知が届くか確認する
   - 完了条件：Pushover/ntfy経由で送った通知が、ホーム画面に追加したPWAに届く
   - 人間作業が必要：実機での通知許可操作、サービスのアカウント作成（`NEEDS_HUMAN.md`参照）
+  - 実装済み（Claude）：`app/`（最小PWA：manifest、Service Worker、起動状態の表示）、`scripts/ntfy_send.py`（通知送信）。通知サービスはntfyに仮決定（D-008）
+  - 自動テスト：`python3 -m unittest discover -s tests -v` → PWAの読み込み・Service Worker登録・通知経由の判定、送信内容（偽サーバー宛て）がすべて OK
+  - 実機確認手順（H-001〜H-003 完了後）：
+    1. PCで `python3 scripts/ntfy_send.py init` を実行し `.env` を作る。`.env` の `APP_URL` に公開したPWAのURL（`…/app/index.html`）を書く
+    2. iPhoneのSafariで `APP_URL` を開く → 共有ボタン →「ホーム画面に追加」
+    3. ホーム画面のアイコンから起動 → 「表示モード：ホーム画面アプリ（standalone）」「開いた経路：ホーム画面のアイコン」「Service Worker：登録済み」と出ること
+    4. iPhoneのntfyアプリで「+」→ `.env` の `NTFY_TOPIC` を購読し、通知を許可する
+    5. PCで `python3 scripts/ntfy_send.py send` → 期待結果：数秒以内にiPhoneに「キィニチくん（検証）」の通知が届く
+    6. 通知をタップ → **どこで開くかを記録する**（ntfyアプリ内／Safari／ホーム画面のPWA）。画面に「開いた経路：通知（ntfy）のタップ」と表示されるか、表示モードが standalone かブラウザ内かも記録する
+  - 注意：通知が届く先はntfyアプリであり、PWAそのものではない。iOSではURLを開くとSafariで開く可能性が高く、その場合「ホーム画面のPWAで会話を再生する」流れが成立しない。結果は手順6で確認し、`docs/decisions.md` に記録する（判断待ち：NEEDS_HUMAN H-004）
 - [ ] 通知をタップして開いた後、ボタン操作1回で音声が再生されるか確認する
   - 完了条件：タップ→画面表示→ボタン1回で音声ファイルが再生される
 - [ ] 画面を閉じた状態で、指定時刻に通知が届くか確認する
