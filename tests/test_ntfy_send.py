@@ -61,6 +61,34 @@ class NtfySendTest(unittest.TestCase):
         ntfy_send.send(env, ntfy_send.build_payload(env, "t", "m"))
         self.assertEqual(FakeNtfy.received[0]["headers"]["Authorization"], "Bearer tk_dummy")
 
+    def test_schedule_at_clock_time_is_sent_as_server_side_delay(self):
+        now = datetime(2026, 11, 6, 20, 0, 0)
+        payload = ntfy_send.build_payload(self.env, "t", "m", at="21:30", now=now)
+        ntfy_send.send(self.env, payload)
+        body = FakeNtfy.received[0]["body"]
+        self.assertEqual(int(body["delay"]), int(datetime(2026, 11, 6, 21, 30).timestamp()))
+        self.assertEqual(body["message"], "m（予定 21:30:00）")
+
+    def test_schedule_at_past_time_rolls_to_next_day(self):
+        now = datetime(2026, 11, 6, 22, 0, 0)
+        payload = ntfy_send.build_payload(self.env, "t", "m", at="21:30", now=now)
+        self.assertEqual(int(payload["delay"]), int(datetime(2026, 11, 7, 21, 30).timestamp()))
+
+    def test_schedule_in_duration(self):
+        now = datetime(2026, 11, 6, 20, 0, 0)
+        payload = ntfy_send.build_payload(self.env, "t", "m", in_="5m", now=now)
+        self.assertEqual(int(payload["delay"]), int(datetime(2026, 11, 6, 20, 5).timestamp()))
+        self.assertIn("予定 20:05:00", payload["message"])
+
+    def test_unknown_delay_format_is_passed_through(self):
+        payload = ntfy_send.build_payload(self.env, "t", "m", at="tomorrow 3pm")
+        self.assertEqual(payload["delay"], "tomorrow 3pm")
+        self.assertEqual(payload["message"], "m")
+
+    def test_at_and_in_together_is_rejected(self):
+        with self.assertRaises(SystemExit):
+            ntfy_send.build_payload(self.env, "t", "m", at="21:30", in_="5m")
+
     def test_missing_topic_stops(self):
         with self.assertRaises(SystemExit):
             ntfy_send.build_payload({}, "t", "m")

@@ -74,6 +74,23 @@ def resolve_at(value, now=None):
     return str(int(target.timestamp()))
 
 
+def resolve_in(value, now=None):
+    """'30s' '5m' '2h' '1d' を Unix 時刻に変換する。解釈できなければそのまま返す（ntfy 側に任せる）。"""
+    now = now or datetime.now()
+    units = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+    v = value.strip().lower()
+    if len(v) >= 2 and v[-1] in units and v[:-1].isdigit():
+        return str(int((now + timedelta(seconds=int(v[:-1]) * units[v[-1]])).timestamp()))
+    return value
+
+
+def scheduled_label(delay):
+    """delay が Unix 時刻なら '21:30:00' のような表示用文字列を返す。"""
+    if delay and delay.isdigit():
+        return datetime.fromtimestamp(int(delay)).strftime("%H:%M:%S")
+    return None
+
+
 def build_payload(env, title, message, at=None, in_=None, click=None, now=None):
     if not env.get("NTFY_TOPIC"):
         raise SystemExit("NTFY_TOPIC が未設定です。先に `init` を実行するか .env を確認してください。")
@@ -87,7 +104,11 @@ def build_payload(env, title, message, at=None, in_=None, click=None, now=None):
     if at:
         payload["delay"] = resolve_at(at, now)
     elif in_:
-        payload["delay"] = in_
+        payload["delay"] = resolve_in(in_, now)
+    label = scheduled_label(payload.get("delay"))
+    if label:
+        # 実機で「予定時刻±60秒以内に届いたか」を比べられるよう、本文に予定時刻を入れる
+        payload["message"] = f"{message}（予定 {label}）"
     return payload
 
 
