@@ -11,22 +11,23 @@ Claude Codeが自力で完了できない作業をここに追記する。追記
 | H-005 | 2026-11-06 | 【判断】キャラクターの声素材の用意方針を決めてほしい（公式ボイスや似せた合成音声は禁止事項のため不可）。現在はPythonで作った合成チャイムで代用している | フェーズ0 タスク2 | 未対応 |
 | H-006 | 2026-11-06 | 【確認】通知サービスをntfyに仮決定した（D-008）。Pushoverは30日試用後に$4.99の買い切り課金が必要で、予約配信もないため。ntfyで確定してよいか、実機確認の結果と合わせて判断してほしい | フェーズ0 全体 | 完了（2026-11-07）。主経路はWeb Pushに変更し、ntfyは予備経路として確定（D-013） |
 | H-007 | 2026-11-06 | リポジトリ otamesi1.0 を上げ直す。現状は全ファイルが直下に並び（`app/` などのフォルダがない）、隠しフォルダ `.git` の中身も上がっているため、`app/index.html` が開けない。手順：①GitHubで今のファイルをすべて削除 ②zipを「すべて展開」してから、展開したフォルダの中の `app`・`docs`・`data`・`scripts`・`tests` フォルダと `CLAUDE.md`・`NEEDS_HUMAN.md` をChromeかEdgeでドラッグ＆ドロップ（`.git` は入れない）③`https://kana13914-pixel.github.io/otamesi1.01/otamesi-upload/otamesi-upload/otamesi-update-webpush/app/index.html` が開くことを確認 | フェーズ0 タスク1 | 完了（2026-11-06）。新規リポジトリ otamesi1.01 に上げ直し。フォルダが `otamesi-upload/otamesi-upload/` と二重になっているが、そのURLで動作するためフェーズ0はこのまま進める |
-
-## 記入例
-
-```
-| H-00X | YYYY-MM-DD | 何を・なぜ依頼するか（具体的な操作名まで） | roadmap.mdのどのタスクか | 未対応 / 完了 |
 | H-008 | 2026-11-06 | Cloudflareアカウント（無料）を作成してほしい。Web Pushの送信サーバー（Workers）を置くため。有料プラン（Workers Paid）には申し込まないこと。作成後、デプロイ方法（ダッシュボードに貼り付けるか、PCでwranglerを使うか）を相談したい | フェーズ0 Web Push検証 | 完了（2026-11-06）。デプロイはダッシュボードへの貼り付けで行う |
 | H-009 | 2026-11-06 | `docs/cloudflare_setup.md` の手順0〜6でWorkerを設定する（合言葉の作成、Worker作成、`worker/worker.js` の貼り付け、KVバインディング `PUSH_KV`、シークレット `APP_TOKEN`、Cron `* * * * *`）。手順6の3つのURLの表示結果と、WorkerのURL（`…workers.dev`）を教えてほしい。合言葉はチャットに書かない | フェーズ0 Web Push検証 | 完了（2026-11-07）。Worker URL https://kiinichi-push.satoukana13914.workers.dev 、3つのURLとも想定どおり。Cloudflare Accessは解除済み |
 | H-010 | 2026-11-06 | GitHubのリポジトリ otamesi1.01 で `otamesi-upload/otamesi-upload/` フォルダを開き、新しいzipを展開した中身（`app`・`docs`・`tests`・`worker` フォルダなど）を「Upload files」でドラッグ＆ドロップして上書きコミットする。数分後、`…/app/index.html` に「Web Push」の欄が出ればOK | フェーズ0 Web Push検証 | 完了（2026-11-07）。ファイルは `otamesi-upload/otamesi-upload/otamesi-update-webpush/` に入ったため、公開URLは https://kana13914-pixel.github.io/otamesi1.01/otamesi-upload/otamesi-upload/otamesi-update-webpush/app/index.html に変更。ホーム画面のアイコンは新しいURLで追加し直す |
 | H-011 | 2026-11-07 | 予約通知の遅れ対策。`docs/cloudflare_setup.md` の「3b. D1」の手順でD1データベースを作り、変数名 `DB` でWorkerにつなぎ、新しい `worker/worker.js` を貼り付け直してデプロイする。続けて GitHub の `otamesi-update-webpush/app/` に新しい `send.js` と `sw.js` を上書きアップロードし、roadmap.md の再検証手順で遅れた秒数を教えてほしい | フェーズ0 Web Push検証（予約） | 完了（2026-11-07）。予約の保存先D1、遅延約20秒（D-013） |
 | H-012 | 2026-11-07 | 【相談】公開URLとアップロードの整理（フェーズ1の準備）。次のどちらかを選んでほしい：(a) Claudeに新しいリポジトリへのpush権限を付与する（この画面から追加できる）。Claudeが手元の履歴ごとリポジトリ直下に `app/` がある形で直接反映するので、以後アップロード作業は不要になる (b) 今のリポジトリを人間が整理する（`otamesi-update-webpush` の中身を直下に移すか、新しいリポジトリに上げ直す）。どちらの場合も、公開URLが変わるのでホーム画面のアイコン追加と通知の有効化をやり直す必要がある | フェーズ1 準備 | 未対応 |
+
+## 記入例
+
+```
+| H-00X | YYYY-MM-DD | 何を・なぜ依頼するか（具体的な操作名まで） | roadmap.mdのどのタスクか | 未対応 / 完了 |
 ```
 
 ## よくある依頼パターン（参考）
 
 - iPhone実機での通知許可・ホーム画面追加・実際のタップ確認
-- Pushover / ntfy のアカウント作成とAPIキー発行
+- Cloudflare・ntfy 等のアカウント作成、設定変更（バインディング・シークレット・Cron）、コードの貼り付け
+- GitHubへのファイルのアップロード（上げ先フォルダはClaudeが明記する）
 - Googleアカウントでの認証・スプレッドシートやカレンダーへのアクセス権限付与
 - キャラクター素材（立ち絵・表情差分・音声）の用意、または調達方針の決定
 - 課金が発生する外部サービスの契約可否判断
