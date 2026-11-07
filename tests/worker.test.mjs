@@ -3,7 +3,20 @@
 // 実行: node --test tests/
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
 import worker, { _internal } from '../worker/worker.js';
+
+// Cloudflare D1 の最小限の偽物（node:sqlite で実際にSQLを実行する）
+function makeD1() {
+  const db = new DatabaseSync(':memory:');
+  const stmt = (sql, args = []) => ({
+    bind: (...a) => stmt(sql, a),
+    async all() { return { results: db.prepare(sql).all(...args) }; },
+    async first() { return db.prepare(sql).get(...args) ?? null; },
+    async run() { db.prepare(sql).run(...args); return { success: true }; },
+  });
+  return { prepare: (sql) => stmt(sql), async batch(list) { return Promise.all(list.map((x) => x.run())); } };
+}
 
 const { b64url, unb64url, hkdf, concat } = _internal;
 const enc = new TextEncoder();
@@ -120,26 +133,43 @@ test('購読→即時送信：暗号化された本文をブラウザ側の鍵�
   await verifyVapid(init.headers.Authorization, url, vapid.publicKey);
 });
 
-test('予約送信：予定の30秒前より前は送らず、以降のCron実行で1回だけ送る', async () => {
+for (const kind of ['d1', 'kv']) {
+  test(`予約送信（${kind}）：予定の30秒前より前は送らず、以降のCron実行で1回だけ送る`, async () => {
+    const { env, pushes } = setup();
+    if (kind === 'd1') env.DB = makeD1();
+    const browser = await makeBrowser();
+    await worker.fetch(req('/api/subscribe', { method: 'POST', token: env.APP_TOKEN, body: browser.subscription }), env);
+    const r = await (await worker.fetch(req('/api/send', { method: 'POST', token: env.APP_TOKEN, body: { delaySeconds: 300 } }), env)).json();
+    assert.equal(r.scheduled, true);
+    assert.equal(r.queueStore, kind);
+    assert.equal(pushes.length, 0);
+    const st = await (await worker.fetch(req('/api/status', { token: env.APP_TOKEN }), env)).json();
+    assert.equal(st.queue.length, 1);
+    assert.deepEqual(await _internal.runDue(env, r.at - 31000), { sent: 0, left: 1 }); // 31秒前はまだ
+    assert.deepEqual(await _internal.runDue(env, r.at - 29000), { sent: 1, left: 0 }); // 30秒前以降は送る
+    assert.deepEqual(await _internal.runDue(env, r.at + 61000), { sent: 0, left: 0 }); // 二重送信しない
+    assert.equal(pushes.length, 1);
+    const msg = await decrypt(browser, pushes[0].init.body);
+    assert.equal(msg.title, 'キィニチくん（検証）');
+  });
+}
+
+test('D1：複数の予約は時刻が来たものだけ送り、残りは残す', async () => {
   const { env, pushes } = setup();
+  env.DB = makeD1();
   const browser = await makeBrowser();
   await worker.fetch(req('/api/subscribe', { method: 'POST', token: env.APP_TOKEN, body: browser.subscription }), env);
-  const r = await (await worker.fetch(req('/api/send', { method: 'POST', token: env.APP_TOKEN, body: { delaySeconds: 300 } }), env)).json();
-  assert.equal(r.scheduled, true);
-  assert.equal(pushes.length, 0);
-  assert.deepEqual(await _internal.runDue(env, r.at - 31000), { sent: 0, left: 1 }); // 31秒前はまだ
-  assert.deepEqual(await _internal.runDue(env, r.at - 29000), { sent: 1, left: 0 }); // 30秒前以降は送る
-  assert.deepEqual(await _internal.runDue(env, r.at + 61000), { sent: 0, left: 0 }); // 二重送信しない
+  const a = await (await worker.fetch(req('/api/send', { method: 'POST', token: env.APP_TOKEN, body: { delaySeconds: 60 } }), env)).json();
+  await worker.fetch(req('/api/send', { method: 'POST', token: env.APP_TOKEN, body: { delaySeconds: 600 } }), env);
+  assert.deepEqual(await _internal.runDue(env, a.at), { sent: 1, left: 1 });
   assert.equal(pushes.length, 1);
-  const msg = await decrypt(browser, pushes[0].init.body);
-  assert.equal(msg.title, 'キィニチくん（検証）');
 });
 
 test('Cron の scheduled ハンドラが予約キューを処理する', async () => {
   const { env, pushes } = setup();
   const browser = await makeBrowser();
   await worker.fetch(req('/api/subscribe', { method: 'POST', token: env.APP_TOKEN, body: browser.subscription }), env);
-  await env.PUSH_KV.put('queue', JSON.stringify([{ id: 'a', at: Date.now() - 1, title: 't', body: 'b' }]));
+  await env.PUSH_KV.put('queue', JSON.stringify([{ id: 'a', at: Date.now() - 1, title: 't', body: 'b' }])); // KV代用時
   let p;
   worker.scheduled({}, env, { waitUntil: (x) => { p = x; } });
   await p;

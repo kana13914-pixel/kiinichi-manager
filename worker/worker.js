@@ -2,7 +2,8 @@
 //
 // ・Cloudflare ダッシュボードの「コードを編集」にこのファイルの中身を丸ごと貼り付けて使う（外部ライブラリなし）
 // ・必要な設定（手順は docs/cloudflare_setup.md）
-//     KV バインディング   PUSH_KV        … 購読情報・VAPID鍵・予約キューの保存先
+//     KV バインディング   PUSH_KV        … 購読情報・VAPID鍵の保存先
+//     D1 バインディング   DB             … 予約キューの保存先（強い整合性。未設定ならKVで代用するが遅れやすい）
 //     シークレット         APP_TOKEN      … PWA/送信ページが送る合言葉。コードやリポジトリには書かない
 //     変数（任意）         ALLOWED_ORIGIN … 呼び出しを許すサイト（既定 https://kana13914-pixel.github.io）
 //     Cron Trigger         * * * * *      … 毎分、予約キューを確認して時刻が来たものを送る
@@ -120,19 +121,63 @@ async function sendPush(env, message) {
 }
 
 // ---------- 予約キュー ----------
+// D1（SQLite）があればそちらを使う。KVは結果整合性で、予約が最大1分ほど遅れることがあったため（D-011, D-012）
+const D1_SCHEMA = 'CREATE TABLE IF NOT EXISTS queue (id TEXT PRIMARY KEY, at INTEGER NOT NULL, title TEXT, body TEXT, url TEXT)';
+const D1_INDEX = 'CREATE INDEX IF NOT EXISTS queue_at ON queue(at)';
+
+function queueStore(env) {
+  if (env.DB) {
+    let ready;
+    const init = () => (ready ||= env.DB.batch([env.DB.prepare(D1_SCHEMA), env.DB.prepare(D1_INDEX)]));
+    return {
+      kind: 'd1',
+      async list() {
+        await init();
+        return (await env.DB.prepare('SELECT id, at FROM queue ORDER BY at').all()).results;
+      },
+      async count() {
+        await init();
+        return (await env.DB.prepare('SELECT COUNT(*) AS n FROM queue').first()).n;
+      },
+      async add(item) {
+        await init();
+        await env.DB.prepare('INSERT INTO queue (id, at, title, body, url) VALUES (?, ?, ?, ?, ?)')
+          .bind(item.id, item.at, item.title, item.body, item.url ?? null).run();
+      },
+      // 取り出しと削除を1文で行い、二重送信を防ぐ
+      async takeDue(until) {
+        await init();
+        return (await env.DB.prepare('DELETE FROM queue WHERE at <= ? RETURNING id, at, title, body, url').bind(until).all()).results;
+      },
+    };
+  }
+  return {
+    kind: 'kv',
+    async list() { return ((await env.PUSH_KV.get('queue', 'json')) || []).map((q) => ({ id: q.id, at: q.at })); },
+    async count() { return ((await env.PUSH_KV.get('queue', 'json')) || []).length; },
+    async add(item) {
+      const queue = (await env.PUSH_KV.get('queue', 'json')) || [];
+      queue.push(item);
+      await env.PUSH_KV.put('queue', JSON.stringify(queue));
+    },
+    async takeDue(until) {
+      const queue = (await env.PUSH_KV.get('queue', 'json')) || [];
+      const due = queue.filter((q) => q.at <= until);
+      if (due.length) await env.PUSH_KV.put('queue', JSON.stringify(queue.filter((q) => q.at > until)));
+      return due;
+    },
+  };
+}
+
 async function runDue(env, now = Date.now()) {
-  const queue = (await env.PUSH_KV.get('queue', 'json')) || [];
-  if (!queue.length) return { sent: 0, left: 0 };
-  const due = queue.filter((q) => q.at - EARLY_MS <= now);
-  if (!due.length) return { sent: 0, left: queue.length };
-  const left = queue.filter((q) => q.at - EARLY_MS > now);
-  await env.PUSH_KV.put('queue', JSON.stringify(left)); // 先に消して二重送信を防ぐ
+  const store = queueStore(env);
+  const due = await store.takeDue(now + EARLY_MS);
   let sent = 0;
   for (const item of due) {
-    const r = await sendPush(env, { title: item.title, body: item.body, url: item.url });
+    const r = await sendPush(env, { title: item.title, body: item.body, url: item.url || undefined });
     if (r.ok) sent++;
   }
-  return { sent, left: left.length };
+  return { sent, left: await store.count() };
 }
 
 // ---------- HTTP ----------
@@ -175,8 +220,8 @@ async function handle(request, env) {
 
   if (pathname === '/api/status' && request.method === 'GET') {
     const sub = await env.PUSH_KV.get('subscription', 'json');
-    const queue = (await env.PUSH_KV.get('queue', 'json')) || [];
-    return json({ subscribed: Boolean(sub), queue: queue.map((q) => ({ id: q.id, at: q.at })) }, 200, h);
+    const store = queueStore(env);
+    return json({ subscribed: Boolean(sub), queueStore: store.kind, queue: await store.list() }, 200, h);
   }
 
   if (pathname === '/api/subscribe' && request.method === 'POST') {
@@ -199,12 +244,11 @@ async function handle(request, env) {
     const delay = Math.floor(Number(p.delaySeconds) || 0);
     if (delay > 0) {
       if (delay > MAX_DELAY_SEC) return json({ error: '予約は3日先までです' }, 400, h);
-      const queue = (await env.PUSH_KV.get('queue', 'json')) || [];
-      if (queue.length >= MAX_QUEUE) return json({ error: '予約が多すぎます' }, 429, h);
+      const store = queueStore(env);
+      if ((await store.count()) >= MAX_QUEUE) return json({ error: '予約が多すぎます' }, 429, h);
       const item = { id: crypto.randomUUID(), at: Date.now() + delay * 1000, ...message };
-      queue.push(item);
-      await env.PUSH_KV.put('queue', JSON.stringify(queue));
-      return json({ ok: true, scheduled: true, id: item.id, at: item.at }, 200, h);
+      await store.add(item);
+      return json({ ok: true, scheduled: true, id: item.id, at: item.at, queueStore: store.kind }, 200, h);
     }
     const r = await sendPush(env, message);
     return json({ ...r, scheduled: false, at: Date.now() }, r.ok ? 200 : 502, h);
