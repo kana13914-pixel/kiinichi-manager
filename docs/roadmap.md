@@ -15,7 +15,7 @@
     - **ブラウザ（PC不要）**：公開したPWAと同じ場所の `…/app/send.html` を開き、トピック名を入れて「通知を送る」
     - **PCのスクリプト**：`python3 scripts/ntfy_send.py init` で `.env` を作り、`APP_URL` を書いてから `send`（Pythonが必要）
   - 実機確認手順（H-001〜H-003 完了後）：
-    1. 公開URL `https://kana13914-pixel.github.io/otamesi1.01/otamesi-upload/otamesi-upload/app/index.html` がPCのブラウザで開けることを確認する
+    1. 公開URL `https://kana13914-pixel.github.io/otamesi1.01/otamesi-upload/otamesi-upload/otamesi-update-webpush/app/index.html` がPCのブラウザで開けることを確認する
     2. iPhoneのSafariで `APP_URL` を開く → 共有ボタン →「ホーム画面に追加」
     3. ホーム画面のアイコンから起動 → 「表示モード：ホーム画面アプリ（standalone）」「開いた経路：ホーム画面のアイコン」「Service Worker：登録済み」と出ること
     4. iPhoneのntfyアプリで「+」→ `.env` の `NTFY_TOPIC` を購読し、通知を許可する
@@ -53,7 +53,7 @@
   - 実装済み（Claude）：`worker/worker.js`（送信サーバー。VAPID鍵の自動生成、購読登録、即時・予約送信、毎分のCron）、PWA側の購読（`index.html` の「通知を有効にする」）、`sw.js` の通知表示とタップ処理、`send.html` の「Web Pushで送る」
   - 自動テスト：Node 13件（暗号化をブラウザ側の鍵で復号、VAPID署名、予約、認証、CORS、Service Workerの通知・タップ処理）、Python 17件。暗号化はPythonの独立実装でも復号できることを確認済み。実際のAppleのプッシュサービスへの送信は未確認（作業環境から外部通信できないため）
   - 実機確認手順（H-009・H-010 完了後）：
-    1. ホーム画面のアプリを一度終了して開き直す（新しいファイルを読み込ませるため）。画面に「Web Push」の欄が出ること
+    1. 古いホーム画面のアイコンを削除し、Safariで新しい公開URL `https://kana13914-pixel.github.io/otamesi1.01/otamesi-upload/otamesi-upload/otamesi-update-webpush/app/index.html` を開いて「ホーム画面に追加」し直す。アイコンから開いて「Web Push」の欄が出ること
     2. 「送信サーバーのURL」に `https://kiinichi-push.….workers.dev`、「合言葉」に APP_TOKEN を貼り付け、「通知を有効にする」→ 許可ダイアログで「許可」
     3. 期待結果：「Web Push：有効（送信サーバーに登録済み）」
     4. Safariで `…/app/send.html` を開き、下の「Web Push で送る」欄に同じURLと合言葉を入れる →「送信サーバーの状態を見る」で「購読：あり」
