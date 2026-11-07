@@ -169,7 +169,11 @@ class PwaTest(unittest.TestCase):
         page.select_option("#wp-trigger", "midday_check.meal_overdue")
         page.select_option("#delay", "0")
         page.click("#wp-send")
-        page.wait_for_function("document.getElementById('wp-status').textContent === '送信しました'", timeout=5_000)
+        # 偽サーバーは常に「予約済み」と返すので、表示ではなく2回目の送信が届いたことで待つ
+        deadline = 50
+        while len([c for c in calls if c.method == "POST"]) < 2 and deadline:
+            page.wait_for_timeout(100)
+            deadline -= 1
         post2 = [c for c in calls if c.method == "POST"][-1]
         body2 = json.loads(post2.post_data)
         self.assertTrue(body2["url"].endswith("?source=webpush&trigger=midday_check.meal_overdue"))
