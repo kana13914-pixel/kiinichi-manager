@@ -12,6 +12,17 @@ from playwright.sync_api import sync_playwright
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
 
+# 設定済み（ready）の状態を作る
+READY = "localStorage.setItem('setup.done','1')"
+# ヘッドレスChromeは本物のプッシュ購読ができない（外部通信が必要）ため、購読処理だけ偽物にする
+FAKE_PUSH = """
+PushManager.prototype.getSubscription = async () => null;
+PushManager.prototype.subscribe = async () => ({
+  options: {},
+  toJSON: () => ({ endpoint: 'https://web.push.apple.com/fake', keys: { p256dh: 'BBBB', auth: 'AAAA' } }),
+});
+"""
+
 
 class QuietHandler(SimpleHTTPRequestHandler):
     extensions_map = {**SimpleHTTPRequestHandler.extensions_map, ".webmanifest": "application/manifest+json"}
@@ -38,8 +49,10 @@ class PwaTest(unittest.TestCase):
         cls.pw.stop()
         cls.server.shutdown()
 
-    def new_page(self):
-        ctx = self.browser.new_context()
+    def new_page(self, permissions=None, init_script=None):
+        ctx = self.browser.new_context(permissions=permissions or [])
+        if init_script:
+            ctx.add_init_script(init_script)
         self.addCleanup(ctx.close)
         page = ctx.new_page()
         errors = []
@@ -59,7 +72,7 @@ class PwaTest(unittest.TestCase):
     def test_page_loads_and_service_worker_registers(self):
         page = self.new_page()
         page.goto(self.base + "index.html")
-        page.wait_for_selector("#sw-status.ok", timeout=10_000)
+        page.wait_for_selector("#sw-status.ok", state="attached", timeout=10_000)
         self.assertEqual(page.text_content("#sw-status"), "登録済み")
         self.assertEqual(page.text_content("#source"), "URLを直接開いた")
         # 画面の版と sw.js のキャッシュ版が一致している（更新し忘れ防止）
@@ -72,8 +85,9 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.text_content("#source"), "通知（ntfy）のタップ")
 
     def test_one_tap_plays_audio_after_opening_from_notification(self):
-        page = self.new_page()
-        page.goto(self.base + "index.html?source=ntfy")
+        page = self.new_page(permissions=["notifications"], init_script=READY)
+        page.goto(self.base + "index.html?source=webpush&mode=standalone")
+        self.assertEqual(page.get_attribute("body", "data-state"), "ready")
         self.assertEqual(page.text_content("#audio-status"), "未再生")
         page.click("#play-voice")  # ボタン1回
         page.wait_for_selector("#audio-status.ok", timeout=5_000)
@@ -154,18 +168,61 @@ class PwaTest(unittest.TestCase):
         page.reload()  # 設定は端末に保存される
         self.assertEqual(page.input_value("#wp-worker-url"), "https://kiinichi.example.workers.dev/")
 
-    def test_index_enable_push_outside_home_screen_explains_why(self):
+    def test_safari_shows_only_add_to_home_screen_guide(self):
         page = self.new_page()
         page.goto(self.base + "index.html")
-        page.wait_for_selector("#sw-status.ok", timeout=10_000)
-        page.fill("#worker-url", "https://kiinichi.example.workers.dev")
-        page.dispatch_event("#worker-url", "change")
-        page.route("https://kiinichi.example.workers.dev/**", lambda r: r.fulfill(
-            status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"},
-            body='{"publicKey":"BAAA"}'))
-        page.click("#enable-push")
-        page.wait_for_selector("#push-status.ng", timeout=10_000)
-        self.assertIn("失敗", page.text_content("#push-status"))
+        self.assertEqual(page.get_attribute("body", "data-state"), "safari")
+        self.assertTrue(page.is_visible("#onboard-safari"))
+        self.assertFalse(page.is_visible("#main"))
+        self.assertFalse(page.is_visible("#onboard-setup"))
+
+    def test_first_launch_setup_registers_and_moves_to_ready(self):
+        page = self.new_page(permissions=["notifications"], init_script=FAKE_PUSH)
+        calls = []
+
+        def fake_worker(route):
+            req = route.request
+            calls.append(req)
+            cors = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization, Content-Type",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS"}
+            if req.method == "OPTIONS":
+                route.fulfill(status=204, headers=cors)
+            elif req.url.endswith("/api/vapid-public-key"):
+                route.fulfill(status=200, content_type="application/json", headers=cors,
+                              body='{"publicKey":"BHwerwZnkkro38y8e_YA6eiURgYes1c4BxSzHrU8kWsGJcOF7AvYnH2mievzMzSHhWWTG2DdGjnPDcDXpwrbsYM"}')
+            else:
+                route.fulfill(status=200, content_type="application/json", headers=cors, body='{"ok":true}')
+
+        page.route("https://kiinichi-push.satoukana13914.workers.dev/**", fake_worker)
+        page.goto(self.base + "index.html?mode=standalone")
+        self.assertEqual(page.get_attribute("body", "data-state"), "setup")
+        self.assertFalse(page.is_visible("#main"))
+        page.wait_for_selector("#sw-status.ok", state="attached", timeout=10_000)
+        # 合言葉なし → 入力を促し、状態は setup のまま
+        page.click("#setup-start")
+        page.wait_for_function("document.getElementById('setup-status').textContent.includes('合言葉')", timeout=5_000)
+        self.assertEqual(page.get_attribute("body", "data-state"), "setup")
+        # 合言葉あり → 登録して ready へ
+        page.fill("#setup-token", "tok-xyz")
+        page.dispatch_event("#setup-token", "change")
+        page.click("#setup-start")
+        page.wait_for_function("document.body.dataset.state === 'ready'", timeout=10_000)
+        self.assertTrue(page.is_visible("#main"))
+        sub = [c for c in calls if c.method == "POST" and c.url.endswith("/api/subscribe")][0]
+        self.assertEqual(sub.headers["authorization"], "Bearer tok-xyz")
+        self.assertEqual(json.loads(sub.post_data)["endpoint"], "https://web.push.apple.com/fake")
+        page.reload()  # 次に開いたときは ready のまま
+        self.assertEqual(page.get_attribute("body", "data-state"), "ready")
+
+    def test_phase0_users_with_saved_token_skip_setup(self):
+        page = self.new_page(permissions=["notifications"],
+                             init_script="localStorage.setItem('phase0.appToken','old-token')")
+        page.goto(self.base + "index.html?mode=standalone")
+        self.assertEqual(page.get_attribute("body", "data-state"), "ready")
+
+    def test_mode_param_is_ignored_outside_localhost(self):
+        app_js = (APP_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("['localhost', '127.0.0.1'].includes(location.hostname)", app_js)
 
     def test_webpush_source_is_detected(self):
         page = self.new_page()

@@ -19,3 +19,13 @@ button {
   background: var(--accent); color: #1e1e1e; font-weight: 600;
 }
 .ok { color: #8fe3a5; } .ng { color: #ff9a8a; }
+
+/* 初回導線：状態に応じて表示を切り替える */
+.onboard, #main { display: none; }
+body[data-state="safari"] #onboard-safari,
+body[data-state="setup"] #onboard-setup,
+body[data-state="ready"] #main { display: block; }
+.onboard { margin-top: 32px; }
+.onboard p, .onboard ol { font-size: .9rem; line-height: 1.6; }
+.onboard input { width: 100%; padding: 10px; font-size: 1rem; border-radius: 8px; border: 1px solid #888; }
+.status { font-size: .85rem; min-height: 1.2em; }
