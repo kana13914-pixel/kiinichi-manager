@@ -1,7 +1,7 @@
-// フェーズ0 技術検証用。起動状態を表示し、実機確認で何が起きたか目で見えるようにする。
+// マネージャー本体。初回導線（D-009）、ホーム画面（D-018）、設定画面（確認用の起動状態）を扱う。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase1-v3';
+const APP_VERSION = 'phase1-v5';
 
 // 自動テスト用：localhost のときだけ ?mode=standalone でホーム画面アプリとして扱う
 const TEST_STANDALONE = ['localhost', '127.0.0.1'].includes(location.hostname)
@@ -46,6 +46,74 @@ setText('display-mode', isStandalone() ? 'ホーム画面アプリ（standalone�
 setText('source', describeSource());
 setText('opened-at', new Date().toLocaleString('ja-JP'));
 setText('app-version', APP_VERSION);
+
+// ---------- 画面の切り替え（下のタブ。URLの #home などで管理） ----------
+const VIEWS = ['home', 'schedule', 'tasks', 'timer', 'report', 'settings'];
+function showView() {
+  const name = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home';
+  for (const v of VIEWS) document.getElementById('view-' + v).hidden = v !== name;
+  for (const a of document.querySelectorAll('.tabbar a')) a.classList.toggle('active', a.dataset.view === name);
+}
+window.addEventListener('hashchange', showView);
+showView();
+
+// ---------- 時計 ----------
+function pad(n) { return String(n).padStart(2, '0'); }
+function renderClock(now = new Date()) {
+  document.getElementById('clock-time').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  document.getElementById('clock-date').textContent =
+    now.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
+}
+
+// ---------- 次の予定（今は仮データ） ----------
+function renderNextEvent(now = new Date()) {
+  const next = SampleData.todayEvents(now).find((e) => e.at > now);
+  const el = document.getElementById('next-event');
+  if (!next) { el.textContent = '今日の予定はもうありません'; return; }
+  const mins = Math.round((next.at - now) / 60000);
+  const rest = mins >= 60 ? `${Math.floor(mins / 60)}時間${mins % 60 ? (mins % 60) + '分' : ''}後` : `${mins}分後`;
+  el.innerHTML = '';
+  const time = document.createElement('span'); time.className = 'next-time'; time.textContent = `${pad(next.at.getHours())}:${pad(next.at.getMinutes())}`;
+  const title = document.createElement('span'); title.className = 'next-title'; title.textContent = next.title;
+  const left = document.createElement('span'); left.className = 'next-rest'; left.textContent = rest;
+  el.append(time, title, left);
+}
+
+function tick() { const now = new Date(); renderClock(now); renderNextEvent(now); }
+tick();
+setInterval(tick, 1000);
+
+// ---------- 吹き出し（セリフ集 app/data/dialogue.json から選ぶ） ----------
+let dialogue = null;
+const dialogueReady = fetch('data/dialogue.json').then((r) => r.json()).then((d) => { dialogue = d; }).catch(() => {});
+
+// "morning_wake.on_time" のようなキーからセリフを1つ選ぶ
+function pickLine(key) {
+  if (!dialogue || !key) return null;
+  const [trigger, condId] = key.split('.');
+  const cond = dialogue[trigger] && (dialogue[trigger].conditions || []).find((c) => c.id === condId);
+  if (!cond || !cond.lines || !cond.lines.length) return null;
+  return cond.lines[Math.floor(Math.random() * cond.lines.length)];
+}
+
+function say(key) {
+  const line = pickLine(key);
+  if (!line) return false;
+  document.getElementById('bubble-text').textContent = line;
+  document.getElementById('play-voice').classList.add('ready'); // 声のボタンを目立たせる
+  return true;
+}
+
+// 通知から開いたとき（?trigger=midday_check.meal_overdue など）は、そのセリフをすぐ出す
+dialogueReady.then(() => {
+  const key = new URLSearchParams(location.search).get('trigger');
+  if (!say(key)) document.getElementById('bubble-text').textContent = '（ここにセリフが出ます）';
+});
+
+// 記録ボタン（今は反応の確認だけ。記録の保存はフェーズ2〜3）
+for (const btn of document.querySelectorAll('.act')) {
+  btn.addEventListener('click', () => say(btn.dataset.trigger));
+}
 
 // 音声再生：ボタン1回で鳴らす。今はテスト用チャイム（合成音）。本番の声素材は人間が用意する（NEEDS_HUMAN）。
 const voice = new Audio('audio/test-chime.wav');

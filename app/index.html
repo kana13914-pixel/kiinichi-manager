@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>マネージャー（検証版）</title>
+  <title>マネージャー</title>
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#1e4034">
   <!-- iOSのホーム画面追加用 -->
@@ -38,43 +38,79 @@
   </section>
 
   <div id="main">
-  <h1>フェーズ0 技術検証</h1>
-  <!-- 公式素材は使わない（CLAUDE.md 禁止事項）。立ち絵はプレースホルダー -->
-  <div class="placeholder">立ち絵<br>プレースホルダー</div>
+    <!-- ホーム（D-018 仮決定）：時刻 → キャラクターと吹き出し → 次の予定 → よく使う操作 -->
+    <section id="view-home" class="view">
+      <header class="clock">
+        <div id="clock-time" class="clock-time">--:--</div>
+        <div id="clock-date" class="clock-date">-</div>
+      </header>
 
-  <section class="card">
-    <h2>起動状態</h2>
-    <dl>
-      <dt>表示モード</dt><dd id="display-mode">-</dd>
-      <dt>開いた経路</dt><dd id="source">-</dd>
-      <dt>Service Worker</dt><dd id="sw-status">-</dd>
-      <dt>開いた時刻</dt><dd id="opened-at">-</dd>
-      <dt>版</dt><dd id="app-version">-</dd>
-    </dl>
-  </section>
+      <div class="stage">
+        <!-- 公式素材は使わない（CLAUDE.md 禁止事項）。立ち絵はプレースホルダー -->
+        <div class="placeholder" id="portrait">立ち絵<br>プレースホルダー</div>
+        <div class="bubble">
+          <p id="bubble-text">…</p>
+          <button id="play-voice" type="button" class="voice">▶ 声を聞く</button>
+          <small id="audio-status" class="status">未再生</small>
+        </div>
+      </div>
 
-  <section class="card">
-    <h2>音声再生テスト</h2>
-    <!-- iOSは利用者の操作なしに音を鳴らせないため、ボタン1回の操作で再生する -->
-    <button id="play-voice" type="button">声を再生（テスト音）</button>
-    <dl style="margin-top:8px">
-      <dt>再生状態</dt><dd id="audio-status">未再生</dd>
-    </dl>
-  </section>
+      <section class="card">
+        <h2>次の予定 <small class="tag">仮データ</small></h2>
+        <div id="next-event" class="next-event">-</div>
+      </section>
 
-  <section class="card">
-    <h2>通知の再設定</h2>
-    <p style="font-size:.8rem;margin:0 0 6px">通知が届かなくなったときや、合言葉を変えたときに使います。</p>
-    <label for="app-token" style="font-size:.8rem">合言葉（APP_TOKEN）</label>
-    <input id="app-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%;padding:8px">
-    <button id="enable-push" type="button">通知を有効にする</button>
-    <dl style="margin-top:8px">
-      <dt>Web Push</dt><dd id="push-status">未設定</dd>
-    </dl>
-  </section>
+      <section class="card actions">
+        <h2>記録</h2>
+        <div class="action-grid">
+          <button type="button" class="act" data-trigger="morning_wake.on_time">起きた</button>
+          <button type="button" class="act" data-trigger="work_start.default">仕事開始</button>
+        </div>
+        <small class="note">食事・休憩・入浴などの記録はフェーズ3〜4で追加</small>
+      </section>
+    </section>
 
+    <section id="view-schedule" class="view"><h1>予定</h1><p class="note">この画面は次のタスクで作ります。</p></section>
+    <section id="view-tasks" class="view"><h1>タスク</h1><p class="note">この画面は次のタスクで作ります。</p></section>
+    <section id="view-timer" class="view"><h1>タイマー</h1><p class="note">この画面は次のタスクで作ります。</p></section>
+    <section id="view-report" class="view"><h1>日報</h1><p class="note">この画面は次のタスクで作ります。</p></section>
+
+    <!-- 設定：フェーズ0の検証情報もここに移した -->
+    <section id="view-settings" class="view">
+      <h1>設定</h1>
+      <section class="card">
+        <h2>通知の再設定</h2>
+        <p class="note">通知が届かなくなったときや、合言葉を変えたときに使います。</p>
+        <label for="app-token" class="note">合言葉（APP_TOKEN）</label>
+        <input id="app-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" class="field">
+        <button id="enable-push" type="button">通知を有効にする</button>
+        <dl style="margin-top:8px">
+          <dt>Web Push</dt><dd id="push-status">未設定</dd>
+        </dl>
+      </section>
+      <section class="card">
+        <h2>起動状態（確認用）</h2>
+        <dl>
+          <dt>表示モード</dt><dd id="display-mode">-</dd>
+          <dt>開いた経路</dt><dd id="source">-</dd>
+          <dt>Service Worker</dt><dd id="sw-status">-</dd>
+          <dt>開いた時刻</dt><dd id="opened-at">-</dd>
+          <dt>版</dt><dd id="app-version">-</dd>
+        </dl>
+      </section>
+    </section>
+
+    <nav class="tabbar" aria-label="画面の切り替え">
+      <a href="#home" data-view="home">ホーム</a>
+      <a href="#schedule" data-view="schedule">予定</a>
+      <a href="#tasks" data-view="tasks">タスク</a>
+      <a href="#timer" data-view="timer">タイマー</a>
+      <a href="#report" data-view="report">日報</a>
+      <a href="#settings" data-view="settings">設定</a>
+    </nav>
   </div>
 
+  <script src="sample-data.js"></script>
   <script src="settings.js"></script>
   <script src="app.js"></script>
 </body>

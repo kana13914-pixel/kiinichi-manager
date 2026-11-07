@@ -49,6 +49,14 @@
     <input id="wp-worker-url" placeholder="https://…workers.dev" autocomplete="off" autocapitalize="off" spellcheck="false">
     <label for="wp-token">合言葉（APP_TOKEN）</label>
     <input id="wp-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <label for="wp-trigger">声掛けの種類（タップで開いたときに出るセリフ）</label>
+    <select id="wp-trigger">
+      <option value="">なし（動作確認のみ）</option>
+      <option value="midday_check.meal_overdue">食事の時間を過ぎた</option>
+      <option value="midday_check.break_overdue">休憩を挟む</option>
+      <option value="night_check.some_left">夜：日課が少し残っている</option>
+      <option value="before_sleep.default">就寝前</option>
+    </select>
     <button id="wp-send" type="button">Web Pushで送る</button>
     <button id="wp-status-btn" type="button" style="background:#cfcfcf">送信サーバーの状態を見る</button>
     <dl style="margin-top:8px">

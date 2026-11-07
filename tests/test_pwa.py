@@ -165,6 +165,15 @@ class PwaTest(unittest.TestCase):
         body = json.loads(post.post_data)
         self.assertEqual(body["delaySeconds"], 300)
         self.assertTrue(body["url"].endswith("/index.html?source=webpush"))
+        # 声掛けの種類を選ぶと、タップ先URLに trigger が付く
+        page.select_option("#wp-trigger", "midday_check.meal_overdue")
+        page.select_option("#delay", "0")
+        page.click("#wp-send")
+        page.wait_for_function("document.getElementById('wp-status').textContent === '送信しました'", timeout=5_000)
+        post2 = [c for c in calls if c.method == "POST"][-1]
+        body2 = json.loads(post2.post_data)
+        self.assertTrue(body2["url"].endswith("?source=webpush&trigger=midday_check.meal_overdue"))
+        self.assertNotIn("delaySeconds", body2)
         page.reload()  # 設定は端末に保存される
         self.assertEqual(page.input_value("#wp-worker-url"), "https://kiinichi.example.workers.dev/")
 
@@ -228,6 +237,55 @@ class PwaTest(unittest.TestCase):
         page = self.new_page()
         page.goto(self.base + "index.html?source=webpush")
         self.assertEqual(page.text_content("#source"), "通知（Web Push）のタップ")
+
+    # ---------- ホーム（D-018） ----------
+    def ready_page(self, query=""):
+        page = self.new_page(permissions=["notifications"], init_script=READY)
+        page.goto(self.base + "index.html?mode=standalone" + query)
+        return page
+
+    def test_home_shows_clock_next_event_and_portrait_within_3_seconds(self):
+        import time
+        page = self.new_page(permissions=["notifications"], init_script=READY)
+        t0 = time.monotonic()
+        page.goto(self.base + "index.html?mode=standalone")
+        page.wait_for_function(
+            "/^\\d{2}:\\d{2}$/.test(document.getElementById('clock-time').textContent)"
+            " && document.getElementById('next-event').textContent.trim() !== '-'", timeout=3_000)
+        self.assertLess(time.monotonic() - t0, 3.0)
+        self.assertTrue(page.is_visible("#portrait"))
+        self.assertTrue(page.is_visible("#view-home"))
+        self.assertFalse(page.is_visible("#view-settings"))
+
+    def test_next_event_picks_first_future_item(self):
+        page = self.ready_page()
+        titles = page.evaluate("""() => {
+          const at = (h, m) => { const d = new Date(); d.setHours(h, m, 0, 0); return d; };
+          const pick = (now) => (SampleData.todayEvents(now).find((e) => e.at > now) || {}).title || null;
+          return [pick(at(8, 0)), pick(at(12, 0)), pick(at(23, 45))];
+        }""")
+        self.assertEqual(titles, ["仕事開始", "休憩", None])
+
+    def test_opened_from_notification_shows_that_triggers_line(self):
+        page = self.ready_page("&source=webpush&trigger=midday_check.meal_overdue")
+        page.wait_for_function("document.getElementById('bubble-text').textContent.includes('飯の時間')", timeout=3_000)
+        self.assertIn("ready", page.get_attribute("#play-voice", "class"))
+
+    def test_record_button_shows_template_line(self):
+        page = self.ready_page()
+        page.wait_for_function("document.getElementById('bubble-text').textContent.includes('セリフが出ます')", timeout=3_000)
+        page.click("text=仕事開始")
+        line = page.text_content("#bubble-text")
+        self.assertIn(line, ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"])
+
+    def test_tabbar_switches_views(self):
+        page = self.ready_page()
+        page.click(".tabbar a[data-view=settings]")
+        page.wait_for_selector("#view-settings", state="visible", timeout=3_000)
+        self.assertFalse(page.is_visible("#view-home"))
+        self.assertEqual(page.text_content("#app-version"), page.evaluate("APP_VERSION"))
+        page.click(".tabbar a[data-view=home]")
+        page.wait_for_selector("#view-home", state="visible", timeout=3_000)
 
 
 if __name__ == "__main__":
