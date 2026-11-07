@@ -75,8 +75,10 @@ function setWp(text, cls) {
   $('wp-status').className = cls || '';
 }
 
-function buildWebPushRequest(minutes, now = new Date()) {
-  const body = { title: 'キィニチくん（検証）', body: '通知テストだ。タップして開いてみろ。', url: appUrl + '?source=webpush' };
+function buildWebPushRequest(minutes, now = new Date(), trigger = '') {
+  const url = appUrl + '?source=webpush' + (trigger ? '&trigger=' + encodeURIComponent(trigger) : '');
+  const label = trigger ? $('wp-trigger').selectedOptions[0].textContent : '';
+  const body = { title: 'キィニチくん（検証）', body: trigger ? `（テスト）${label}` : '通知テストだ。タップして開いてみろ。', url };
   if (minutes > 0) {
     const at = new Date(now.getTime() + minutes * 60_000);
     body.delaySeconds = minutes * 60;
@@ -88,7 +90,7 @@ function buildWebPushRequest(minutes, now = new Date()) {
 $('wp-send').addEventListener('click', async () => {
   setWp('送信中…', '');
   try {
-    const r = await Settings.api('/api/send', { method: 'POST', body: buildWebPushRequest(Number($('delay').value)) });
+    const r = await Settings.api('/api/send', { method: 'POST', body: buildWebPushRequest(Number($('delay').value), new Date(), $('wp-trigger').value) });
     const note = r.queueStore === 'kv' ? '。保存先がKVのため最大1分ほど遅れることがあります（D1の設定を推奨）' : '';
     setWp(r.scheduled ? `予約しました（配信予定 ${hhmmss(new Date(r.at))}${note}）` : '送信しました', 'ok');
   } catch (e) {

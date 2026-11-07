@@ -68,7 +68,7 @@
 - `docs/roadmap.md` — フェーズ別タスクと完了条件
 - `docs/cloudflare_setup.md` — Web Push送信サーバー（Cloudflare Workers）の設定手順
 - `worker/worker.js` — 送信サーバーのコード（ダッシュボードに貼り付けて使う）
-- `app/` — PWA本体（現状はフェーズ0の検証版）
+- `app/` — PWA本体（`index.html` が本体、`send.html` は検証用の送信ページ）
 - `tests/` — 自動テスト（`python3 -m unittest discover -s tests` と `node --test tests/worker.test.mjs tests/sw.test.mjs`）
-- `data/dialogue_template.yaml` — セリフ集テンプレート
+- `data/dialogue_template.yaml` — セリフ集テンプレート（編集したら `python3 scripts/build_dialogue.py` で `app/data/dialogue.json` を作り直す）
 - `NEEDS_HUMAN.md` — 人間への依頼キュー
