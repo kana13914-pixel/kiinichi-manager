@@ -12,10 +12,11 @@
 | --- | --- |
 | アプリ形式 | PWA（ホーム画面に追加して起動。App Store配信はしない） |
 | 画面 | HTML / CSS / JavaScript |
-| 通知 | PWAのWeb Push（主。送信はCloudflare Workers、予約はCron Trigger）＋ ntfy（予備）。経緯は `docs/decisions.md` D-008〜D-010 |
+| 通知 | PWAのWeb Push（主。送信はCloudflare Workers、予約はD1＋毎分のCron Trigger）＋ ntfy（予備）。経緯は `docs/decisions.md` D-008〜D-015 |
 | ローカル保存 | localStorage / IndexedDB（主）＋ GAS経由でGoogleスプレッドシートに同期（従） |
 | データ処理 | Google Apps Script（GAS） |
 | 予定管理 | Googleカレンダー連携（GASから読み書き） |
+| 送信サーバー | Cloudflare Workers（無料プラン）。購読情報・鍵はKV、通知予約はD1。コードは `worker/worker.js` |
 | 会話の作り方 | ハイブリッド：定型の挨拶・催促はセリフ集（`data/dialogue_template.yaml`）、相談・提案の場面のみLLM |
 | LLM呼び出し | 必ずサーバー経由。APIキーをクライアント（PWA）側に置かない |
 
@@ -37,6 +38,9 @@
 - 各段階の後に、人間が実機で確認できる手順（URL、操作、期待される結果）を `docs/roadmap.md` の該当タスクに書き足す
 - 仕様や会話内容に迷ったら、`docs/spec.md` と `docs/decisions.md` を先に確認する。それでも判断できない場合は作業を止め、`NEEDS_HUMAN.md` に追記してユーザーに判断を仰ぐ
 - 新しい決定をしたら `docs/decisions.md` に理由とともに記録する
+- 本番への反映（GitHubへのアップロード、Cloudflareへの貼り付け・設定）は人間が行う。依頼するときは、上げるファイル名と上げ先のフォルダ（パンくずリストの形）を必ず書く（D-016）
+- 利用者はホーム画面に追加したPWAだけを使う前提で作る。Safariで開いた画面とは保存データが別（D-009）
+- アプリを閉じている間の声掛けは、アプリ内で判定せず通知予約で行う（D-015）
 
 ## 禁止事項
 
@@ -51,7 +55,8 @@
 以下は人間でなければ完了できない。作業を止め、`NEEDS_HUMAN.md` に依頼内容を書くこと。
 
 - iPhone実機での通知許可・ホーム画面追加・動作確認
-- Pushover / ntfy のアカウント作成、APIキー発行
+- 外部サービス（Cloudflare・ntfy等）のアカウント作成、設定変更（バインディング・シークレット・Cron）、コードの貼り付けとデプロイ
+- GitHubへのファイルのアップロード
 - Google（スプレッドシート・カレンダー）の認証・権限設定
 - キャラクター素材（立ち絵・音声）の用意
 - 課金を伴う判断
@@ -62,5 +67,8 @@
 - `docs/decisions.md` — 決定事項と理由の記録
 - `docs/roadmap.md` — フェーズ別タスクと完了条件
 - `docs/cloudflare_setup.md` — Web Push送信サーバー（Cloudflare Workers）の設定手順
+- `worker/worker.js` — 送信サーバーのコード（ダッシュボードに貼り付けて使う）
+- `app/` — PWA本体（現状はフェーズ0の検証版）
+- `tests/` — 自動テスト（`python3 -m unittest discover -s tests` と `node --test tests/worker.test.mjs tests/sw.test.mjs`）
 - `data/dialogue_template.yaml` — セリフ集テンプレート
 - `NEEDS_HUMAN.md` — 人間への依頼キュー
