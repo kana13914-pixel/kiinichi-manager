@@ -132,8 +132,11 @@ class PwaTest(unittest.TestCase):
 
         page.route("https://kiinichi.example.workers.dev/**", fake_worker)
         page.goto(self.base + "send.html")
+        # 送信サーバーのURLは最初から入っている（D-014）。合言葉は空
+        self.assertEqual(page.input_value("#wp-worker-url"), "https://kiinichi-push.satoukana13914.workers.dev")
+        self.assertEqual(page.input_value("#wp-token"), "")
         page.click("#wp-send")
-        self.assertIn("URL", page.text_content("#wp-status"))  # 未設定ならURL入力を促す
+        self.assertIn("合言葉", page.text_content("#wp-status"))  # 合言葉が未入力なら入力を促す
         page.fill("#wp-worker-url", "https://kiinichi.example.workers.dev/")
         page.dispatch_event("#wp-worker-url", "change")
         page.fill("#wp-token", "tok-123")

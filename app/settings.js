@@ -3,8 +3,10 @@
 // 注意：iPhoneでは Safari とホーム画面のアプリで保存場所が別なので、それぞれで入力が必要。
 const Settings = (() => {
   const KEYS = { workerUrl: 'phase0.workerUrl', appToken: 'phase0.appToken' };
+  // 送信サーバーのURLは秘密ではないのでコードに書く（D-014）。合言葉は書かない
+  const DEFAULTS = { workerUrl: 'https://kiinichi-push.satoukana13914.workers.dev', appToken: '' };
   function get(name) {
-    try { return localStorage.getItem(KEYS[name]) || ''; } catch (_) { return ''; }
+    try { return localStorage.getItem(KEYS[name]) || DEFAULTS[name]; } catch (_) { return DEFAULTS[name]; }
   }
   function set(name, value) {
     try { localStorage.setItem(KEYS[name], value); } catch (_) {}
