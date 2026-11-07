@@ -1,7 +1,7 @@
 // フェーズ0 技術検証用。起動状態を表示し、実機確認で何が起きたか目で見えるようにする。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase1-v1';
+const APP_VERSION = 'phase1-v2';
 
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
