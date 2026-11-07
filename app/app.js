@@ -1,11 +1,32 @@
 // フェーズ0 技術検証用。起動状態を表示し、実機確認で何が起きたか目で見えるようにする。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase1-v2';
+const APP_VERSION = 'phase1-v3';
+
+// 自動テスト用：localhost のときだけ ?mode=standalone でホーム画面アプリとして扱う
+const TEST_STANDALONE = ['localhost', '127.0.0.1'].includes(location.hostname)
+  && new URLSearchParams(location.search).get('mode') === 'standalone';
 
 function isStandalone() {
-  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  return TEST_STANDALONE || window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 }
+
+// 初回導線の状態を決める（D-009）
+const SETUP_DONE_KEY = 'setup.done';
+function isSetupDone() {
+  let done = false;
+  try { done = localStorage.getItem(SETUP_DONE_KEY) === '1'; } catch (_) {}
+  // 通知の許可を後から取り消した場合は設定し直してもらう
+  const granted = !('Notification' in window) || Notification.permission === 'granted';
+  // フェーズ0で設定済みの人（合言葉が保存済みで通知も許可済み）は、やり直さなくてよい
+  const hasToken = Boolean(Settings.get('appToken'));
+  return granted && (done || hasToken);
+}
+function decideState() {
+  if (!isStandalone()) return 'safari';
+  return isSetupDone() ? 'ready' : 'setup';
+}
+document.body.dataset.state = decideState();
 
 function describeSource() {
   const src = new URLSearchParams(location.search).get('source');
@@ -37,8 +58,8 @@ document.getElementById('play-voice').addEventListener('click', () => {
 });
 
 // Web Push：ボタン操作 → 通知許可 → 購読 → 送信サーバーに登録
-Settings.bind('worker-url', 'workerUrl');
 Settings.bind('app-token', 'appToken');
+Settings.bind('setup-token', 'appToken');
 
 function base64UrlToBytes(str) {
   const s = atob(str.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((str.length + 3) % 4));
@@ -68,11 +89,35 @@ async function enablePush() {
   await Settings.api('/api/subscribe', { method: 'POST', body: sub.toJSON() });
 }
 
+function explainError(e) {
+  if (/許可されませんでした/.test(e.message)) {
+    return e.message + '。iPhoneの「設定」→「通知」→「マネージャー」で通知をオンにしてから、もう一度押してください';
+  }
+  return e.message;
+}
+
+// 初回導線：合言葉 → 通知許可 → 購読登録 を1回のボタン操作で行う（iOSは許可ダイアログに利用者の操作が必要）
+document.getElementById('setup-start').addEventListener('click', () => {
+  const status = document.getElementById('setup-status');
+  status.textContent = '設定中…';
+  status.className = 'status';
+  enablePush()
+    .then(() => {
+      try { localStorage.setItem(SETUP_DONE_KEY, '1'); } catch (_) {}
+      setText('push-status', '有効（送信サーバーに登録済み）', 'ok');
+      document.body.dataset.state = 'ready';
+    })
+    .catch((e) => {
+      status.textContent = '失敗: ' + explainError(e);
+      status.className = 'status ng';
+    });
+});
+
 document.getElementById('enable-push').addEventListener('click', () => {
   setText('push-status', '設定中…', '');
   enablePush()
     .then(() => setText('push-status', '有効（送信サーバーに登録済み）', 'ok'))
-    .catch((e) => setText('push-status', '失敗: ' + e.message, 'ng'));
+    .catch((e) => setText('push-status', '失敗: ' + explainError(e), 'ng'));
 });
 
 if ('serviceWorker' in navigator) {

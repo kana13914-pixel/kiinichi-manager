@@ -13,7 +13,31 @@
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-state="loading">
+  <!-- 初回導線（D-009, D-014）。状態は app.js が body[data-state] に設定する
+       safari … Safariで開かれた：ホーム画面への追加を案内するだけ
+       setup  … ホーム画面のアプリで未設定：合言葉 → 通知許可 → 登録 を一続きで
+       ready  … 設定済み：通常の画面 -->
+  <section id="onboard-safari" class="card onboard">
+    <h2>ホーム画面に追加してから使ってください</h2>
+    <p>このアプリは、ホーム画面に追加したアイコンから開いたときだけ通知や記録が使えます（Safariで開いた画面とはデータが別になるため）。</p>
+    <ol>
+      <li>画面下の共有ボタン（四角から矢印が出ているマーク）をタップ</li>
+      <li>「ホーム画面に追加」→ 右上の「追加」</li>
+      <li>ホーム画面にできたアイコンから開く</li>
+    </ol>
+  </section>
+
+  <section id="onboard-setup" class="card onboard">
+    <h2>はじめに：通知の設定</h2>
+    <p>声を掛けるために通知を使います。合言葉を入れて、ボタンを押してください。続けて出る確認で「許可」を選びます。</p>
+    <label for="setup-token">合言葉（APP_TOKEN）</label>
+    <input id="setup-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button id="setup-start" type="button">通知を有効にして始める</button>
+    <p id="setup-status" class="status"></p>
+  </section>
+
+  <div id="main">
   <h1>フェーズ0 技術検証</h1>
   <!-- 公式素材は使わない（CLAUDE.md 禁止事項）。立ち絵はプレースホルダー -->
   <div class="placeholder">立ち絵<br>プレースホルダー</div>
@@ -39,10 +63,8 @@
   </section>
 
   <section class="card">
-    <h2>Web Push（ホーム画面のアプリで開く通知）</h2>
-    <p style="font-size:.8rem;margin:0 0 6px">ホーム画面のアイコンから開いた状態で設定してください（Safariで開いた画面では使えません）。</p>
-    <label for="worker-url" style="font-size:.8rem">送信サーバーのURL</label>
-    <input id="worker-url" placeholder="https://…workers.dev" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%;padding:8px">
+    <h2>通知の再設定</h2>
+    <p style="font-size:.8rem;margin:0 0 6px">通知が届かなくなったときや、合言葉を変えたときに使います。</p>
     <label for="app-token" style="font-size:.8rem">合言葉（APP_TOKEN）</label>
     <input id="app-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%;padding:8px">
     <button id="enable-push" type="button">通知を有効にする</button>
@@ -50,6 +72,8 @@
       <dt>Web Push</dt><dd id="push-status">未設定</dd>
     </dl>
   </section>
+
+  </div>
 
   <script src="settings.js"></script>
   <script src="app.js"></script>
