@@ -45,6 +45,10 @@
 
 ## 6. 動作確認（PCのブラウザでよい）
 
+手順1で控えたURLの末尾に `api/vapid-public-key` などを付け足したものを、ブラウザのアドレス欄に直接入力して開く。
+
+**Cloudflare Access（アカウント承認・ログインを挟む設定）は使わない。** iPhoneのアプリや送信ページからの呼び出しがログイン画面に止められて届かなくなる。不正な利用は合言葉（APP_TOKEN）で防いでいる。`workers.dev` の設定で Access を有効にした場合は無効に戻す。
+
 | 開くURL | 期待される表示 |
 | --- | --- |
 | `https://kiinichi-push.….workers.dev/` | `kiinichi push worker: OK` |
