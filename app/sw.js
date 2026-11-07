@@ -1,6 +1,6 @@
 // フェーズ0用の最小Service Worker。オフラインでも画面が開けるよう、静的ファイルをキャッシュする。
 // ファイルを更新したら CACHE_VERSION を上げること（古いキャッシュが残るのを防ぐ）。
-const CACHE_VERSION = 'phase0-v5';
+const CACHE_VERSION = 'phase1-v1';
 const ASSETS = [
   './',
   './index.html',
@@ -17,7 +17,8 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_VERSION).then((c) => c.addAll(ASSETS)));
+  // cache:'reload' … ブラウザの一時保存を使わず、必ずサーバーから最新を取る
+  event.waitUntil(caches.open(CACHE_VERSION).then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' })))));
   self.skipWaiting();
 });
 
@@ -30,15 +31,20 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// ネットワーク優先、失敗時はキャッシュ。検証中は最新ファイルを優先したいため。
+// ネットワーク優先、失敗時はキャッシュ。
+// cache:'no-cache' … GitHub Pagesはファイルを最大10分ブラウザに保存させるため、毎回サーバーに更新の有無を確認する
+// （変わっていなければ304で軽く済む）。これで更新後すぐ新しい版が表示される。
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (new URL(event.request.url).origin !== self.location.origin) return; // 送信サーバー等の外部APIはキャッシュしない
   event.respondWith(
-    fetch(event.request)
+    // navigate リクエストに初期化オプションは付けられないため、URLから作り直す
+    fetch(event.request.url, { cache: 'no-cache', credentials: 'same-origin' })
       .then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE_VERSION).then((c) => c.put(event.request, copy));
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE_VERSION).then((c) => c.put(event.request, copy));
+        }
         return res;
       })
       .catch(() => caches.match(event.request, { ignoreSearch: true }))

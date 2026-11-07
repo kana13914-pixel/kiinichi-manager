@@ -1,5 +1,8 @@
 // フェーズ0 技術検証用。起動状態を表示し、実機確認で何が起きたか目で見えるようにする。
 
+// 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
+const APP_VERSION = 'phase1-v1';
+
 function isStandalone() {
   return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 }
@@ -21,6 +24,7 @@ function setText(id, text, cls) {
 setText('display-mode', isStandalone() ? 'ホーム画面アプリ（standalone）' : 'ブラウザ内', isStandalone() ? 'ok' : '');
 setText('source', describeSource());
 setText('opened-at', new Date().toLocaleString('ja-JP'));
+setText('app-version', APP_VERSION);
 
 // 音声再生：ボタン1回で鳴らす。今はテスト用チャイム（合成音）。本番の声素材は人間が用意する（NEEDS_HUMAN）。
 const voice = new Audio('audio/test-chime.wav');
@@ -73,7 +77,7 @@ document.getElementById('enable-push').addEventListener('click', () => {
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker
-    .register('sw.js')
+    .register('sw.js', { updateViaCache: 'none' }) // sw.js 自体も一時保存を使わず更新を確認する
     .then(() => navigator.serviceWorker.ready)
     .then((reg) => {
       setText('sw-status', '登録済み', 'ok');

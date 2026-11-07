@@ -62,6 +62,9 @@ class PwaTest(unittest.TestCase):
         page.wait_for_selector("#sw-status.ok", timeout=10_000)
         self.assertEqual(page.text_content("#sw-status"), "登録済み")
         self.assertEqual(page.text_content("#source"), "URLを直接開いた")
+        # 画面の版と sw.js のキャッシュ版が一致している（更新し忘れ防止）
+        sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")
+        self.assertIn(f"const CACHE_VERSION = '{page.text_content('#app-version')}'", sw)
 
     def test_opened_from_notification_is_detected(self):
         page = self.new_page()

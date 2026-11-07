@@ -6,7 +6,7 @@ import vm from 'node:vm';
 
 const SCOPE = 'https://kana13914-pixel.github.io/x/app/';
 
-function loadSw({ windows = [] } = {}) {
+function loadSw({ windows = [], fetchImpl = () => {}, cachesImpl = {} } = {}) {
   const handlers = {};
   const shown = [];
   const opened = [];
@@ -21,7 +21,7 @@ function loadSw({ windows = [] } = {}) {
     skipWaiting: () => {},
     addEventListener: (type, fn) => { handlers[type] = fn; },
   };
-  vm.runInNewContext(readFileSync(new URL('../app/sw.js', import.meta.url), 'utf8'), { self, caches: {}, fetch: () => {}, URL });
+  vm.runInNewContext(readFileSync(new URL('../app/sw.js', import.meta.url), 'utf8'), { self, caches: cachesImpl, fetch: fetchImpl, URL, Request });
   return { handlers, shown, opened };
 }
 
@@ -62,4 +62,25 @@ test('通知タップ：開いている画面があれば前面に出して移�
   await fire(handlers.notificationclick, { notification: { close() {}, data: { url: SCOPE + 'index.html?source=webpush' } } });
   assert.deepEqual(calls, ['focus', 'navigate ' + SCOPE + 'index.html?source=webpush']);
   assert.deepEqual(opened, []);
+});
+
+test('同じサイトのファイルは毎回サーバーに更新を確認して取得する（古い版を出さない）', async () => {
+  const calls = [];
+  const put = [];
+  const fetchImpl = async (url, init) => { calls.push({ url, init }); return { ok: true, clone() { return this; } }; };
+  const cachesImpl = { open: async () => ({ put: (req, res) => put.push(req) }), match: async () => null };
+  const { handlers } = loadSw({ fetchImpl, cachesImpl });
+  let responded;
+  handlers.fetch({ request: { method: 'GET', url: SCOPE + 'app.js' }, respondWith: (p) => { responded = p; } });
+  await responded;
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, SCOPE + 'app.js');
+  assert.equal(calls[0].init.cache, 'no-cache');
+});
+
+test('外部（送信サーバー）へのリクエストには手を出さない', () => {
+  let responded = false;
+  const { handlers } = loadSw();
+  handlers.fetch({ request: { method: 'GET', url: 'https://kiinichi-push.example.workers.dev/api/status' }, respondWith: () => { responded = true; } });
+  assert.equal(responded, false);
 });
