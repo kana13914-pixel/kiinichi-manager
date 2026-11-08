@@ -31,7 +31,7 @@
   <section id="onboard-setup" class="card onboard">
     <h2>はじめに：通知の設定</h2>
     <p>声を掛けるために通知を使います。合言葉を入れて、ボタンを押してください。続けて出る確認で「許可」を選びます。</p>
-    <label for="setup-token">合言葉（APP_TOKEN）</label>
+    <label for="setup-token">合言葉</label>
     <input id="setup-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
     <button id="setup-start" type="button">通知を有効にして始める</button>
     <p id="setup-status" class="status"></p>
@@ -45,6 +45,10 @@
           <span id="clock-time" class="clock-time">--:--</span>
           <span id="clock-date" class="clock-date">-</span>
         </div>
+        <!-- 設定は日常的に開かないので右上（D-019 Q1）。歯車は簡略化すると太陽に見えるためスライダー型 -->
+        <a class="icon-btn" href="#settings" data-view="settings" aria-label="設定">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+        </a>
       </header>
 
       <div class="stage">
@@ -84,11 +88,11 @@
 
     <!-- 設定：フェーズ0の検証情報もここに移した -->
     <section id="view-settings" class="view">
-      <h1>設定</h1>
+      <header class="sub-header"><a href="#home" class="back">‹ ホーム</a><h1>設定</h1></header>
       <section class="card">
         <h2>通知の再設定</h2>
         <p class="note">通知が届かなくなったときや、合言葉を変えたときに使います。</p>
-        <label for="app-token" class="note">合言葉（APP_TOKEN）</label>
+        <label for="app-token" class="note">合言葉</label>
         <input id="app-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" class="field">
         <button id="enable-push" type="button">通知を有効にする</button>
         <dl>
@@ -108,12 +112,12 @@
     </section>
 
     <nav class="tabbar" aria-label="画面の切り替え">
-      <a href="#home" data-view="home">ホーム</a>
-      <a href="#schedule" data-view="schedule">予定</a>
-      <a href="#tasks" data-view="tasks">タスク</a>
-      <a href="#timer" data-view="timer">タイマー</a>
-      <a href="#report" data-view="report">日報</a>
-      <a href="#settings" data-view="settings">設定</a>
+      <!-- アイコンはオリジナルの単純な線画（I2-02, M3-01） -->
+      <a href="#home" data-view="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg><span>ホーム</span></a>
+      <a href="#schedule" data-view="schedule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg><span>予定</span></a>
+      <a href="#tasks" data-view="tasks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7l2 2 3-3M4 15l2 2 3-3M12 8h8M12 16h8"/></svg><span>タスク</span></a>
+      <a href="#timer" data-view="timer"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7"/><path d="M12 13V9M10 3h4"/></svg><span>タイマー</span></a>
+      <a href="#report" data-view="report"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M9 11h6M9 15h6"/></svg><span>日報</span></a>
     </nav>
   </div>
 

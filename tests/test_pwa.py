@@ -310,13 +310,20 @@ class PwaTest(unittest.TestCase):
         self.assertIn(line, ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"])
 
     def test_tabbar_switches_views(self):
+        # D-019 Q1：タブは5個、設定はホーム右上のアイコンから開き「‹ ホーム」で戻る
         page = self.ready_page()
-        page.click(".tabbar a[data-view=settings]")
+        self.assertEqual(len(page.query_selector_all(".tabbar a")), 5)
+        self.assertEqual(page.get_attribute(".tabbar a[data-view=home]", "aria-current"), "page")
+        page.click(".home-header a[data-view=settings]")
         page.wait_for_selector("#view-settings", state="visible", timeout=3_000)
         self.assertFalse(page.is_visible("#view-home"))
+        self.assertIsNone(page.get_attribute(".tabbar a[data-view=home]", "aria-current"))
         self.assertEqual(page.text_content("#app-version"), page.evaluate("APP_VERSION"))
-        page.click(".tabbar a[data-view=home]")
+        page.click("#view-settings .back")
         page.wait_for_selector("#view-home", state="visible", timeout=3_000)
+        page.click(".tabbar a[data-view=tasks]")
+        page.wait_for_selector("#view-tasks", state="visible", timeout=3_000)
+        self.assertEqual(page.get_attribute(".tabbar a[data-view=tasks]", "aria-current"), "page")
 
     def test_inputs_are_16px_or_larger(self):
         # 16px 未満の入力欄は iOS がフォーカス時に画面を拡大する（V2-04）

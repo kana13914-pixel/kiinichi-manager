@@ -188,13 +188,36 @@ button.voice.ready { background: var(--color-accent); color: var(--color-on-acce
 /* 取り消しの表示（T09） */
 .toast { display: none; }
 
-/* ---------- 下のタブ ---------- */
+/* ---------- 下のタブ（D-019 Q1：5個。I2-01〜03） ---------- */
 .tabbar {
-  position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(6, 1fr);
-  background: var(--color-bg-deep); border-top: 1px solid var(--color-border-subtle); padding-bottom: var(--safe-bottom);
+  position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr);
+  height: calc(var(--tabbar-h) + var(--safe-bottom)); padding-bottom: var(--safe-bottom);
+  background: var(--color-bg-deep); border-top: 1px solid var(--color-border-subtle);
 }
-.tabbar a { color: var(--color-text-tertiary); text-decoration: none; text-align: center; font-size: var(--fs-caption2); padding: var(--space-4) 0; }
-.tabbar a.active { color: var(--color-accent); font-weight: 700; }
+.tabbar a {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--color-text-tertiary); text-decoration: none; font-size: var(--fs-caption2);
+}
+.tabbar svg, .icon-btn svg {
+  width: var(--size-icon); height: var(--size-icon);
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.tabbar a[aria-current="page"] { color: var(--color-accent); font-weight: 700; }
+.tabbar a[aria-current="page"] svg { stroke-width: 2.2; }
+
+/* 右上の設定ボタン（P2-02：aria-label あり） */
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--tap); height: var(--tap); margin-right: calc(var(--space-2) * -1);
+  color: var(--color-text-secondary); border-radius: var(--radius-pill);
+}
+/* 子画面の戻る導線（I2-04） */
+.sub-header { display: flex; align-items: center; gap: var(--space-3); min-height: var(--tap); }
+.sub-header h1 { margin: 0; }
+.back {
+  display: inline-flex; align-items: center; min-height: var(--tap); padding-right: var(--space-2);
+  color: var(--color-text-secondary); text-decoration: none; font-size: var(--fs-callout);
+}
 
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {

@@ -50,12 +50,14 @@ setText('source', describeSource());
 setText('opened-at', new Date().toLocaleString('ja-JP'));
 setText('app-version', APP_VERSION);
 
-// ---------- 画面の切り替え（下のタブ。URLの #home などで管理） ----------
+// ---------- 画面の切り替え（下のタブ5個＋右上の設定。URLの #home などで管理。D-019 Q1） ----------
 const VIEWS = ['home', 'schedule', 'tasks', 'timer', 'report', 'settings'];
 function showView() {
   const name = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home';
   for (const v of VIEWS) document.getElementById('view-' + v).hidden = v !== name;
-  for (const a of document.querySelectorAll('.tabbar a')) a.classList.toggle('active', a.dataset.view === name);
+  for (const a of document.querySelectorAll('.tabbar a')) {
+    if (a.dataset.view === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); // I2-03
+  }
 }
 window.addEventListener('hashchange', showView);
 showView();
