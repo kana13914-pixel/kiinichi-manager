@@ -377,6 +377,36 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.text_content("#next-rest"), "あと40分")
         self.assertEqual(page.query_selector(".next-day"), None)
 
+    # ---------- セリフの選び方（T05, D-019 Q4=出す） ----------
+    def idle_lines(self, period):
+        data = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))
+        cond = [c for c in data["idle_greeting"]["conditions"] if c["id"] == period][0]
+        return cond["lines"]
+
+    def test_idle_line_follows_time_of_day(self):
+        for hour, period in [(7, "morning"), (13, "day"), (19, "evening"), (23, "night")]:
+            with self.subTest(hour=hour):
+                page = self.clock_page(hour, 0)
+                page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
+                self.assertIn(page.text_content("#bubble-text"), self.idle_lines(period))
+                self.assertEqual(page.get_attribute("body", "data-period"), period)
+                self.assertNotIn("ready", page.get_attribute("#play-voice", "class") or "")
+
+    def test_line_is_not_repeated(self):
+        page = self.clock_page(13, 0)
+        texts = page.evaluate("[0,1,2,3,4,5].map(() => pickLine('idle_greeting.day').text)")
+        for a, b in zip(texts, texts[1:]):
+            self.assertNotEqual(a, b, texts)
+
+    def test_notification_line_param_is_used(self):
+        page = self.clock_page(9, 3, "&source=webpush&trigger=work_start.default&line=1")
+        page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
+        self.assertEqual(page.text_content("#bubble-text"), "了解。進捗、気になったらこっちから聞く。")
+        page = self.clock_page(9, 3, "&source=webpush&trigger=work_start.default&line=9")
+        page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
+        self.assertIn(page.text_content("#bubble-text"),
+                      ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"])
+
 
 if __name__ == "__main__":
     unittest.main()
