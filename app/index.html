@@ -38,36 +38,43 @@
   </section>
 
   <div id="main">
-    <!-- ホーム（D-018 仮決定）：時刻 → キャラクターと吹き出し → 次の予定 → よく使う操作 -->
-    <section id="view-home" class="view">
-      <header class="clock">
-        <div id="clock-time" class="clock-time">--:--</div>
-        <div id="clock-date" class="clock-date">-</div>
+    <!-- ホーム（D-019 / A配置）：見出し行 → 舞台（立ち絵）→ 会話ウィンドウ → 次の予定の帯 → 記録。スクロールしない -->
+    <section id="view-home" class="view home">
+      <header class="home-header">
+        <div class="clock">
+          <span id="clock-time" class="clock-time">--:--</span>
+          <span id="clock-date" class="clock-date">-</span>
+        </div>
       </header>
 
       <div class="stage">
         <!-- 公式素材は使わない（CLAUDE.md 禁止事項）。立ち絵はプレースホルダー -->
-        <div class="placeholder" id="portrait">立ち絵<br>プレースホルダー</div>
-        <div class="bubble">
-          <p id="bubble-text">…</p>
-          <button id="play-voice" type="button" class="voice">▶ 声を聞く</button>
-          <small id="audio-status" class="status">未再生</small>
-        </div>
+        <div id="portrait" class="portrait" role="img" aria-label="キィニチの立ち絵（仮）">立ち絵<br>（仮）</div>
       </div>
 
-      <section class="card">
-        <h2>次の予定 <small class="tag">仮データ</small></h2>
+      <section class="dialogue" aria-label="キィニチのセリフ">
+        <div class="nameplate" aria-hidden="true">キィニチ</div>
+        <p id="bubble-text" class="line" role="status">…</p>
+        <div class="dialogue-foot">
+          <span id="audio-status" class="sr-only">未再生</span>
+          <button id="play-voice" type="button" class="voice">▶ 声を聞く</button>
+        </div>
+      </section>
+
+      <section class="next-strip" aria-label="次の予定">
+        <div class="next-head">
+          <span class="next-label">次の予定 <small class="tag">仮</small></span>
+          <span id="next-rest" class="next-rest"></span>
+        </div>
         <div id="next-event" class="next-event">-</div>
       </section>
 
-      <section class="card actions">
-        <h2>記録</h2>
-        <div class="action-grid">
-          <button type="button" class="act" data-trigger="morning_wake.on_time">起きた</button>
-          <button type="button" class="act" data-trigger="work_start.default">仕事開始</button>
-        </div>
-        <small class="note">食事・休憩・入浴などの記録はフェーズ3〜4で追加</small>
+      <section class="record-dock" aria-label="記録">
+        <button type="button" class="act" data-trigger="morning_wake.on_time" data-label="起きた" data-record="wake" data-hours="4-11">起きた</button>
+        <button type="button" class="act" data-trigger="work_start.default" data-label="仕事開始" data-record="work_start" data-hours="7-13">仕事開始</button>
       </section>
+
+      <div id="toast" class="toast" role="status" hidden></div>
     </section>
 
     <section id="view-schedule" class="view"><h1>予定</h1><p class="note">この画面は次のタスクで作ります。</p></section>

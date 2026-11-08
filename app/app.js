@@ -62,27 +62,57 @@ showView();
 
 // ---------- 時計 ----------
 function pad(n) { return String(n).padStart(2, '0'); }
+function hm(d) { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function setIfChanged(el, text) { if (el.textContent !== text) el.textContent = text; } // P3-04
 function renderClock(now = new Date()) {
-  document.getElementById('clock-time').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-  document.getElementById('clock-date').textContent =
-    now.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
+  setIfChanged(document.getElementById('clock-time'), hm(now));
+  setIfChanged(document.getElementById('clock-date'),
+    now.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' }));
 }
 
 // ---------- 次の予定（今は仮データ） ----------
+// 今日の予定が尽きたら、明日の最初の予定を「明日」付きで出す（C7-03）
+function nextEvent(now = new Date()) {
+  const today = SampleData.todayEvents(now).find((e) => e.at > now);
+  if (today) return { ...today, tomorrow: false };
+  const tmr = new Date(now); tmr.setDate(tmr.getDate() + 1);
+  const first = SampleData.todayEvents(tmr)[0];
+  return first ? { ...first, tomorrow: true } : null;
+}
+// 「あと N 時間 M 分」（1時間未満は「あと M 分」）（C7-02）
+function restText(ms) {
+  const mins = Math.max(0, Math.ceil(ms / 60000));
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h === 0) return `あと${m}分`;
+  return m ? `あと${h}時間${m}分` : `あと${h}時間`;
+}
+let lastEventKey = '';
 function renderNextEvent(now = new Date()) {
-  const next = SampleData.todayEvents(now).find((e) => e.at > now);
+  const next = nextEvent(now);
   const el = document.getElementById('next-event');
-  if (!next) { el.textContent = '今日の予定はもうありません'; return; }
-  const mins = Math.round((next.at - now) / 60000);
-  const rest = mins >= 60 ? `${Math.floor(mins / 60)}時間${mins % 60 ? (mins % 60) + '分' : ''}後` : `${mins}分後`;
-  el.innerHTML = '';
-  const time = document.createElement('span'); time.className = 'next-time'; time.textContent = `${pad(next.at.getHours())}:${pad(next.at.getMinutes())}`;
-  const title = document.createElement('span'); title.className = 'next-title'; title.textContent = next.title;
-  const left = document.createElement('span'); left.className = 'next-rest'; left.textContent = rest;
-  el.append(time, title, left);
+  setIfChanged(document.getElementById('next-rest'), next ? restText(next.at - now) : '');
+  const key = next ? `${next.tomorrow}|${next.at.getTime()}|${next.title}` : 'none';
+  if (key === lastEventKey) return; // 表示が変わるときだけ作り直す（P3-04）
+  lastEventKey = key;
+  el.textContent = '';
+  if (!next) { el.textContent = '予定はありません'; return; }
+  const parts = [];
+  if (next.tomorrow) parts.push(['next-day', '明日']);
+  parts.push(['next-time', hm(next.at)], ['next-title', next.title]);
+  for (const [cls, text] of parts) {
+    const span = document.createElement('span'); span.className = cls; span.textContent = text; el.append(span);
+  }
 }
 
-function tick() { const now = new Date(); renderClock(now); renderNextEvent(now); }
+let lastMinute = '';
+function tick() {
+  const now = new Date();
+  const minute = hm(now) + now.toDateString();
+  if (minute === lastMinute) return; // 分が変わったときだけ書き換える（P3-04）
+  lastMinute = minute;
+  renderClock(now);
+  renderNextEvent(now);
+}
 tick();
 setInterval(tick, 1000);
 
