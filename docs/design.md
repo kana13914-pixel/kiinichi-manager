@@ -88,28 +88,39 @@
 | `--safe-top` |  | `env(safe-area-inset-top, 0px)` |
 | `--safe-bottom` |  | `env(safe-area-inset-bottom, 0px)` |
 
+## 夜の上書き（D-019 Q5）
+
+22〜4時は `body[data-period="night"]` で次のトークンを上書きする（C9-02）。
+
+| 名前 | 昼 | 夜 |
+| --- | --- | --- |
+| `--color-bg` | `#1e4034` | `#142c24` |
+| `--color-surface-1` | `#2a4b3f` | `#1f3a30` |
+| `--color-surface-2` | `#355749` | `#29473b` |
+| `--color-bg-deep` | `#163128` | `#0f221b` |
+
 ## コントラスト表
 
 `python3 scripts/contrast_check.py` の出力（WCAG 2.x の相対輝度。`scrim` は `bg` に重ねた色で計算）。基準：文字 4.5、部品の枠 3.0（V3-01, V3-03）。
 
-| 文字・部品 | 下地 | 基準 | 昼 |
-| --- | --- | --- | --- |
-| text | bg | 4.5 | 10.12 |
-| text | surface-1 | 4.5 | 8.54 |
-| text | surface-2 | 4.5 | 7.12 |
-| text | scrim | 4.5 | 14.66 |
-| text-secondary | bg | 4.5 | 7.47 |
-| text-secondary | surface-1 | 4.5 | 6.31 |
-| text-secondary | surface-2 | 4.5 | 5.26 |
-| text-tertiary | bg | 4.5 | 5.92 |
-| text-tertiary | surface-1 | 4.5 | 5.00 |
-| text-tertiary | bg-deep | 4.5 | 7.23 |
-| accent | bg-deep | 4.5 | 8.30 |
-| on-accent | accent | 4.5 | 9.91 |
-| success | bg | 4.5 | 7.45 |
-| success | surface-1 | 4.5 | 6.29 |
-| danger | surface-1 | 4.5 | 5.63 |
-| danger | scrim | 4.5 | 9.66 |
-| border | bg | 3.0 | 3.76 |
-| border | surface-1 | 3.0 | 3.17 |
-| border | scrim | 3.0 | 5.44 |
+| 文字・部品 | 下地 | 基準 | 昼 | 夜 |
+| --- | --- | --- | --- | --- |
+| text | bg | 4.5 | 10.12 | 13.14 |
+| text | surface-1 | 4.5 | 8.54 | 10.90 |
+| text | surface-2 | 4.5 | 7.12 | 9.03 |
+| text | scrim | 4.5 | 14.66 | 14.96 |
+| text-secondary | bg | 4.5 | 7.47 | 9.70 |
+| text-secondary | surface-1 | 4.5 | 6.31 | 8.05 |
+| text-secondary | surface-2 | 4.5 | 5.26 | 6.67 |
+| text-tertiary | bg | 4.5 | 5.92 | 7.69 |
+| text-tertiary | surface-1 | 4.5 | 5.00 | 6.38 |
+| text-tertiary | bg-deep | 4.5 | 7.23 | 8.60 |
+| accent | bg-deep | 4.5 | 8.30 | 9.87 |
+| on-accent | accent | 4.5 | 9.91 | 9.91 |
+| success | bg | 4.5 | 7.45 | 9.68 |
+| success | surface-1 | 4.5 | 6.29 | 8.03 |
+| danger | surface-1 | 4.5 | 5.63 | 7.18 |
+| danger | scrim | 4.5 | 9.66 | 9.86 |
+| border | bg | 3.0 | 3.76 | 4.88 |
+| border | surface-1 | 3.0 | 3.17 | 4.05 |
+| border | scrim | 3.0 | 5.44 | 5.55 |
