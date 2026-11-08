@@ -112,42 +112,85 @@ function tick() {
   const minute = hm(now) + now.toDateString();
   if (minute === lastMinute) return; // 分が変わったときだけ書き換える（P3-04）
   lastMinute = minute;
+  applyPeriod(now);
   renderClock(now);
   renderNextEvent(now);
 }
 tick();
 setInterval(tick, 1000);
 
-// ---------- 吹き出し（セリフ集 app/data/dialogue.json から選ぶ） ----------
+// ---------- 時間帯（C9-01。時間帯の一言と配色はこれを参照する） ----------
+function periodOf(now = new Date()) {
+  const h = now.getHours();
+  if (h >= 5 && h < 10) return 'morning';
+  if (h >= 10 && h < 17) return 'day';
+  if (h >= 17 && h < 22) return 'evening';
+  return 'night';
+}
+function applyPeriod(now = new Date()) {
+  const p = periodOf(now);
+  if (document.body.dataset.period !== p) document.body.dataset.period = p; // 変わったときだけ
+}
+
+// ---------- セリフ（セリフ集 app/data/dialogue.json から選ぶ） ----------
 let dialogue = null;
 const dialogueReady = fetch('data/dialogue.json').then((r) => r.json()).then((d) => { dialogue = d; }).catch(() => {});
+const lastLineIndex = {}; // キーごとに直前に出した候補の番号（C1-02）
 
-// "morning_wake.on_time" のようなキーからセリフを1つ選ぶ
-function pickLine(key) {
+function candidates(key) {
   if (!dialogue || !key) return null;
   const [trigger, condId] = key.split('.');
   const cond = dialogue[trigger] && (dialogue[trigger].conditions || []).find((c) => c.id === condId);
-  if (!cond || !cond.lines || !cond.lines.length) return null;
-  return cond.lines[Math.floor(Math.random() * cond.lines.length)];
+  return cond && cond.lines && cond.lines.length ? cond.lines : null;
 }
 
-function say(key) {
-  const line = pickLine(key);
-  if (!line) return false;
-  document.getElementById('bubble-text').textContent = line;
-  document.getElementById('play-voice').classList.add('ready'); // 声のボタンを目立たせる
+// "morning_wake.on_time" のようなキーからセリフを1つ選び、{ text, index } を返す
+// index が範囲内の整数ならその候補（通知の line 指定。C5-05）。それ以外は直前と違うものをランダムに（C1-02）
+function pickLine(key, { index } = {}) {
+  const lines = candidates(key);
+  if (!lines) return null;
+  let i;
+  if (Number.isInteger(index) && index >= 0 && index < lines.length) {
+    i = index;
+  } else {
+    const pool = lines.map((_, k) => k).filter((k) => lines.length < 2 || k !== lastLineIndex[key]);
+    i = pool[Math.floor(Math.random() * pool.length)];
+  }
+  lastLineIndex[key] = i;
+  return { text: lines[i], index: i };
+}
+
+// セリフを表示する。ready が真なら「声を聞く」を主ボタンにする
+function showLine(key, { index, ready = false } = {}) {
+  const picked = pickLine(key, { index });
+  if (!picked) return false;
+  document.getElementById('bubble-text').textContent = picked.text;
+  document.getElementById('play-voice').classList.toggle('ready', ready);
   return true;
 }
 
-// 通知から開いたとき（?trigger=midday_check.meal_overdue など）は、そのセリフをすぐ出す
-dialogueReady.then(() => {
-  const key = new URLSearchParams(location.search).get('trigger');
-  if (!say(key)) document.getElementById('bubble-text').textContent = '（ここにセリフが出ます）';
-});
+// 通知や記録の反応がないときの時間帯の一言（D-019 Q4 = 出す）。出せなければ「…」（沈黙）
+function showIdle(now = new Date()) {
+  if (showLine('idle_greeting.' + periodOf(now))) return;
+  document.getElementById('bubble-text').textContent = '…';
+  document.getElementById('play-voice').classList.remove('ready');
+}
 
-// 記録ボタン（今は反応の確認だけ。記録の保存はフェーズ2〜3）
+// 開いたときの処理（読み込み時・通知のタップ時）。URL の source / trigger / line を見る
+function applyOpenParams(params, now = new Date()) {
+  const trigger = params.get('trigger');
+  const index = params.has('line') ? Number(params.get('line')) : undefined; // Number(null) は 0 になるため has を確かめる
+  const fromPush = params.get('source') === 'webpush';
+  if (trigger && showLine(trigger, { index, ready: fromPush })) return;
+  showIdle(now);
+}
+
+applyPeriod();
+dialogueReady.then(() => applyOpenParams(new URLSearchParams(location.search)));
+
+// 記録ボタン（反応のセリフ。主ボタンが2つにならないよう ready は付けない）
 for (const btn of document.querySelectorAll('.act')) {
-  btn.addEventListener('click', () => say(btn.dataset.trigger));
+  btn.addEventListener('click', () => showLine(btn.dataset.trigger, { ready: false }));
 }
 
 // 音声再生：ボタン1回で鳴らす。今はテスト用チャイム（合成音）。本番の声素材は人間が用意する（NEEDS_HUMAN）。
