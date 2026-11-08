@@ -188,6 +188,17 @@ button.voice[data-state="error"] { color: var(--color-danger); border-color: var
 .record-dock .act {
   margin-top: 0; min-height: var(--size-record); padding: 0 var(--space-2);
   font-size: var(--fs-body); white-space: nowrap;
+  background: var(--color-surface-2); color: var(--color-text); border: 1px solid var(--color-border);
+}
+/* 今押すもの（主ボタン）は 1 つだけ金で塗る（V3-02, C4-02） */
+.record-dock .act.primary { background: var(--color-accent); color: var(--color-on-accent); border-color: var(--color-accent); }
+
+/* 通知から開いた直後（C5-03）：セリフの面の縁を金に、「声を聞く」を 2 回だけ脈動させる */
+body.from-notification .dialogue { border-color: var(--color-accent); }
+body.from-notification button.voice.ready { animation: voice-pulse 1.2s var(--ease-out) 2; }
+@keyframes voice-pulse {
+  0% { box-shadow: 0 0 0 0 var(--color-accent-glow); }
+  100% { box-shadow: 0 0 0 var(--space-3) transparent; }
 }
 
 /* 取り消しの表示（T09） */
