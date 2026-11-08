@@ -69,6 +69,7 @@
 - `docs/cloudflare_setup.md` — Web Push送信サーバー（Cloudflare Workers）の設定手順
 - `docs/ui_knowledge.md` — UI/UX の知識ベース（ルール ID 付き）。画面を作る・直す前に読む
 - `docs/design.md` — デザインの決まりごと（トークン・原則・コントラスト表）
+- `scripts/contrast_check.py` — 色の明暗差を計算する（トークンを変えたら実行）
 - `worker/worker.js` — 送信サーバーのコード（ダッシュボードに貼り付けて使う）
 - `app/` — PWA本体（`index.html` が本体、`send.html` は検証用の送信ページ）
 - `tests/` — 自動テスト（`python3 -m unittest discover -s tests` と `node --test tests/worker.test.mjs tests/sw.test.mjs`）
