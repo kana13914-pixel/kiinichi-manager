@@ -2,6 +2,7 @@
 iOS固有の挙動（ホーム画面追加・通知許可）はここでは確認できないため、実機手順は docs/roadmap.md を参照。
 """
 import functools
+from datetime import datetime
 import json
 import threading
 import unittest
@@ -12,6 +13,13 @@ from playwright.sync_api import sync_playwright
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
 
+# iPhone の 3 機種（V4-02）：(幅, 高さ), (上, 下のセーフエリア)
+DEVICES = [((375, 667), (20, 0)), ((393, 852), (59, 34)), ((430, 932), (59, 34))]
+# 裏に回す操作を模す（window.__vis を 'hidden' にして visibilitychange を発火する）
+VISIBILITY = """
+Object.defineProperty(Document.prototype, 'visibilityState', { configurable: true, get() { return window.__vis || 'visible'; } });
+Object.defineProperty(Document.prototype, 'hidden', { configurable: true, get() { return (window.__vis || 'visible') === 'hidden'; } });
+"""
 # 設定済み（ready）の状態を作る
 READY = "localStorage.setItem('setup.done','1')"
 # ヘッドレスChromeは本物のプッシュ購読ができない（外部通信が必要）ため、購読処理だけ偽物にする
@@ -248,6 +256,25 @@ class PwaTest(unittest.TestCase):
         page.goto(self.base + "index.html?mode=standalone" + query)
         return page
 
+    def clock_page(self, hour, minute, query="", size=(393, 852), safe=None, day=9, init_script=None):
+        """時刻と画面の大きさを決めて、設定済みの状態でホームを開く。safe=(上, 下) でセーフエリアを模す。"""
+        ctx = self.browser.new_context(permissions=["notifications"], viewport={"width": size[0], "height": size[1]})
+        self.addCleanup(ctx.close)
+        ctx.add_init_script(READY)
+        ctx.add_init_script(VISIBILITY)
+        if init_script:
+            ctx.add_init_script(init_script)
+        page = ctx.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.addCleanup(lambda: self.assertEqual(errors, [], "JSエラーが出ている"))
+        page.clock.install(time=datetime(2026, 11, day, hour, minute, 0))
+        page.goto(self.base + "index.html?mode=standalone" + query)
+        if safe:
+            page.add_style_tag(content=":root{--safe-top:%dpx;--safe-bottom:%dpx}" % safe)
+        page.wait_for_function("dialogue !== null", timeout=3_000)
+        return page
+
     def test_home_shows_clock_next_event_and_portrait_within_3_seconds(self):
         import time
         page = self.new_page(permissions=["notifications"], init_script=READY)
@@ -277,8 +304,8 @@ class PwaTest(unittest.TestCase):
 
     def test_record_button_shows_template_line(self):
         page = self.ready_page()
-        page.wait_for_function("document.getElementById('bubble-text').textContent.includes('セリフが出ます')", timeout=3_000)
-        page.click("text=仕事開始")
+        page.wait_for_function("dialogue !== null", timeout=3_000)
+        page.click(".act[data-record=work_start]")
         line = page.text_content("#bubble-text")
         self.assertIn(line, ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"])
 
@@ -298,6 +325,50 @@ class PwaTest(unittest.TestCase):
         sizes = page.eval_on_selector_all("input", "els => els.map(e => parseFloat(getComputedStyle(e).fontSize))")
         self.assertTrue(sizes)
         self.assertTrue(all(sz >= 16 for sz in sizes), sizes)
+
+    # ---------- ホームの構造（T03, D-019 Q2=A, Q3=28px） ----------
+    def test_home_fits_without_scrolling(self):
+        for size, safe in DEVICES:
+            with self.subTest(size=size):
+                page = self.clock_page(9, 3, size=size, safe=safe)
+                m = page.evaluate("""() => {
+                  const v = document.getElementById('play-voice').getBoundingClientRect();
+                  const acts = [...document.querySelectorAll('.act')].map((b) => {
+                    const lh = parseFloat(getComputedStyle(b).lineHeight) || parseFloat(getComputedStyle(b).fontSize) * 1.3;
+                    return { h: b.getBoundingClientRect().height, sw: b.scrollWidth, cw: b.clientWidth, top: b.getBoundingClientRect().top };
+                  });
+                  return { sh: document.documentElement.scrollHeight, ih: innerHeight,
+                           vTop: v.top, vH: v.height, acts };
+                }""")
+                self.assertLessEqual(m["sh"], m["ih"], f"{size} ではみ出している")
+                self.assertGreaterEqual(m["vH"], 44)
+                self.assertGreater(m["vTop"], m["ih"] / 2, "声を聞くは下半分に（I1-02）")
+                for a in m["acts"]:
+                    self.assertLessEqual(a["sw"], a["cw"], "記録ボタンのラベルが収まっていない")
+                    self.assertGreater(a["top"], m["ih"] / 2)
+
+    def test_clock_size_matches_decision(self):
+        page = self.clock_page(9, 3)
+        size = page.eval_on_selector("#clock-time", "e => parseFloat(getComputedStyle(e).fontSize)")
+        self.assertEqual(size, 28)
+
+    def test_home_dom_order(self):
+        page = self.clock_page(9, 3)
+        order = page.evaluate("[...document.querySelectorAll('#view-home > *')].map(e => e.className.split(' ')[0])")
+        self.assertEqual(order[:5], ["home-header", "stage", "dialogue", "next-strip", "record-dock"])
+
+    def test_next_event_shows_tomorrow_after_last_item(self):
+        page = self.clock_page(23, 48)
+        self.assertEqual(page.text_content(".next-day"), "明日")
+        self.assertEqual(page.text_content(".next-time"), "07:00")
+        self.assertEqual(page.text_content(".next-title"), "起床")
+        self.assertEqual(page.text_content("#next-rest"), "あと7時間12分")
+
+    def test_next_event_rest_under_an_hour(self):
+        page = self.clock_page(14, 20)
+        self.assertEqual(page.text_content(".next-title"), "休憩")
+        self.assertEqual(page.text_content("#next-rest"), "あと40分")
+        self.assertEqual(page.query_selector(".next-day"), None)
 
 
 if __name__ == "__main__":

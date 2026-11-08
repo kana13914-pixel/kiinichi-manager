@@ -68,7 +68,7 @@ html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
 [hidden] { display: none !important; } /* P1-10 */
 body {
   margin: 0; min-height: 100dvh; overscroll-behavior: none; /* V4-03, P1-09 */
-  padding: max(var(--safe-top), var(--space-3)) var(--space-5) var(--space-6); /* P1-01 */
+  padding: max(var(--safe-top), var(--space-3)) var(--space-4) var(--space-6); /* P1-01 */
   font-family: var(--font-sans); font-size: var(--fs-callout);
   background: var(--color-bg); color: var(--color-text);
 }
@@ -110,32 +110,83 @@ body[data-state="ready"] #main { display: block; }
 .onboard p, .onboard ol { font-size: var(--fs-subhead); line-height: var(--lh-body); }
 .status { font-size: var(--fs-footnote); min-height: calc(1em * var(--lh-body)); }
 
-/* ---------- ホーム（D-018 の配置。T03 で D-019 の配置に置き換える） ---------- */
-.clock { text-align: center; margin-top: var(--space-4); }
-.clock-time { font-size: var(--fs-title1); font-weight: 700; font-variant-numeric: tabular-nums; }
-.clock-date { color: var(--color-text-secondary); font-size: var(--fs-subhead); }
-.stage { display: flex; gap: var(--space-3); align-items: flex-end; margin: var(--space-4) 0 var(--space-2); }
-.placeholder {
-  flex: 0 0 auto; width: calc(var(--stage-min-h) * 0.75); height: var(--stage-min-h);
-  border: 2px dashed var(--color-border); border-radius: var(--radius-m);
-  display: flex; align-items: center; justify-content: center; text-align: center;
-  font-size: var(--fs-footnote); color: var(--color-text-secondary);
-}
-.bubble { position: relative; flex: 1; background: var(--color-scrim); border-radius: var(--radius-l); padding: var(--space-3) var(--space-4); }
-.bubble p { margin: 0 0 var(--space-2); font-size: var(--fs-body); line-height: var(--lh-body); min-height: calc(2em * var(--lh-body)); }
-button.voice { margin-top: 0; min-height: var(--tap); padding: var(--space-2); font-size: var(--fs-subhead); background: var(--color-surface-2); color: var(--color-text); }
-button.voice.ready { background: var(--color-accent); color: var(--color-on-accent); }
+/* ---------- ホーム（D-019 / A配置） ---------- */
+.view h1 { margin-top: var(--space-5); }
 .tag {
   font-size: var(--fs-caption); font-weight: 400; color: var(--color-text-tertiary);
   border: 1px solid currentColor; border-radius: var(--radius-xs); padding: 0 var(--space-1); margin-left: var(--space-1);
 }
-.next-event { display: flex; align-items: baseline; gap: var(--space-3); }
-.next-time { font-size: var(--fs-title3); font-weight: 700; font-variant-numeric: tabular-nums; }
-.next-title { flex: 1; font-size: var(--fs-body); }
+/* ホームは画面の高さに収める（V4-02） */
+#view-home:not([hidden]) {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  height: calc(100dvh - max(var(--safe-top), var(--space-3)) - var(--tabbar-h) - var(--safe-bottom) - var(--space-4));
+  min-height: var(--home-min-h);
+}
+
+/* 見出し行：時刻と日付を横1行（D-019 Q3=28px, V1-02） */
+.home-header { display: flex; align-items: center; justify-content: space-between; min-height: var(--tap); }
+.clock { display: flex; align-items: baseline; gap: var(--space-2); }
+.clock-time { font-size: var(--fs-title1); font-weight: 700; line-height: var(--lh-tight); font-variant-numeric: tabular-nums; }
+.clock-date { font-size: var(--fs-subhead); color: var(--color-text-secondary); }
+
+/* 舞台：伸び縮みする唯一の部分（V4-04, C1-05） */
+.stage {
+  flex: 1 1 auto; min-height: var(--stage-min-h); display: flex; align-items: flex-end; justify-content: center;
+  background: radial-gradient(ellipse at 50% 70%, var(--color-stage-glow), transparent 65%);
+}
+.portrait {
+  height: 100%; max-height: var(--portrait-max-h); aspect-ratio: 3 / 4;
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  font-size: var(--fs-footnote); color: var(--color-text-secondary);
+  border: 2px dashed var(--color-border); border-bottom: 0; border-radius: var(--radius-l) var(--radius-l) 0 0;
+  -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; /* P1-07 */
+}
+
+/* 会話ウィンドウ：立ち絵の足元に重ねる（C2-01, V3-06） */
+.dialogue {
+  position: relative; margin-top: calc(var(--space-6) * -1);
+  background: var(--color-scrim); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-l);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  -webkit-backdrop-filter: blur(var(--blur-dialogue)); backdrop-filter: blur(var(--blur-dialogue));
+}
+.nameplate {
+  position: absolute; top: calc(var(--space-3) * -1); left: var(--space-4);
+  padding: 0 var(--space-2); font-size: var(--fs-footnote); font-weight: 700; line-height: calc(var(--space-5) - 2px);
+  color: var(--color-accent); background: var(--color-bg-deep);
+  border: 1px solid var(--color-accent); border-radius: var(--radius-s);
+}
+.line {
+  margin: 0; font-size: var(--fs-body); line-height: var(--lh-body);
+  min-height: calc(2em * var(--lh-body)); /* P3-02：セリフが入る前に高さを確保 */
+  line-break: strict; text-wrap: pretty; /* V2-07 */
+}
+.dialogue-foot { display: flex; justify-content: flex-end; margin-top: var(--space-2); }
+button.voice {
+  width: auto; margin-top: 0; min-height: var(--tap); padding: 0 var(--space-4);
+  font-size: var(--fs-subhead); border-radius: var(--radius-pill);
+  background: var(--color-surface-2); color: var(--color-text);
+}
+button.voice.ready { background: var(--color-accent); color: var(--color-on-accent); }
+
+/* 次の予定の帯（C7-02, C7-03） */
+.next-strip { background: var(--color-surface-1); border-radius: var(--radius-m); padding: var(--space-2) var(--space-4) var(--space-3); }
+.next-head { display: flex; justify-content: space-between; align-items: baseline; }
+.next-label { font-size: var(--fs-caption); color: var(--color-text-tertiary); }
 .next-rest { font-size: var(--fs-footnote); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
-.action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
-.action-grid button { margin-top: 0; }
-.view h1 { margin-top: var(--space-5); }
+.next-event { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.next-day { font-size: var(--fs-subhead); color: var(--color-text-secondary); }
+.next-time { font-size: var(--fs-title3); font-weight: 700; font-variant-numeric: tabular-nums; }
+.next-title { flex: 1; min-width: 0; font-size: var(--fs-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 記録（I4-04：1行に3個まで） */
+.record-dock { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--space-2); }
+.record-dock .act {
+  margin-top: 0; min-height: var(--size-record); padding: 0 var(--space-2);
+  font-size: var(--fs-body); white-space: nowrap;
+}
+
+/* 取り消しの表示（T09） */
+.toast { display: none; }
 
 /* ---------- 下のタブ ---------- */
 .tabbar {
