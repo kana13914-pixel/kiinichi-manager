@@ -407,6 +407,21 @@ class PwaTest(unittest.TestCase):
         self.assertIn(page.text_content("#bubble-text"),
                       ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"])
 
+    # ---------- 声を聞く（T06） ----------
+    def test_voice_label_resets_on_new_line(self):
+        page = self.clock_page(12, 41, "&source=webpush&trigger=midday_check.meal_overdue&line=0")
+        page.wait_for_function("document.getElementById('bubble-text').textContent.includes('飯')", timeout=3_000)
+        self.assertEqual(page.get_attribute("#play-voice", "data-state"), "idle")
+        self.assertEqual(page.text_content("#play-voice .voice-label"), "声を聞く")
+        page.click("#play-voice")
+        page.clock.run_for(3_000)
+        page.wait_for_function("document.getElementById('play-voice').dataset.state === 'ended'", timeout=5_000)
+        self.assertEqual(page.text_content("#play-voice .voice-label"), "もう一度聞く")
+        self.assertNotIn("ready", page.get_attribute("#play-voice", "class"))
+        page.click(".act[data-record=work_start]")
+        self.assertEqual(page.get_attribute("#play-voice", "data-state"), "idle")
+        self.assertEqual(page.text_content("#play-voice .voice-label"), "声を聞く")
+
 
 if __name__ == "__main__":
     unittest.main()
