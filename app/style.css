@@ -161,12 +161,17 @@ body[data-state="ready"] #main { display: block; }
   line-break: strict; text-wrap: pretty; /* V2-07 */
 }
 .dialogue-foot { display: flex; justify-content: flex-end; margin-top: var(--space-2); }
+/* 「声を聞く」（C2-02, V3-08）：通常は金を使わない。主ボタンのときだけ塗る。再生中は枠だけ金 */
 button.voice {
+  display: inline-flex; align-items: center; gap: var(--space-2);
   width: auto; margin-top: 0; min-height: var(--tap); padding: 0 var(--space-4);
-  font-size: var(--fs-subhead); border-radius: var(--radius-pill);
-  background: var(--color-surface-2); color: var(--color-text);
+  font-size: var(--fs-subhead); font-weight: 700; border-radius: var(--radius-pill);
+  background: transparent; color: var(--color-text); border: 1px solid var(--color-border);
 }
-button.voice.ready { background: var(--color-accent); color: var(--color-on-accent); }
+button.voice svg { width: var(--size-icon-s); height: var(--size-icon-s); fill: currentColor; }
+button.voice.ready { background: var(--color-accent); color: var(--color-on-accent); border-color: var(--color-accent); }
+button.voice[data-state="playing"] { background: var(--color-accent-soft); color: var(--color-text); border-color: var(--color-accent); }
+button.voice[data-state="error"] { color: var(--color-danger); border-color: var(--color-danger); }
 
 /* 次の予定の帯（C7-02, C7-03） */
 .next-strip { background: var(--color-surface-1); border-radius: var(--radius-m); padding: var(--space-2) var(--space-4) var(--space-3); }

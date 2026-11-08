@@ -166,6 +166,7 @@ function showLine(key, { index, ready = false } = {}) {
   if (!picked) return false;
   document.getElementById('bubble-text').textContent = picked.text;
   document.getElementById('play-voice').classList.toggle('ready', ready);
+  setVoiceState('idle'); // 新しいセリフが出たら「声を聞く」に戻す（C2-02）
   return true;
 }
 
@@ -174,6 +175,7 @@ function showIdle(now = new Date()) {
   if (showLine('idle_greeting.' + periodOf(now))) return;
   document.getElementById('bubble-text').textContent = '…';
   document.getElementById('play-voice').classList.remove('ready');
+  setVoiceState('idle');
 }
 
 // 開いたときの処理（読み込み時・通知のタップ時）。URL の source / trigger / line を見る
@@ -193,15 +195,37 @@ for (const btn of document.querySelectorAll('.act')) {
   btn.addEventListener('click', () => showLine(btn.dataset.trigger, { ready: false }));
 }
 
-// 音声再生：ボタン1回で鳴らす。今はテスト用チャイム（合成音）。本番の声素材は人間が用意する（NEEDS_HUMAN）。
+// ---------- 声を聞く（C2-02）：idle「声を聞く」/ playing「再生中」/ ended「もう一度聞く」/ error「再生できません」 ----------
+// 今はテスト用チャイム（合成音）。本番の声素材は人間が用意する（H-005）。
+const VOICE_LABELS = { idle: '声を聞く', playing: '再生中', ended: 'もう一度聞く', error: '再生できません' };
+const voiceBtn = document.getElementById('play-voice');
+function setVoiceState(state) {
+  voiceBtn.dataset.state = state;
+  voiceBtn.querySelector('.voice-label').textContent = VOICE_LABELS[state];
+}
+// 読み上げ専用の状態テキスト。setText は className を上書きして .sr-only を消すので使わない（I4-02）
+function setAudioStatus(text, cls) {
+  const el = document.getElementById('audio-status');
+  el.textContent = text;
+  el.classList.remove('ok', 'ng');
+  if (cls) el.classList.add(cls);
+}
 const voice = new Audio('audio/test-chime.wav');
 voice.preload = 'auto';
-voice.addEventListener('playing', () => setText('audio-status', '再生中', 'ok'));
-voice.addEventListener('ended', () => setText('audio-status', '再生完了', 'ok'));
-document.getElementById('play-voice').addEventListener('click', () => {
-  voice.currentTime = 0;
-  voice.play().catch((e) => setText('audio-status', '再生失敗: ' + e.name, 'ng'));
+voice.addEventListener('playing', () => { setVoiceState('playing'); setAudioStatus('再生中', 'ok'); });
+voice.addEventListener('ended', () => {
+  setVoiceState('ended');
+  setAudioStatus('再生完了', 'ok');
+  onVoiceEnded();
 });
+voiceBtn.addEventListener('click', () => {
+  voice.currentTime = 0;
+  voice.play().catch((e) => { setVoiceState('error'); setAudioStatus('再生失敗: ' + e.name, 'ng'); }); // error で押すと再試行
+});
+// 再生が終わったら主ボタンの塗りを外す（T08 で通知から開いた状態の解除も行う）
+function onVoiceEnded() {
+  voiceBtn.classList.remove('ready');
+}
 
 // Web Push：ボタン操作 → 通知許可 → 購読 → 送信サーバーに登録
 Settings.bind('app-token', 'appToken');
