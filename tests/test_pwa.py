@@ -425,6 +425,53 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.get_attribute("#play-voice", "data-state"), "idle")
         self.assertEqual(page.text_content("#play-voice .voice-label"), "声を聞く")
 
+    # ---------- 主ボタンは 1 つ（T08, D-019 Q7=保存する） ----------
+    def primaries(self, page):
+        return page.eval_on_selector_all(".act.primary", "els => els.map(e => e.dataset.record)")
+
+    def test_only_one_primary_action(self):
+        page = self.clock_page(7, 12)
+        page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
+        self.assertEqual(self.primaries(page), ["wake"])
+        page = self.clock_page(11, 30)
+        page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
+        self.assertEqual(self.primaries(page), ["work_start"])
+        page = self.clock_page(12, 41, "&source=webpush&trigger=midday_check.meal_overdue&line=0")
+        page.wait_for_function("document.body.classList.contains('from-notification')", timeout=3_000)
+        self.assertEqual(self.primaries(page), [])
+        self.assertIn("ready", page.get_attribute("#play-voice", "class"))
+
+    ACCENT_SCAN = """(allowedBorder) => {
+      const ACCENT = 'rgb(232, 196, 92)';
+      const els = [...document.querySelectorAll('#view-home *, .tabbar, .tabbar *')]
+        .filter((e) => e.getClientRects().length > 0);           // 表示されているものだけ
+      const bg = els.filter((e) => getComputedStyle(e).backgroundColor === ACCENT);
+      const borderOf = (e) => ['Top', 'Right', 'Bottom', 'Left'].some((k) => {
+        const cs = getComputedStyle(e);
+        return cs['border' + k + 'Style'] !== 'none' && parseFloat(cs['border' + k + 'Width']) > 0 && cs['border' + k + 'Color'] === ACCENT;
+      });
+      const tabActive = (e) => !!e.closest('.tabbar a[aria-current]');
+      const colorBad = els.filter((e) => getComputedStyle(e).color === ACCENT && !e.closest('.nameplate') && !tabActive(e) && !bg.includes(e));
+      const borderBad = els.filter((e) => borderOf(e) && !bg.includes(e) && !allowedBorder.some((sel) => e.matches(sel)));
+      const name = (e) => e.id || e.className || e.tagName;
+      return { bg: bg.map(name), colorBad: colorBad.map(name), borderBad: borderBad.map(name) };
+    }"""
+
+    def test_accent_usage_on_home(self):
+        # 通常（7:12）：金の塗りは 1 つ、金の文字・枠は名前欄と選択中のタブだけ（V3-08）
+        page = self.clock_page(7, 12)
+        page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
+        r = page.evaluate(self.ACCENT_SCAN, [".nameplate"])
+        self.assertEqual(len(r["bg"]), 1, r)
+        self.assertEqual(r["colorBad"], [], r)
+        self.assertEqual(r["borderBad"], [], r)
+        # 通知から開いた直後（12:41）：塗りは「声を聞く」だけ、枠は名前欄・セリフの面・声を聞くだけ
+        page = self.clock_page(12, 41, "&source=webpush&trigger=midday_check.meal_overdue&line=0")
+        page.wait_for_function("document.body.classList.contains('from-notification')", timeout=3_000)
+        r = page.evaluate(self.ACCENT_SCAN, [".nameplate", ".dialogue", "#play-voice"])
+        self.assertEqual(r["bg"], ["play-voice"], r)
+        self.assertEqual(r["borderBad"], [], r)
+
 
 if __name__ == "__main__":
     unittest.main()

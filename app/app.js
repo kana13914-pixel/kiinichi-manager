@@ -107,11 +107,14 @@ function renderNextEvent(now = new Date()) {
 }
 
 let lastMinute = '';
+let lastHour = null;
 function tick() {
   const now = new Date();
   const minute = hm(now) + now.toDateString();
   if (minute === lastMinute) return; // 分が変わったときだけ書き換える（P3-04）
   lastMinute = minute;
+  if (lastHour !== null && lastHour !== now.getHours()) markPrimary(now); // 「時」が変わったら主ボタンを判定し直す
+  lastHour = now.getHours();
   applyPeriod(now);
   renderClock(now);
   renderNextEvent(now);
@@ -178,13 +181,46 @@ function showIdle(now = new Date()) {
   setVoiceState('idle');
 }
 
+// ---------- 主ボタン（金の塗り）は 1 つ（V3-02, C4-02） ----------
+// data-hours="4-11" … 4時以上11時未満（受付時間帯。仮決定 D-019）
+function inHours(btn, hour) {
+  const m = /^(\d+)-(\d+)$/.exec(btn.dataset.hours || '');
+  if (!m) return false; // data-hours が無いボタンは主にしない
+  return hour >= Number(m[1]) && hour < Number(m[2]);
+}
+function markPrimary(now = new Date()) {
+  const acts = [...document.querySelectorAll('.act')];
+  let primary = null;
+  if (!document.body.classList.contains('from-notification')) { // 通知から開いた直後は「声を聞く」が主
+    primary = acts.find((b) => !b.classList.contains('done') && inHours(b, now.getHours())) || null;
+  }
+  for (const b of acts) b.classList.toggle('primary', b === primary);
+}
+
+// ---------- 通知から開いた状態（C5-03。source=webpush のときだけ。ntfy は PWA で開かない） ----------
+function startNotificationState() {
+  document.body.classList.add('from-notification');
+  voiceBtn.classList.add('ready');
+  markPrimary();
+}
+function endNotificationState() {
+  document.body.classList.remove('from-notification');
+  voiceBtn.classList.remove('ready');
+  markPrimary();
+}
+
 // 開いたときの処理（読み込み時・通知のタップ時）。URL の source / trigger / line を見る
 function applyOpenParams(params, now = new Date()) {
   const trigger = params.get('trigger');
   const index = params.has('line') ? Number(params.get('line')) : undefined; // Number(null) は 0 になるため has を確かめる
   const fromPush = params.get('source') === 'webpush';
-  if (trigger && showLine(trigger, { index, ready: fromPush })) return;
+  if (trigger && showLine(trigger, { index, ready: fromPush })) {
+    if (fromPush) startNotificationState(); else markPrimary(now);
+    return;
+  }
+  document.body.classList.remove('from-notification');
   showIdle(now);
+  markPrimary(now);
 }
 
 applyPeriod();
@@ -222,9 +258,10 @@ voiceBtn.addEventListener('click', () => {
   voice.currentTime = 0;
   voice.play().catch((e) => { setVoiceState('error'); setAudioStatus('再生失敗: ' + e.name, 'ng'); }); // error で押すと再試行
 });
-// 再生が終わったら主ボタンの塗りを外す（T08 で通知から開いた状態の解除も行う）
+// 再生が終わったら主ボタンの塗りを外し、通知から開いた状態を終える（C5-03）
 function onVoiceEnded() {
   voiceBtn.classList.remove('ready');
+  if (document.body.classList.contains('from-notification')) endNotificationState();
 }
 
 // Web Push：ボタン操作 → 通知許可 → 購読 → 送信サーバーに登録
