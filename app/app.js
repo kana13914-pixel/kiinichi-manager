@@ -226,10 +226,98 @@ function applyOpenParams(params, now = new Date()) {
 applyPeriod();
 dialogueReady.then(() => applyOpenParams(new URLSearchParams(location.search)));
 
-// 記録ボタン（反応のセリフ。主ボタンが2つにならないよう ready は付けない）
-for (const btn of document.querySelectorAll('.act')) {
-  btn.addEventListener('click', () => showLine(btn.dataset.trigger, { ready: false }));
+// ---------- 記録（I3-02, C6-01） ----------
+// 仮の保存（D-019 Q7）。フェーズ2のデータ構造を決めるときに置き換える。記録による通知予約の取り消し（D-015）もフェーズ2
+const RECORDS_KEY = 'records.today';
+function dateStr(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function loadRecords(now = new Date()) {
+  try {
+    const r = JSON.parse(localStorage.getItem(RECORDS_KEY) || 'null');
+    if (r && r.date === dateStr(now) && r.items) return r; // 今日の分だけ使う
+  } catch (_) {}
+  return { date: dateStr(now), items: {} };
 }
+function saveRecords(r) {
+  try { localStorage.setItem(RECORDS_KEY, JSON.stringify(r)); } catch (_) {} // 失敗しても画面は動かす
+}
+function setDone(btn, time) {
+  btn.classList.add('done');
+  btn.textContent = `✓ ${btn.dataset.label} ${time}`;
+}
+function setUndone(btn) {
+  btn.classList.remove('done');
+  btn.textContent = btn.dataset.label;
+}
+// 保存してある今日の記録を、ボタンの表示に反映する
+function applyRecords(now = new Date()) {
+  const r = loadRecords(now);
+  for (const btn of document.querySelectorAll('.act')) {
+    const t = r.items[btn.dataset.record];
+    if (t) setDone(btn, t); else setUndone(btn);
+  }
+}
+
+// 取り消しの表示（5秒）
+const toast = document.getElementById('toast');
+let toastTimer = null;
+let toastFor = null; // { btn, prevLine, reactionLine } … prevLine は押した直後のときだけ
+function hideToast() {
+  toast.hidden = true;
+  toastFor = null;
+  clearTimeout(toastTimer);
+}
+function showToast(info) {
+  toastFor = info; // 前のトーストの記録はそのまま確定する
+  toast.textContent = '';
+  const msg = document.createElement('span');
+  msg.textContent = `「${info.btn.dataset.label}」を記録しました`;
+  const undo = document.createElement('button');
+  undo.type = 'button';
+  undo.className = 'undo';
+  undo.textContent = '取り消す';
+  undo.addEventListener('click', undoRecord);
+  toast.append(msg, undo);
+  toast.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, 5000);
+}
+function undoRecord() {
+  if (!toastFor) return;
+  const { btn, prevLine, reactionLine } = toastFor;
+  setUndone(btn);
+  const r = loadRecords();
+  delete r.items[btn.dataset.record];
+  saveRecords(r);
+  // 押した直後の取り消しで、セリフがまだ反応のままなら、押す前のセリフに戻す
+  const bubble = document.getElementById('bubble-text');
+  if (prevLine !== undefined && bubble.textContent === reactionLine) {
+    bubble.textContent = prevLine;
+    setVoiceState('idle');
+  }
+  hideToast();
+  markPrimary();
+}
+
+for (const btn of document.querySelectorAll('.act')) {
+  btn.addEventListener('click', () => {
+    if (btn.classList.contains('done')) { // 記録済み：新しい記録はせず、取り消しを出し直す（セリフは変えない）
+      showToast({ btn });
+      return;
+    }
+    const now = new Date();
+    const prevLine = document.getElementById('bubble-text').textContent;
+    if (document.body.classList.contains('from-notification')) endNotificationState(); // 記録に移ったら通知の強調は終える（D-020）
+    showLine(btn.dataset.trigger, { ready: false }); // 反応のセリフ。主ボタンが2つにならないよう ready は付けない
+    const time = hm(now);
+    setDone(btn, time);
+    const r = loadRecords(now);
+    r.items[btn.dataset.record] = time;
+    saveRecords(r);
+    markPrimary(now);
+    showToast({ btn, prevLine, reactionLine: document.getElementById('bubble-text').textContent });
+  });
+}
+applyRecords();
 
 // ---------- 声を聞く（C2-02）：idle「声を聞く」/ playing「再生中」/ ended「もう一度聞く」/ error「再生できません」 ----------
 // 今はテスト用チャイム（合成音）。本番の声素材は人間が用意する（H-005）。

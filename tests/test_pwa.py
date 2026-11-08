@@ -472,6 +472,70 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(r["bg"], ["play-voice"], r)
         self.assertEqual(r["borderBad"], [], r)
 
+    # ---------- 記録の完了表示・取り消し・当日分の保存（T09, D-019 Q7=保存する） ----------
+    def test_record_shows_done_state_and_can_be_undone(self):
+        page = self.clock_page(7, 12)
+        page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
+        before = page.text_content("#bubble-text")
+        page.click(".act[data-record=wake]")
+        self.assertEqual(page.text_content(".act[data-record=wake]"), "✓ 起きた 07:12")
+        self.assertIn("done", page.get_attribute(".act[data-record=wake]", "class"))
+        self.assertTrue(page.is_visible("#toast"))
+        self.assertIn("「起きた」を記録しました", page.text_content("#toast"))
+        self.assertIn(page.text_content("#bubble-text"), self.lines_of("morning_wake", "on_time"))
+        undo = page.eval_on_selector("#toast .undo", "e => e.getBoundingClientRect().height")
+        self.assertGreaterEqual(undo, 44)
+        page.click("#toast .undo")
+        self.assertEqual(page.text_content(".act[data-record=wake]"), "起きた")
+        self.assertFalse(page.is_visible("#toast"))
+        self.assertEqual(page.text_content("#bubble-text"), before)
+        self.assertEqual(self.primaries(page), ["wake"])
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('records.today')"))["items"], {})
+
+    def test_toast_disappears_after_5_seconds(self):
+        page = self.clock_page(7, 12)
+        page.click(".act[data-record=wake]")
+        page.clock.run_for(5_100)
+        self.assertFalse(page.is_visible("#toast"))
+        self.assertEqual(page.text_content(".act[data-record=wake]"), "✓ 起きた 07:12")
+
+    def test_tapping_done_button_reopens_undo(self):
+        page = self.clock_page(7, 12)
+        page.click(".act[data-record=wake]")
+        page.clock.run_for(6_000)
+        self.assertFalse(page.is_visible("#toast"))
+        line = page.text_content("#bubble-text")
+        page.click(".act[data-record=wake]")
+        self.assertTrue(page.is_visible("#toast"))
+        self.assertEqual(page.text_content(".act[data-record=wake]"), "✓ 起きた 07:12")  # 新しい記録はしない
+        page.click("#toast .undo")
+        self.assertEqual(page.text_content(".act[data-record=wake]"), "起きた")
+        self.assertEqual(page.text_content("#bubble-text"), line)  # 出し直したトーストからの取り消しではセリフを変えない
+
+    def test_record_persists_for_today(self):
+        page = self.clock_page(7, 12)
+        page.click(".act[data-record=wake]")
+        page.reload()
+        page.wait_for_function("dialogue !== null", timeout=3_000)
+        self.assertEqual(page.text_content(".act[data-record=wake]"), "✓ 起きた 07:12")
+        self.assertEqual(self.primaries(page), ["work_start"])  # 起きたは記録済みなので次が主
+        saved = page.evaluate("localStorage.getItem('records.today')")
+        # 翌日の日付で開くと未記録
+        page2 = self.clock_page(7, 12, day=10, init_script="localStorage.setItem('records.today', %s)" % json.dumps(saved))
+        self.assertEqual(page2.text_content(".act[data-record=wake]"), "起きた")
+        self.assertEqual(self.primaries(page2), ["wake"])
+
+    def test_done_label_fits_on_small_screen(self):
+        page = self.clock_page(9, 3, size=(375, 667), safe=(20, 0))
+        page.click(".act[data-record=work_start]")
+        self.assertEqual(page.text_content(".act[data-record=work_start]"), "✓ 仕事開始 09:03")
+        sw, cw = page.eval_on_selector(".act[data-record=work_start]", "e => [e.scrollWidth, e.clientWidth]")
+        self.assertLessEqual(sw, cw)
+
+    def lines_of(self, trigger, cond_id):
+        data = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))
+        return [c for c in data[trigger]["conditions"] if c["id"] == cond_id][0]["lines"]
+
 
 if __name__ == "__main__":
     unittest.main()
