@@ -577,6 +577,14 @@ class PwaTest(unittest.TestCase):
         page.clock.run_for(3 * 60 * 1000)  # 0:01 になる
         self.assertEqual(page.text_content(".act[data-record=wake]"), "起きた")
 
+    # ---------- 夜の配色（T11, D-019 Q5=暗くする） ----------
+    def test_night_palette(self):
+        page = self.clock_page(23, 48)
+        self.assertEqual(page.get_attribute("body", "data-period"), "night")
+        self.assertEqual(page.evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(20, 44, 36)")
+        page = self.clock_page(13, 0)
+        self.assertEqual(page.evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(30, 64, 52)")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -37,6 +37,10 @@ class StyleTest(unittest.TestCase):
                 problems.append(f"rem: {line.strip()}")
         self.assertEqual(problems, [], "トークンを使ってください（M2-01）:\n" + "\n".join(problems))
 
+    def test_contrast_check_covers_night(self):
+        r = subprocess.run([sys.executable, str(ROOT / "scripts" / "contrast_check.py")], capture_output=True, text=True)
+        self.assertIn("| 夜 |", r.stdout.splitlines()[0])
+
 
 if __name__ == "__main__":
     unittest.main()

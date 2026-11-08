@@ -62,6 +62,14 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* 夜（22〜4時。D-019 Q5）は面を一段暗くする。タブバーの地も下げ、背景より暗い関係を保つ（C9-02） */
+body[data-period="night"] {
+  --color-bg: #142c24;
+  --color-surface-1: #1f3a30;
+  --color-surface-2: #29473b;
+  --color-bg-deep: #0f221b;
+}
+
 /* ---------- 全体 ---------- */
 html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
 * { box-sizing: border-box; }
