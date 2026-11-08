@@ -201,8 +201,25 @@ body.from-notification button.voice.ready { animation: voice-pulse 1.2s var(--ea
   100% { box-shadow: 0 0 0 var(--space-3) transparent; }
 }
 
-/* 取り消しの表示（T09） */
-.toast { display: none; }
+/* 記録済み（I3-02, V3-05）：塗りなし・成功色の文字・破線の枠 */
+.record-dock .act.done {
+  background: transparent; color: var(--color-success); border: 1px dashed var(--color-success);
+  font-size: var(--fs-subhead);
+}
+
+/* 取り消しの表示（I3-02）：記録ボタンの真上に 5 秒 */
+.toast {
+  position: fixed; left: var(--space-4); right: var(--space-4);
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4) + var(--size-record) + var(--space-2));
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  padding: 0 var(--space-2) 0 var(--space-4); font-size: var(--fs-subhead);
+  background: var(--color-surface-2); color: var(--color-text);
+  border: 1px solid var(--color-border); border-radius: var(--radius-m); box-shadow: var(--shadow-raised);
+}
+.toast .undo {
+  width: auto; margin: 0; min-height: var(--tap); padding: 0 var(--space-3);
+  background: transparent; color: var(--color-text); font-weight: 700; text-decoration: underline;
+}
 
 /* ---------- 下のタブ（D-019 Q1：5個。I2-01〜03） ---------- */
 .tabbar {
