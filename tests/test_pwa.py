@@ -291,6 +291,14 @@ class PwaTest(unittest.TestCase):
         page.click(".tabbar a[data-view=home]")
         page.wait_for_selector("#view-home", state="visible", timeout=3_000)
 
+    def test_inputs_are_16px_or_larger(self):
+        # 16px 未満の入力欄は iOS がフォーカス時に画面を拡大する（V2-04）
+        page = self.new_page(permissions=["notifications"], init_script=READY)
+        page.goto(self.base + "index.html?mode=standalone#settings")
+        sizes = page.eval_on_selector_all("input", "els => els.map(e => parseFloat(getComputedStyle(e).fontSize))")
+        self.assertTrue(sizes)
+        self.assertTrue(all(sz >= 16 for sz in sizes), sizes)
+
 
 if __name__ == "__main__":
     unittest.main()

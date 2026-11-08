@@ -3,6 +3,9 @@
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
 const APP_VERSION = 'phase1-v5';
 
+// iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
+document.addEventListener('touchstart', () => {}, { passive: true });
+
 // 自動テスト用：localhost のときだけ ?mode=standalone でホーム画面アプリとして扱う
 const TEST_STANDALONE = ['localhost', '127.0.0.1'].includes(location.hostname)
   && new URLSearchParams(location.search).get('mode') === 'standalone';

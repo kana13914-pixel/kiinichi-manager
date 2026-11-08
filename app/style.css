@@ -1,67 +1,152 @@
-:root { color-scheme: light dark; --bg: #1e4034; --fg: #f4f1e8; --accent: #e8c45c; }
+/* 値の正本はこの :root（M2-02）。画面ごとに生の色コード・px・rem を書かない（M2-01）。
+   トークンを変えたら python3 scripts/contrast_check.py を実行し、docs/design.md の表を更新する。 */
+:root {
+  color-scheme: dark; /* P1-08 */
+
+  /* 色：面（奥ほど暗い） */
+  --color-bg: #1e4034;
+  --color-bg-deep: #163128;             /* タブバー・入力欄・名前欄の地 */
+  --color-surface-1: #2a4b3f;           /* カード・次の予定の帯 */
+  --color-surface-2: #355749;           /* 控えめなボタン・トースト */
+  --color-scrim: rgba(13, 31, 25, 0.9); /* セリフの面（bg に重ねると約 #0f221c） */
+  /* 色：文字（半透明は使わない。V3-04） */
+  --color-text: #f4f1e8;
+  --color-text-secondary: #c8d4cb;
+  --color-text-tertiary: #adbfb3;
+  /* 色：役割 */
+  --color-accent: #e8c45c;              /* 使い道は V3-08 */
+  --color-on-accent: #1e1e1e;
+  --color-accent-soft: rgba(232, 196, 92, 0.14);
+  --color-accent-glow: rgba(232, 196, 92, 0.5);
+  --color-border: #7f9a8c;
+  --color-border-subtle: rgba(244, 241, 232, 0.12);
+  --color-stage-glow: rgba(244, 241, 232, 0.06);
+  --color-success: #8fe3a5;
+  --color-danger: #ffb3a6;              /* 旧 #ff9a8a はカード上 4.40:1 で不足 */
+
+  /* 文字（iOS の文字段階。rem = 16px。D-019 Q6 = 追従しない） */
+  --font-sans: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  --fs-caption2: 0.6875rem; /* 11 タブのラベル専用 */
+  --fs-caption: 0.75rem;    /* 12 */
+  --fs-footnote: 0.8125rem; /* 13 */
+  --fs-subhead: 0.9375rem;  /* 15 */
+  --fs-callout: 1rem;       /* 16 入力欄・既定 */
+  --fs-body: 1.0625rem;     /* 17 セリフ・本文 */
+  --fs-title3: 1.25rem;     /* 20 */
+  --fs-title1: 1.75rem;     /* 28 */
+  --lh-tight: 1.25;
+  --lh-body: 1.7;
+
+  /* 余白・角丸 */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
+  --radius-xs: 4px; --radius-s: 8px; --radius-m: 12px; --radius-l: 16px; --radius-pill: 999px;
+
+  /* 寸法 */
+  --tap: 44px;
+  --size-record: 52px;
+  --size-btn-primary: 48px;
+  --size-icon: 24px;
+  --size-icon-s: 16px;
+  --portrait-max-h: 420px;
+  --stage-min-h: 160px;
+  --home-min-h: 520px;
+  --tabbar-h: 56px;
+
+  /* 効果・動き */
+  --blur-dialogue: 6px;
+  --shadow-raised: 0 6px 24px rgba(0, 0, 0, 0.35);
+  --dur-fast: 120ms; --dur-base: 200ms; --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* セーフエリア（CSS では env() を直接書かずこれを使う。テストで上書きする。M1-04） */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ---------- 全体 ---------- */
+html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; } /* P1-10 */
 body {
-  margin: 0; min-height: 100vh; padding: env(safe-area-inset-top) 20px 32px;
-  font-family: -apple-system, "Hiragino Sans", sans-serif; background: var(--bg); color: var(--fg);
+  margin: 0; min-height: 100dvh; overscroll-behavior: none; /* V4-03, P1-09 */
+  padding: max(var(--safe-top), var(--space-3)) var(--space-5) var(--space-6); /* P1-01 */
+  font-family: var(--font-sans); font-size: var(--fs-callout);
+  background: var(--color-bg); color: var(--color-text);
 }
-body[data-state="ready"] { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
-h1 { font-size: 1.2rem; margin: 24px 0 8px; }
-.placeholder {
-  width: 120px; height: 160px; margin: 16px auto; border: 2px dashed var(--accent); border-radius: 12px;
-  display: flex; align-items: center; justify-content: center; text-align: center; font-size: .8rem; opacity: .8;
-}
-.card { background: rgba(255,255,255,.08); border-radius: 12px; padding: 12px 16px; margin: 12px 0; }
-.card h2 { font-size: .95rem; margin: 0 0 8px; }
-dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: .85rem; }
-dt { opacity: .7; }
+body[data-state="ready"] { padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4)); }
+h1 { font-size: var(--fs-title3); margin: var(--space-5) 0 var(--space-2); }
+.card { background: var(--color-surface-1); border-radius: var(--radius-m); padding: var(--space-3) var(--space-4); margin: var(--space-3) 0; }
+.card h2 { font-size: var(--fs-subhead); margin: 0 0 var(--space-2); }
+dl { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-3); margin: 0; font-size: var(--fs-footnote); }
+dt { color: var(--color-text-tertiary); }
 dd { margin: 0; word-break: break-all; }
 button {
-  width: 100%; padding: 14px; margin-top: 8px; font-size: 1rem; border: 0; border-radius: 10px;
-  background: var(--accent); color: #1e1e1e; font-weight: 600;
+  width: 100%; min-height: var(--size-btn-primary); padding: var(--space-3); margin-top: var(--space-2);
+  font: inherit; font-size: var(--fs-callout); font-weight: 600; border: 0; border-radius: var(--radius-m);
+  background: var(--color-accent); color: var(--color-on-accent);
+  transition: transform var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out);
 }
-.ok { color: #8fe3a5; } .ng { color: #ff9a8a; }
+button:active { transform: scale(0.97); filter: brightness(0.92); } /* I3-06 */
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; } /* P2-04 */
+input, .field {
+  width: 100%; min-height: var(--tap); padding: var(--space-2) var(--space-3);
+  font: inherit; font-size: var(--fs-callout); /* V2-04：16px 未満だと iOS が画面を拡大する */
+  color: var(--color-text); background: var(--color-bg-deep);
+  border: 1px solid var(--color-border); border-radius: var(--radius-s);
+}
+label { display: block; margin-top: var(--space-2); }
+.ok { color: var(--color-success); } .ng { color: var(--color-danger); } /* V3-01, V3-07 */
+.note { font-size: var(--fs-footnote); color: var(--color-text-secondary); }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 
-/* 初回導線：状態に応じて表示を切り替える */
+/* ---------- 初回導線 ---------- */
 .onboard, #main { display: none; }
 body[data-state="safari"] #onboard-safari,
 body[data-state="setup"] #onboard-setup,
 body[data-state="ready"] #main { display: block; }
-.onboard { margin-top: 32px; }
-.onboard p, .onboard ol { font-size: .9rem; line-height: 1.6; }
-.onboard input { width: 100%; padding: 10px; font-size: 1rem; border-radius: 8px; border: 1px solid #888; }
-.status { font-size: .85rem; min-height: 1.2em; }
+.onboard { margin-top: var(--space-6); }
+.onboard p, .onboard ol { font-size: var(--fs-subhead); line-height: var(--lh-body); }
+.status { font-size: var(--fs-footnote); min-height: calc(1em * var(--lh-body)); }
 
-/* ---------- ホーム（D-018） ---------- */
-.clock { text-align: center; margin-top: 16px; }
-.clock-time { font-size: 3.2rem; font-weight: 700; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
-.clock-date { opacity: .8; font-size: .95rem; }
-.stage { display: flex; gap: 12px; align-items: flex-end; margin: 16px 0 8px; }
-.stage .placeholder { flex: 0 0 110px; height: 150px; margin: 0; }
-.bubble {
-  position: relative; flex: 1; background: #f4f1e8; color: #1e1e1e; border-radius: 14px; padding: 12px 14px;
+/* ---------- ホーム（D-018 の配置。T03 で D-019 の配置に置き換える） ---------- */
+.clock { text-align: center; margin-top: var(--space-4); }
+.clock-time { font-size: var(--fs-title1); font-weight: 700; font-variant-numeric: tabular-nums; }
+.clock-date { color: var(--color-text-secondary); font-size: var(--fs-subhead); }
+.stage { display: flex; gap: var(--space-3); align-items: flex-end; margin: var(--space-4) 0 var(--space-2); }
+.placeholder {
+  flex: 0 0 auto; width: calc(var(--stage-min-h) * 0.75); height: var(--stage-min-h);
+  border: 2px dashed var(--color-border); border-radius: var(--radius-m);
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  font-size: var(--fs-footnote); color: var(--color-text-secondary);
 }
-.bubble::before {
-  content: ""; position: absolute; left: -8px; bottom: 24px; border: 8px solid transparent; border-right-color: #f4f1e8; border-left: 0;
+.bubble { position: relative; flex: 1; background: var(--color-scrim); border-radius: var(--radius-l); padding: var(--space-3) var(--space-4); }
+.bubble p { margin: 0 0 var(--space-2); font-size: var(--fs-body); line-height: var(--lh-body); min-height: calc(2em * var(--lh-body)); }
+button.voice { margin-top: 0; min-height: var(--tap); padding: var(--space-2); font-size: var(--fs-subhead); background: var(--color-surface-2); color: var(--color-text); }
+button.voice.ready { background: var(--color-accent); color: var(--color-on-accent); }
+.tag {
+  font-size: var(--fs-caption); font-weight: 400; color: var(--color-text-tertiary);
+  border: 1px solid currentColor; border-radius: var(--radius-xs); padding: 0 var(--space-1); margin-left: var(--space-1);
 }
-.bubble p { margin: 0 0 8px; font-size: .95rem; line-height: 1.5; min-height: 2.8em; }
-.bubble .status { color: #555; }
-button.voice { margin-top: 0; padding: 8px; font-size: .9rem; background: #d9d4c4; }
-button.voice.ready { background: var(--accent); }
-.tag { font-size: .7rem; font-weight: 400; opacity: .7; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; margin-left: 4px; }
-.next-event { display: flex; align-items: baseline; gap: 10px; }
-.next-time { font-size: 1.4rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.next-title { flex: 1; font-size: 1.05rem; }
-.next-rest { font-size: .8rem; opacity: .75; }
-.action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.next-event { display: flex; align-items: baseline; gap: var(--space-3); }
+.next-time { font-size: var(--fs-title3); font-weight: 700; font-variant-numeric: tabular-nums; }
+.next-title { flex: 1; font-size: var(--fs-body); }
+.next-rest { font-size: var(--fs-footnote); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
 .action-grid button { margin-top: 0; }
-.note { font-size: .8rem; opacity: .75; }
-.field { width: 100%; padding: 8px; }
-.view h1 { margin-top: 20px; }
+.view h1 { margin-top: var(--space-5); }
 
 /* ---------- 下のタブ ---------- */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(6, 1fr);
-  background: #163128; border-top: 1px solid rgba(255,255,255,.12); padding-bottom: env(safe-area-inset-bottom);
+  background: var(--color-bg-deep); border-top: 1px solid var(--color-border-subtle); padding-bottom: var(--safe-bottom);
 }
-.tabbar a { color: var(--fg); opacity: .65; text-decoration: none; text-align: center; font-size: .72rem; padding: 14px 0; }
-.tabbar a.active { opacity: 1; color: var(--accent); font-weight: 700; }
+.tabbar a { color: var(--color-text-tertiary); text-decoration: none; text-align: center; font-size: var(--fs-caption2); padding: var(--space-4) 0; }
+.tabbar a.active { color: var(--color-accent); font-weight: 700; }
+
+/* ---------- 動きを減らす設定（I3-04） ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  button:active { transform: none; }
+}
