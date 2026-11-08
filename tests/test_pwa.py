@@ -184,7 +184,10 @@ class PwaTest(unittest.TestCase):
             deadline -= 1
         post2 = [c for c in calls if c.method == "POST"][-1]
         body2 = json.loads(post2.post_data)
-        self.assertTrue(body2["url"].endswith("?source=webpush&trigger=midday_check.meal_overdue"))
+        # 本文はセリフそのもの、URL にその番号（line）が付く（T07, C5-05）
+        self.assertTrue(body2["url"].endswith("?source=webpush&trigger=midday_check.meal_overdue&line=0"), body2["url"])
+        self.assertEqual(body2["body"], "そろそろ飯の時間、過ぎてるぞ。")
+        self.assertEqual(body2["title"], "キィニチ（テスト）")
         self.assertNotIn("delaySeconds", body2)
         page.reload()  # 設定は端末に保存される
         self.assertEqual(page.input_value("#wp-worker-url"), "https://kiinichi.example.workers.dev/")
