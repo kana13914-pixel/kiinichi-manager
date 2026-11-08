@@ -536,6 +536,47 @@ class PwaTest(unittest.TestCase):
         data = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))
         return [c for c in data[trigger]["conditions"] if c["id"] == cond_id][0]["lines"]
 
+    # ---------- 開いたときの判定し直し（T10） ----------
+    def hide_and_return(self, page, ms):
+        page.evaluate("window.__vis = 'hidden'; document.dispatchEvent(new Event('visibilitychange'))")
+        page.clock.fast_forward(ms)
+        page.evaluate("window.__vis = 'visible'; document.dispatchEvent(new Event('visibilitychange'))")
+
+    def test_resume_after_long_hide_refreshes_home(self):
+        page = self.clock_page(7, 12, "&source=webpush&trigger=midday_check.meal_overdue&line=0")
+        page.wait_for_function("document.body.classList.contains('from-notification')", timeout=3_000)
+        self.hide_and_return(page, 15 * 3600 * 1000)  # 15時間後（22:12）に戻る
+        self.assertEqual(page.get_attribute("body", "data-period"), "night")
+        self.assertFalse(page.evaluate("document.body.classList.contains('from-notification')"))
+        self.assertNotIn("ready", page.get_attribute("#play-voice", "class") or "")
+        self.assertIn(page.text_content("#bubble-text"), self.idle_lines("night"))
+        self.assertEqual(page.text_content("#clock-time"), "22:12")
+
+    def test_short_hide_keeps_line(self):
+        page = self.clock_page(7, 12, "&source=webpush&trigger=midday_check.meal_overdue&line=0")
+        page.wait_for_function("document.body.classList.contains('from-notification')", timeout=3_000)
+        line = page.text_content("#bubble-text")
+        self.hide_and_return(page, 5 * 60 * 1000)
+        self.assertEqual(page.text_content("#bubble-text"), line)
+        self.assertTrue(page.evaluate("document.body.classList.contains('from-notification')"))
+
+    def test_sw_message_fallback_applies_trigger(self):
+        page = self.clock_page(12, 41)
+        page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
+        page.evaluate("""navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: {
+          type: 'open-url', url: location.origin + '/index.html?source=webpush&trigger=midday_check.meal_overdue&line=0' } }))""")
+        page.wait_for_function("document.body.classList.contains('from-notification')", timeout=3_000)
+        self.assertEqual(page.text_content("#bubble-text"), "そろそろ飯の時間、過ぎてるぞ。")
+        self.assertIn("ready", page.get_attribute("#play-voice", "class"))
+        self.assertEqual(self.primaries(page), [])
+
+    def test_records_reload_when_date_changes(self):
+        page = self.clock_page(23, 58)
+        page.click(".act[data-record=wake]")
+        self.assertIn("done", page.get_attribute(".act[data-record=wake]", "class"))
+        page.clock.run_for(3 * 60 * 1000)  # 0:01 になる
+        self.assertEqual(page.text_content(".act[data-record=wake]"), "起きた")
+
 
 if __name__ == "__main__":
     unittest.main()

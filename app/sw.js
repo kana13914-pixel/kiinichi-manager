@@ -78,7 +78,10 @@ self.addEventListener('notificationclick', (event) => {
     for (const c of all) {
       if ('focus' in c) {
         await c.focus();
-        if ('navigate' in c) await c.navigate(url).catch(() => {});
+        // 移動に失敗（例外または null）したら、画面に URL を渡して同じ処理をしてもらう（P1-12。WebKit Bug 263687）
+        let moved = null;
+        try { moved = 'navigate' in c ? await c.navigate(url) : null; } catch (_) { moved = null; }
+        if (!moved && 'postMessage' in c) c.postMessage({ type: 'open-url', url });
         return;
       }
     }

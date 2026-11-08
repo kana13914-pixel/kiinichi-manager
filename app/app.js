@@ -108,13 +108,16 @@ function renderNextEvent(now = new Date()) {
 
 let lastMinute = '';
 let lastHour = null;
+let lastDate = null;
 function tick() {
   const now = new Date();
   const minute = hm(now) + now.toDateString();
   if (minute === lastMinute) return; // 分が変わったときだけ書き換える（P3-04）
   lastMinute = minute;
+  if (lastDate !== null && lastDate !== now.toDateString()) applyRecords(now); // 日付が変わったら記録を読み直す
   if (lastHour !== null && lastHour !== now.getHours()) markPrimary(now); // 「時」が変わったら主ボタンを判定し直す
   lastHour = now.getHours();
+  lastDate = now.toDateString();
   applyPeriod(now);
   renderClock(now);
   renderNextEvent(now);
@@ -318,6 +321,41 @@ for (const btn of document.querySelectorAll('.act')) {
   });
 }
 applyRecords();
+
+// ---------- 開いたときの判定し直し（P1-11, P1-12） ----------
+// ホーム画面のアプリは裏から再開されることが多い。表示に戻ったときに、セリフ・主ボタン・記録・時間帯を判定し直す
+const RESUME_REFRESH_MS = 10 * 60 * 1000; // 仮決定（D-019）
+let hiddenAt = null;
+function onResume(away) {
+  const now = new Date();
+  applyRecords(now);
+  if (away >= RESUME_REFRESH_MS) { // 長く裏にあった：通知から開いた状態を終え、今の時間帯の一言に戻す
+    hideToast();
+    endNotificationState();
+    showIdle(now);
+  }
+  lastMinute = ''; // 時計と次の予定をすぐ更新する
+  tick();
+  applyPeriod(now);
+  markPrimary(now);
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+  if (hiddenAt === null) return;
+  const away = Date.now() - hiddenAt;
+  hiddenAt = null;
+  onResume(away);
+});
+window.addEventListener('pageshow', (e) => { if (e.persisted) onResume(Infinity); });
+
+// 通知のタップで画面の移動に失敗したとき、Service Worker から URL が届く（sw.js）。通知から開いたときと同じ処理をする
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    if (!e.data || e.data.type !== 'open-url') return;
+    dialogueReady.then(() => applyOpenParams(new URL(e.data.url, location.href).searchParams));
+  });
+  if (navigator.serviceWorker.startMessages) navigator.serviceWorker.startMessages();
+}
 
 // ---------- 声を聞く（C2-02）：idle「声を聞く」/ playing「再生中」/ ended「もう一度聞く」/ error「再生できません」 ----------
 // 今はテスト用チャイム（合成音）。本番の声素材は人間が用意する（H-005）。

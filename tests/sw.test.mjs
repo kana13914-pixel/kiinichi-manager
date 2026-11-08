@@ -84,3 +84,20 @@ test('外部（送信サーバー）へのリクエストには手を出さな�
   handlers.fetch({ request: { method: 'GET', url: 'https://kiinichi-push.example.workers.dev/api/status' }, respondWith: () => { responded = true; } });
   assert.equal(responded, false);
 });
+
+test('通知タップ：navigate が例外なら、画面に URL を postMessage で渡す', async () => {
+  const sent = [];
+  const win = { focus: async () => {}, navigate: async () => { throw new Error('not allowed'); }, postMessage: (m) => sent.push(m) };
+  const { handlers, opened } = loadSw({ windows: [win] });
+  await fire(handlers.notificationclick, { notification: { close() {}, data: { url: SCOPE + 'index.html?source=webpush&trigger=a.b&line=0' } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(sent)), [{ type: 'open-url', url: SCOPE + 'index.html?source=webpush&trigger=a.b&line=0' }]);
+  assert.deepEqual(opened, []);
+});
+
+test('通知タップ：navigate が null なら、画面に URL を postMessage で渡す', async () => {
+  const sent = [];
+  const win = { focus: async () => {}, navigate: async () => null, postMessage: (m) => sent.push(m) };
+  const { handlers } = loadSw({ windows: [win] });
+  await fire(handlers.notificationclick, { notification: { close() {}, data: { url: SCOPE + 'index.html?source=webpush' } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(sent)), [{ type: 'open-url', url: SCOPE + 'index.html?source=webpush' }]);
+});
