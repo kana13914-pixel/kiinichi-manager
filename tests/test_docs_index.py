@@ -18,7 +18,7 @@ class DocsIndexTest(unittest.TestCase):
         for f in files:
             parts = f.split("/")
             candidates = [f] + ["/".join(parts[:i]) + "/" for i in range(1, len(parts))]
-            if not any(f"`{c}`" in index or f"`{c}" in index and c.endswith("/") for c in candidates):
+            if not any(f"`{c}`" in index for c in candidates):  # フォルダは `app/img/` のように末尾 / まで一致したときだけ
                 missing.append(f)
         self.assertEqual(missing, [], "docs/README.md に載っていないファイル:\n" + "\n".join(missing))
 
