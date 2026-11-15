@@ -1,0 +1,22 @@
+# push と pull request のたびに、自動テストを両方とも走らせる（D-033）
+name: test
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements-dev.txt
+      - name: 送信サーバーと Service Worker のテスト
+        run: node --test tests/worker.test.mjs tests/sw.test.mjs
+      - name: 画面・セリフ集・見た目・目次のテスト
+        run: python3 -m unittest discover -s tests

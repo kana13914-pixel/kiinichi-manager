@@ -1,0 +1,4 @@
+# 自動テストに必要な道具（アプリ本体には不要）。  pip install -r requirements-dev.txt
+# 画面テスト（tests/test_pwa.py）は、これに加えて Chrome（/usr/bin/google-chrome）が必要
+playwright>=1.48
+PyYAML>=6
