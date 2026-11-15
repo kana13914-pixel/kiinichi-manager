@@ -545,10 +545,21 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(self.primaries(page), ["work_start"])
 
     def test_records_reload_when_date_changes(self):
+        # 1日の区切りは朝4時（D-034）。0時をまたいでも記録は残り、4時をまたぐと消える
         page = self.clock_page(23, 58)
         page.click(".act[data-record=wake]")
         self.assertIn("done", page.get_attribute(".act[data-record=wake]", "class"))
         page.clock.run_for(3 * 60 * 1000)  # 0:01 になる
+        self.assertIn("done", page.get_attribute(".act[data-record=wake]", "class"))
+        page.clock.fast_forward(4 * 3600 * 1000)  # 4:01 になる
+        page.clock.run_for(1500)
+        self.assertEqual(page.text_content(".act[data-record=wake]"), "起きた")
+
+    def test_records_before_4am_belong_to_previous_day(self):
+        saved = json.dumps({"date": "2026-11-09", "items": {"wake": "07:12"}})
+        page = self.clock_page(1, 30, day=10, init_script="localStorage.setItem('records.today', %s)" % json.dumps(saved))
+        self.assertEqual(page.text_content(".act[data-record=wake]"), "✓ 起きた 07:12")
+        page = self.clock_page(4, 0, day=10, init_script="localStorage.setItem('records.today', %s)" % json.dumps(saved))
         self.assertEqual(page.text_content(".act[data-record=wake]"), "起きた")
 
     # ---------- 夜の配色（T11, D-019 Q5=暗くする） ----------
@@ -751,7 +762,8 @@ class PwaTest(unittest.TestCase):
             return int(datetime(2026, 11, day, hour, 0, 0).timestamp() * 1000)
         tasks = [
             {"id": "old", "title": "先週", "due": None, "done": True, "doneAt": ms(2, 23), "createdAt": 1},   # 11/2 完了 → 11/9 に消える
-            {"id": "keep", "title": "七日目", "due": None, "done": True, "doneAt": ms(3, 0), "createdAt": 2},  # 11/3 完了 → 11/9 はまだ残る
+            {"id": "night", "title": "深夜", "due": None, "done": True, "doneAt": ms(3, 3), "createdAt": 2},   # 11/3 の3時＝11/2 の分（朝4時区切り。D-034）→ 消える
+            {"id": "keep", "title": "七日目", "due": None, "done": True, "doneAt": ms(3, 4), "createdAt": 2},  # 11/3 完了 → 11/9 はまだ残る
             {"id": "nodate", "title": "日付なし", "due": None, "done": True, "createdAt": 3},                  # 完了日なし → 今日完了した扱い
             {"id": "open", "title": "未完了", "due": "2026-10-01", "done": False, "createdAt": 4},              # 未完了は古くても消さない
         ]
@@ -763,7 +775,10 @@ class PwaTest(unittest.TestCase):
         page.click("#done-section summary")
         self.assertIn("11/3(火) に完了", page.text_content("#done-list li[data-id=keep]"))
         self.assertIn("1週間", page.text_content("#done-section .note"))
-        page.clock.fast_forward(14 * 3600_000 + 60_000)  # 日付が変わって 11/10 → 11/3 完了のものも消える
+        page.clock.fast_forward(14 * 3600_000 + 60_000)  # 0:01。朝4時まではまだ 11/9 の続き
+        page.evaluate("Tasks.render()")
+        self.assertIn("keep", [t["id"] for t in json.loads(page.evaluate("localStorage.getItem('tasks.v1')"))])
+        page.clock.fast_forward(4 * 3600_000)  # 4:01。11/10 になり、11/3 完了のものも消える
         page.evaluate("Tasks.render()")
         self.assertEqual(sorted(t["id"] for t in json.loads(page.evaluate("localStorage.getItem('tasks.v1')"))), ["nodate", "open"])
 
@@ -918,6 +933,9 @@ class PwaTest(unittest.TestCase):
             if req.method == "OPTIONS":
                 route.fulfill(status=204, headers=cors)
                 return
+            if req.method == "GET":  # 起動時の購読の確認（/api/status）。予約・取り消しの呼び出しには数えない
+                route.fulfill(status=200, content_type="application/json", headers=cors, body='{"subscribed":true,"queue":[]}')
+                return
             calls.append(req)
             route.fulfill(status=status, content_type="application/json", headers=cors, body=body)
         return handler
@@ -932,7 +950,9 @@ class PwaTest(unittest.TestCase):
         ctx.add_init_script(READY)
         ctx.add_init_script(VISIBILITY)
         ctx.add_init_script(init)
-        ctx.route(self.WORKER + "/**", self.fake_timer_worker(calls, status, body))
+        if kw.get("fake_push"):
+            ctx.add_init_script(FAKE_PUSH)
+        ctx.route(self.WORKER + "/**", kw.get("handler") or self.fake_timer_worker(calls, status, body))
         page = ctx.new_page()
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
@@ -1316,6 +1336,164 @@ class PwaTest(unittest.TestCase):
         for sel in ("#cal-prev", "#cal-next", "#cal-today"):
             r = page.eval_on_selector(sel, "e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }")
             self.assertTrue(r[0] >= 44 and r[1] >= 44, (sel, r))
+
+    # ---------- レビューで見つけた点の修正（D-033, D-034） ----------
+    CORS = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS"}
+
+    def worker_handler(self, calls, respond):
+        """respond(path, method) が (status, body) を返す。None なら通信の失敗。"""
+        def handler(route):
+            req = route.request
+            if req.method == "OPTIONS":
+                route.fulfill(status=204, headers=self.CORS)
+                return
+            path = req.url.split("/api/", 1)[1]
+            calls.append(path)
+            r = respond(path, req.method)
+            if r is None:
+                route.abort()
+            else:
+                route.fulfill(status=r[0], content_type="application/json", headers=self.CORS, body=json.dumps(r[1]))
+        return handler
+
+    def test_tasks_due_today_lasts_until_4am(self):
+        tasks = [{"id": "a", "title": "昨日の暦で今日まで", "due": "2026-11-09", "done": False, "createdAt": 1}]
+        page = self.tasks_page(hour=1, minute=30, day=10, tasks=tasks)
+        self.assertIn("今日まで", page.text_content("#task-list li[data-id=a]"))
+        page.click("#task-add-open")
+        page.click("#task-form .chip[data-due=today]")
+        self.assertEqual(page.input_value("#task-due"), "2026-11-09")
+        page = self.tasks_page(hour=4, minute=0, day=10, tasks=tasks)
+        self.assertIn("期限切れ", page.text_content("#task-list li[data-id=a]"))
+
+    def test_report_draft_survives_reload(self):
+        page = self.report_page()
+        page.fill("#report-done", "書いている途中")
+        page.click("#report-form .mood[data-mood=tired]")
+        page.reload()  # iPhone が裏でアプリを終了したのと同じ
+        page.wait_for_function("dialogue !== null")
+        self.assertEqual(page.input_value("#report-done"), "書いている途中")
+        self.assertEqual(page.get_attribute("#report-form .mood[data-mood=tired]", "aria-pressed"), "true")
+        self.assertIn("書きかけ", page.text_content("#report-status"))
+        self.assertIsNone(page.evaluate("localStorage.getItem('reports.v1')"))  # まだ日報としては保存していない
+        page.click("#report-save")
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('reports.v1')"))["2026-11-09"]["done"], "書いている途中")
+        self.assertIsNone(page.evaluate("localStorage.getItem('reports.draft')"))
+        page.reload()
+        page.wait_for_function("dialogue !== null")
+        self.assertIn("保存済み", page.text_content("#report-status"))
+
+    def test_report_saves_under_shown_date_across_4am(self):
+        page = self.report_page(hour=3, minute=50, day=10)
+        self.assertEqual(page.text_content("#report-date"), "11月9日(月)の日報")
+        page.fill("#report-done", "深夜に書いた")
+        page.clock.fast_forward(15 * 60_000)  # 4:05。画面は開いたまま
+        page.click("#report-save")
+        self.assertEqual(list(json.loads(page.evaluate("localStorage.getItem('reports.v1')"))), ["2026-11-09"])
+
+    def test_report_old_draft_is_kept_as_that_days_report(self):
+        page = self.report_page(hour=3, minute=50, day=10)
+        page.fill("#report-done", "保存し忘れ")
+        self.hide_and_return(page, 15 * 60_000)  # 4:05 に戻る
+        self.assertEqual(page.text_content("#report-date"), "11月10日(火)の日報")
+        self.assertEqual(page.input_value("#report-done"), "")
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('reports.v1')"))["2026-11-09"]["done"], "保存し忘れ")
+        self.assertIn("保存し忘れ", page.text_content("#report-list"))
+
+    def test_notification_params_are_removed_from_url(self):
+        page = self.clock_page(12, 0, "&source=webpush&trigger=midday_check.meal_overdue&line=0#timer")
+        self.assertEqual(page.text_content("#bubble-text"), "そろそろ飯の時間、過ぎてるぞ。")
+        self.assertTrue(page.evaluate("document.body.classList.contains('from-notification')"))
+        self.assertTrue(page.url.endswith("index.html?mode=standalone#timer"), page.url)
+        page.reload()
+        page.wait_for_function("dialogue !== null")
+        self.assertFalse(page.evaluate("document.body.classList.contains('from-notification')"))
+        self.assertNotEqual(page.text_content("#bubble-text"), "そろそろ飯の時間、過ぎてるぞ。")
+
+    def test_timer_retries_cancel_that_did_not_reach_server(self):
+        calls, offline = [], {"cancel": True}
+        handler = self.worker_handler(calls, lambda path, m: None if path == "cancel" and offline["cancel"] else (200, {"ok": True, "subscribed": True}))
+        page = self.routed_timer_page(calls, handler=handler)
+        page.click("#timer-list li[data-id=work] .task-main")
+        page.wait_for_selector("#timer-notify.ok", timeout=3_000)
+        page.click("#timer-stop")
+        page.wait_for_function("JSON.parse(localStorage.getItem('timer.v1')).cancelPending === true", timeout=3_000)
+        offline["cancel"] = False
+        page.reload()  # 開き直したときにやり直す
+        page.wait_for_function("JSON.parse(localStorage.getItem('timer.v1')).cancelPending === false", timeout=3_000)
+        self.assertEqual([c for c in calls if c != "status"], ["schedule", "cancel", "cancel"])
+
+    def test_timer_pending_cancel_does_not_cancel_new_timer(self):
+        calls, offline = [], {"cancel": True}
+        handler = self.worker_handler(calls, lambda path, m: None if path == "cancel" and offline["cancel"] else (200, {"ok": True, "subscribed": True}))
+        page = self.routed_timer_page(calls, handler=handler)
+        page.click("#timer-list li[data-id=work] .task-main")
+        page.wait_for_selector("#timer-notify.ok", timeout=3_000)
+        page.click("#timer-stop")
+        page.wait_for_function("JSON.parse(localStorage.getItem('timer.v1')).cancelPending === true", timeout=3_000)
+        offline["cancel"] = False
+        page.click("#timer-list li[data-id=break] .task-main")
+        page.wait_for_selector("#timer-notify.ok", timeout=3_000)
+        self.hide_and_return(page, 1000)
+        page.wait_for_timeout(300)
+        self.assertEqual([c for c in calls if c != "status"], ["schedule", "cancel", "schedule"])  # 新しいタイマーの予約は取り消さない
+
+    def test_timer_resubscribes_when_server_lost_subscription(self):
+        calls = []
+        def respond(path, method):
+            if path == "vapid-public-key":
+                return (200, {"publicKey": "BHwerwZnkkro38y8e_YA6eiURgYes1c4BxSzHrU8kWsGJcOF7AvYnH2mievzMzSHhWWTG2DdGjnPDcDXpwrbsYM"})
+            if path == "status":
+                return (200, {"subscribed": True, "queue": []})
+            return (200, {"ok": True, "subscribed": path != "schedule"})
+        page = self.routed_timer_page(calls, handler=self.worker_handler(calls, respond), fake_push=True)
+        page.click("#timer-list li[data-id=work] .task-main")
+        page.wait_for_selector("#timer-notify.ok", timeout=5_000)
+        self.assertEqual([c for c in calls if c != "status"], ["schedule", "vapid-public-key", "subscribe"])
+
+    def test_app_resubscribes_on_open_when_server_lost_subscription(self):
+        calls = []
+        def respond(path, method):
+            if path == "vapid-public-key":
+                return (200, {"publicKey": "BHwerwZnkkro38y8e_YA6eiURgYes1c4BxSzHrU8kWsGJcOF7AvYnH2mievzMzSHhWWTG2DdGjnPDcDXpwrbsYM"})
+            return (200, {"ok": True, "subscribed": False, "queue": []})
+        page = self.routed_timer_page(calls, handler=self.worker_handler(calls, respond), fake_push=True)
+        page.wait_for_function("document.getElementById('push-status').textContent.includes('登録し直しました')", timeout=10_000)
+        self.assertEqual(calls, ["status", "vapid-public-key", "subscribe"])
+
+    def test_save_failure_is_shown_not_silent(self):
+        broken = "() => { Storage.prototype.setItem = function () { throw new DOMException('quota', 'QuotaExceededError'); }; }"
+        page = self.tasks_page()
+        page.evaluate(broken)
+        page.click("#task-add-open")
+        page.fill("#task-title", "保存できないタスク")
+        page.click("#task-submit")
+        self.assertIn("保存できませんでした", page.text_content("#task-form-status"))
+        self.assertTrue(page.is_visible("#task-form"))  # 入力は残す
+        self.assertEqual(page.input_value("#task-title"), "保存できないタスク")
+        page = self.timer_page()
+        page.evaluate(broken)
+        page.click("#timer-list li[data-id=work] .task-main")
+        self.assertTrue(page.is_visible("#timer-toast"))
+        self.assertIn("保存できませんでした", page.text_content("#timer-toast"))
+        self.assertTrue(page.is_visible("#timer-idle"))  # 始まっていない
+        page = self.clock_page(8, 0)
+        page.evaluate(broken)
+        page.click(".act[data-record=wake]")
+        self.assertIn("保存できませんでした", page.text_content("#toast"))
+        self.assertNotIn("done", page.get_attribute(".act[data-record=wake]", "class"))
+
+    def test_sw_assets_all_exist_and_cover_app_files(self):
+        sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")
+        import re
+        assets = re.findall(r"'\./([^']+)'", sw.split("const ASSETS = [", 1)[1].split("];", 1)[0])
+        for a in assets:
+            self.assertTrue((APP_DIR / a).is_file(), a)  # 1つでも欠けると Service Worker の更新が止まる
+        for f in list(APP_DIR.glob("*.js")) + list(APP_DIR.glob("*.html")) + list(APP_DIR.glob("*.css")):
+            if f.name != "sw.js":
+                self.assertIn(f.name, assets, f.name)
+
 
 if __name__ == "__main__":
     unittest.main()

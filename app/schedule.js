@@ -2,7 +2,8 @@
 //   リスト … 今日から7日先まで（8日分）を日付ごとに区切って時刻順に並べる。過ぎた予定は薄く、次の予定に金の線と「あと何分」
 //   月     … マス目に日付を並べ、その日の予定（kind が event のもの）をタグで出す。マスを押すと下にその日の予定を出す
 // データはどちらも SampleData.eventsOn（フェーズ2で Google カレンダーに置き換える）だけを読む。
-// app.js の hm / dateStr / restText / nextEvent / pickLine / dialogueReady を使う。
+// 日付は暦どおり（0時区切り）。朝4時区切り（D-034）は使わない。
+// util.js（日付）、dialogue.js（セリフ）、app.js の restText / nextEvent を使う。
 
 const Schedule = (() => {
   const LIST_DAYS = 8;   // 今日を含めて8日分
@@ -11,8 +12,8 @@ const Schedule = (() => {
   const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
   const $ = (id) => document.getElementById(id);
 
-  function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); x.setHours(0, 0, 0, 0); return x; }
-  function dayLabel(d) { return d.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' }); }
+  function dayAt(d, n) { return addDays(startOfDay(d), n); } // n 日後の 0 時
+  const dayLabel = labelLong;
   function sameEvent(a, b) { return a && b && a.at.getTime() === b.at.getTime() && a.title === b.title; }
 
   let mode = 'list';
@@ -61,7 +62,7 @@ const Schedule = (() => {
     const days = [];
     let total = 0;
     for (let i = 0; i < LIST_DAYS; i++) {
-      const date = addDays(now, i);
+      const date = dayAt(now, i);
       const events = SampleData.eventsOn(date);
       total += events.length;
       const sec = document.createElement('section');
@@ -125,11 +126,11 @@ const Schedule = (() => {
   }
   function renderMonth(now) {
     $('cal-title').textContent = `${cursor.getFullYear()}年${cursor.getMonth() + 1}月`;
-    const first = addDays(cursor, -cursor.getDay()); // 日曜はじまり
+    const first = dayAt(cursor, -cursor.getDay()); // 日曜はじまり
     const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
     const weeks = Math.ceil((cursor.getDay() + daysInMonth) / 7);
     const cells = [];
-    for (let i = 0; i < weeks * 7; i++) cells.push(cell(addDays(first, i), now));
+    for (let i = 0; i < weeks * 7; i++) cells.push(cell(dayAt(first, i), now));
     $('cal-grid').replaceChildren(...cells);
 
     const events = SampleData.eventsOn(selected).filter((e) => e.kind === 'event');
@@ -140,14 +141,14 @@ const Schedule = (() => {
   function moveMonth(n, now = new Date()) {
     cursor = new Date(cursor.getFullYear(), cursor.getMonth() + n, 1);
     // 今月なら今日、ほかの月なら1日を選ぶ
-    selected = cursor.getFullYear() === now.getFullYear() && cursor.getMonth() === now.getMonth() ? addDays(now, 0) : new Date(cursor);
+    selected = cursor.getFullYear() === now.getFullYear() && cursor.getMonth() === now.getMonth() ? startOfDay(now) : new Date(cursor);
     render(now, true);
   }
 
   // ---------- 切り替えと描き直し ----------
   let shownKey = null;
   function render(now = new Date(), force = false) {
-    if (!cursor) { cursor = new Date(now.getFullYear(), now.getMonth(), 1); selected = addDays(now, 0); }
+    if (!cursor) { cursor = new Date(now.getFullYear(), now.getMonth(), 1); selected = startOfDay(now); }
     // 分が変わるか、表示・月・選んだ日が変わったときだけ作り直す（P3-04）
     const key = [mode, hm(now), dateStr(now), dateStr(cursor), dateStr(selected)].join('|');
     if (key === shownKey && !force) return;
@@ -170,8 +171,7 @@ const Schedule = (() => {
   $('cal-next').addEventListener('click', () => moveMonth(1));
   $('cal-today').addEventListener('click', () => { cursor = null; render(new Date(), true); });
 
-  window.addEventListener('hashchange', () => { if (location.hash === '#schedule') render(); });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); });
+  onShow('schedule', () => render());
   setInterval(() => { if (location.hash === '#schedule') render(); }, 1000); // 「あと何分」と過ぎた予定を、分が変わったら直す
   render();
 

@@ -458,6 +458,7 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
 #task-toast, #timer-toast { bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4)); }
 /* トーストの文は 1 行に収め、「取り消す」は折り返さない（狭い画面でも押しやすく） */
 .toast > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast { min-height: var(--tap); } /* 「取り消す」のない知らせ（保存の失敗など）でも同じ高さ */
 .toast .undo { flex: none; white-space: nowrap; }
 
 /* ---------- 日報（D-026 ②, D-027） ---------- */

@@ -1,7 +1,8 @@
 // タスク画面（D-026 ①, D-031）。1件は「名前・期限（日付。なくてもよい）・完了」。
 // 完了したタスクは完了日を持ち、完了日から7日たつと自動で消す。削除は確認してから行う。
+// 「今日」「完了日」は朝4時で区切る（D-034）。
 // 保存は仮に localStorage（D-026 ⑤）。フェーズ2のデータ設計で移すか捨てるかを決める。
-// app.js の pad / dateStr / pickLine / dialogueReady を使うため、app.js の後に読み込む。
+// util.js（日付・保存）、dialogue.js（セリフ）、ui.js（確認・取り消しの表示・ごみ箱）を使う。
 
 const Tasks = (() => {
   const KEY = 'tasks.v1';
@@ -10,27 +11,23 @@ const Tasks = (() => {
 
   // ---------- 保存 ----------
   function load() {
-    try {
-      const list = JSON.parse(localStorage.getItem(KEY) || '[]');
-      return Array.isArray(list) ? list.filter((t) => t && typeof t.title === 'string') : [];
-    } catch (_) { return []; }
+    const list = Store.read(KEY, []);
+    return Array.isArray(list) ? list.filter((t) => t && typeof t.title === 'string') : [];
   }
+  // 保存できたら true。失敗したら画面に知らせて false（黙って消えたように見せない。D-033）
   function save(list) {
-    try { localStorage.setItem(KEY, JSON.stringify(list)); } catch (_) {} // 失敗しても画面は動かす
-  }
-  function newId() {
-    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    if (Store.write(KEY, list)) return true;
+    toast.show(SAVE_FAILED);
+    return false;
   }
 
   // ---------- 期限 ----------
-  function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
   // 期限の表示：期限切れ / 今日 / 明日 / 11/20(金)
   function dueInfo(due, now = new Date()) {
     if (!due) return null;
-    const today = dateStr(now);
-    const tomorrow = dateStr(addDays(now, 1));
-    const [y, m, d] = due.split('-').map(Number);
-    const label = new Date(y, m - 1, d).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' });
+    const today = todayKey(now);
+    const tomorrow = dateStr(addDays(logicalDay(now), 1));
+    const label = labelShort(parseDay(due));
     if (due < today) return { text: `期限切れ（${label}）`, overdue: true };
     if (due === today) return { text: '今日まで', overdue: false };
     if (due === tomorrow) return { text: '明日まで', overdue: false };
@@ -38,18 +35,16 @@ const Tasks = (() => {
   }
   // 完了日から7日たったものを除く。完了日のない完了済み（古いデータ）は今日完了したことにする
   function tidy(list, now = new Date()) {
-    const limit = dateStr(addDays(now, -KEEP_DONE_DAYS)); // この日までに完了したものを消す
+    const limit = dateStr(addDays(logicalDay(now), -KEEP_DONE_DAYS)); // この日までに完了したものを消す
     let changed = false;
     const kept = list.filter((t) => {
       if (!t.done) return true;
       if (!t.doneAt) { t.doneAt = now.getTime(); changed = true; }
-      return dateStr(new Date(t.doneAt)) > limit;
+      return todayKey(new Date(t.doneAt)) > limit;
     });
     return { list: kept, changed: changed || kept.length !== list.length };
   }
-  function dayLabel(ms) {
-    return new Date(ms).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' });
-  }
+  function dayLabel(ms) { return labelShort(logicalDay(new Date(ms))); }
   // 未完了の並び：期限切れ・期限の近い順、期限なしは最後、同じなら作った順
   function sortOpen(list) {
     return list.filter((t) => !t.done).sort((a, b) => {
@@ -100,21 +95,14 @@ const Tasks = (() => {
     main.append(box, body);
     main.addEventListener('click', () => toggle(task.id));
 
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'task-del';
-    del.setAttribute('aria-label', `「${task.title}」を削除`);
-    del.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 13h8l1-13"/></svg>';
-    del.addEventListener('click', () => remove(task.id));
-
-    li.append(main, del);
+    li.append(main, trashButton(`「${task.title}」を削除`, () => remove(task.id)));
     return li;
   }
 
   // 一言の条件：0件 → 期限切れあり → 今日まであり → それ以外
   function sayKey(open, now) {
     if (open.length === 0) return 'screen_empty.tasks';
-    const today = dateStr(now);
+    const today = todayKey(now);
     if (open.some((t) => t.due && t.due < today)) return 'tasks_status.overdue';
     if (open.some((t) => t.due === today)) return 'tasks_status.today';
     return 'tasks_status.open';
@@ -122,7 +110,7 @@ const Tasks = (() => {
   let shownSay = null;
   function render(now = new Date()) {
     const tidied = tidy(load(), now);
-    if (tidied.changed) save(tidied.list);
+    if (tidied.changed) Store.write(KEY, tidied.list); // 整理の保存は、失敗しても次に開いたときにやり直せる
     const list = tidied.list;
     const open = sortOpen(list);
     const done = sortDone(list);
@@ -141,33 +129,7 @@ const Tasks = (() => {
     }
   }
 
-  // ---------- 取り消し（5秒） ----------
-  let toastTimer = null;
-  let undoAction = null;
-  function hideToast() {
-    $('task-toast').hidden = true;
-    undoAction = null;
-    clearTimeout(toastTimer);
-  }
-  function showToast(message, undo) {
-    undoAction = undo;
-    const toast = $('task-toast');
-    const msg = document.createElement('span');
-    msg.textContent = message;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'undo';
-    btn.textContent = '取り消す';
-    btn.addEventListener('click', () => {
-      const fn = undoAction;
-      hideToast();
-      if (fn) fn();
-    });
-    toast.replaceChildren(msg, btn);
-    toast.hidden = false;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(hideToast, 5000);
-  }
+  const toast = makeToast($('task-toast')); // 取り消し（5秒）と、保存の失敗の知らせ
 
   // ---------- 操作 ----------
   function update(id, fn) {
@@ -176,7 +138,7 @@ const Tasks = (() => {
     if (!t) return null;
     const before = { ...t };
     fn(t);
-    save(list);
+    if (!save(list)) return null;
     render();
     return before;
   }
@@ -184,9 +146,9 @@ const Tasks = (() => {
     const before = update(id, (t) => { t.done = !t.done; t.doneAt = t.done ? Date.now() : null; });
     if (!before) return;
     if (!before.done) {
-      showToast(`「${before.title}」を完了にしました`, () => update(id, (t) => { t.done = false; t.doneAt = null; }));
+      toast.show(`「${before.title}」を完了にしました`, () => update(id, (t) => { t.done = false; t.doneAt = null; }));
     } else {
-      hideToast(); // 完了→未完了に戻すのは、それ自体が取り消しなのでトーストは出さない
+      toast.hide(); // 完了→未完了に戻すのは、それ自体が取り消しなのでトーストは出さない
     }
   }
   async function remove(id) {
@@ -196,9 +158,9 @@ const Tasks = (() => {
     const index = list.findIndex((x) => x.id === id);
     if (index < 0) return;
     const [removed] = list.splice(index, 1);
-    save(list);
+    if (!save(list)) return;
     render();
-    showToast(`「${removed.title}」を削除しました`, () => {
+    toast.show(`「${removed.title}」を削除しました`, () => {
       const now = load();
       now.splice(Math.min(index, now.length), 0, removed);
       save(now);
@@ -208,8 +170,9 @@ const Tasks = (() => {
   function add(title, due) {
     const list = load();
     list.push({ id: newId(), title, due: due || null, done: false, doneAt: null, createdAt: Date.now() });
-    save(list);
+    if (!Store.write(KEY, list)) return false;
     render();
+    return true;
   }
 
   // ---------- 追加フォーム ----------
@@ -237,7 +200,7 @@ const Tasks = (() => {
   for (const chip of document.querySelectorAll('#task-form .chip')) {
     chip.addEventListener('click', () => {
       const now = new Date();
-      chosenDue = chip.dataset.due === 'today' ? dateStr(now) : chip.dataset.due === 'tomorrow' ? dateStr(addDays(now, 1)) : null;
+      chosenDue = chip.dataset.due === 'today' ? todayKey(now) : chip.dataset.due === 'tomorrow' ? dateStr(addDays(logicalDay(now), 1)) : null;
       $('task-due').value = chosenDue || '';
       setChip(chip.dataset.due);
     });
@@ -253,13 +216,15 @@ const Tasks = (() => {
       $('task-form-status').textContent = 'やることを入力してください';
       return;
     }
-    add(title.slice(0, 100), chosenDue);
+    if (!add(title.slice(0, 100), chosenDue)) { // 入力を残したまま知らせる
+      $('task-form-status').textContent = SAVE_FAILED;
+      return;
+    }
     closeForm();
   });
 
   // 画面を開いたとき・日付が変わりうるときに描き直す（期限の表示が日付に依存するため）
-  window.addEventListener('hashchange', () => { if (location.hash === '#tasks') render(); });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); });
+  onShow('tasks', render);
   render();
 
   return { load, dueInfo, sortOpen, tidy, render };

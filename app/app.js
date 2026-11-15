@@ -1,7 +1,8 @@
-// マネージャー本体。初回導線（D-009）、ホーム画面（D-019・見た目は D-021）、設定画面（確認用の起動状態）を扱う。
+// マネージャー本体。初回導線（D-009）、ホーム画面（D-019・見た目は D-021）、通知の購読、設定画面（確認用の起動状態）を扱う。
+// 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase1-v14';
+const APP_VERSION = 'phase1-v15';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -82,9 +83,6 @@ function loadPortrait(sources = PORTRAIT_SOURCES) {
 loadPortrait();
 
 // ---------- 時計 ----------
-function pad(n) { return String(n).padStart(2, '0'); }
-function hm(d) { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
-function setIfChanged(el, text) { if (el.textContent !== text) el.textContent = text; } // P3-04
 function renderClock(now = new Date()) {
   setIfChanged(document.getElementById('clock-time'), hm(now));
   setIfChanged(document.getElementById('clock-date'),
@@ -93,20 +91,6 @@ function renderClock(now = new Date()) {
 
 // ---------- 次の予定（今は仮データ） ----------
 // 今日の予定が尽きたら、明日の最初の予定を「明日」付きで出す（C7-03）
-// 削除の前の確認（I1-04, D-031）。「やめる」に最初のフォーカスを置く。枠の外を押す・Esc は「やめる」と同じ
-function confirmDialog(message, okLabel = '削除する') {
-  const dlg = document.getElementById('confirm');
-  document.getElementById('confirm-text').textContent = message;
-  document.getElementById('confirm-ok').textContent = okLabel;
-  return new Promise((resolve) => {
-    dlg.returnValue = '';
-    dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok'), { once: true });
-    dlg.showModal();
-    document.getElementById('confirm-cancel').focus();
-  });
-}
-document.getElementById('confirm').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
-
 function nextEvent(now = new Date()) {
   const today = SampleData.todayEvents(now).find((e) => e.at > now);
   if (today) return { ...today, tomorrow: false };
@@ -147,10 +131,10 @@ function tick() {
   const minute = hm(now) + now.toDateString();
   if (minute === lastMinute) return; // 分が変わったときだけ書き換える（P3-04）
   lastMinute = minute;
-  if (lastDate !== null && lastDate !== now.toDateString()) applyRecords(now); // 日付が変わったら記録を読み直す
+  if (lastDate !== null && lastDate !== todayKey(now)) applyRecords(now); // 1日の区切り（朝4時。D-034）をまたいだら記録を読み直す
   if (lastHour !== null && lastHour !== now.getHours()) markPrimary(now); // 「時」が変わったら主ボタンを判定し直す
   lastHour = now.getHours();
-  lastDate = now.toDateString();
+  lastDate = todayKey(now);
   applyPeriod(now);
   renderClock(now);
   renderNextEvent(now);
@@ -171,34 +155,7 @@ function applyPeriod(now = new Date()) {
   if (document.body.dataset.period !== p) document.body.dataset.period = p; // 変わったときだけ
 }
 
-// ---------- セリフ（セリフ集 app/data/dialogue.json から選ぶ） ----------
-let dialogue = null;
-const dialogueReady = fetch('data/dialogue.json').then((r) => r.json()).then((d) => { dialogue = d; }).catch(() => {});
-const lastLineIndex = {}; // キーごとに直前に出した候補の番号（C1-02）
-
-function candidates(key) {
-  if (!dialogue || !key) return null;
-  const [trigger, condId] = key.split('.');
-  const cond = dialogue[trigger] && (dialogue[trigger].conditions || []).find((c) => c.id === condId);
-  return cond && cond.lines && cond.lines.length ? cond.lines : null;
-}
-
-// "morning_wake.on_time" のようなキーからセリフを1つ選び、{ text, index } を返す
-// index が範囲内の整数ならその候補（通知の line 指定。C5-05）。それ以外は直前と違うものをランダムに（C1-02）
-function pickLine(key, { index } = {}) {
-  const lines = candidates(key);
-  if (!lines) return null;
-  let i;
-  if (Number.isInteger(index) && index >= 0 && index < lines.length) {
-    i = index;
-  } else {
-    const pool = lines.map((_, k) => k).filter((k) => lines.length < 2 || k !== lastLineIndex[key]);
-    i = pool[Math.floor(Math.random() * pool.length)];
-  }
-  lastLineIndex[key] = i;
-  return { text: lines[i], index: i };
-}
-
+// ---------- セリフ（選び方は dialogue.js） ----------
 // セリフを表示する（声の再生は見送り。D-023）
 function showLine(key, { index } = {}) {
   const picked = pickLine(key, { index });
@@ -254,23 +211,34 @@ function applyOpenParams(params, now = new Date()) {
   markPrimary(now);
 }
 
+// 通知から開いた印（trigger・line・source=webpush）は、使い終えたら URL から外す。
+// 残したままだと、再読み込みのたびに同じ通知のセリフと金の上辺が出直す（D-033）
+function clearOpenParams() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has('trigger') && !params.has('line') && params.get('source') !== 'webpush') return;
+  params.delete('trigger');
+  params.delete('line');
+  if (params.get('source') === 'webpush') params.delete('source');
+  const query = params.toString();
+  history.replaceState(null, '', location.pathname + (query ? '?' + query : '') + location.hash);
+}
+
 applyPeriod();
-dialogueReady.then(() => applyOpenParams(new URLSearchParams(location.search)));
+dialogueReady.then(() => {
+  applyOpenParams(new URLSearchParams(location.search));
+  clearOpenParams();
+});
 
 // ---------- 記録（I3-02, C6-01） ----------
 // 仮の保存（D-019 Q7）。フェーズ2のデータ構造を決めるときに置き換える。記録による通知予約の取り消し（D-015）もフェーズ2
+// 「今日」は朝4時で区切る（D-034）
 const RECORDS_KEY = 'records.today';
-function dateStr(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 function loadRecords(now = new Date()) {
-  try {
-    const r = JSON.parse(localStorage.getItem(RECORDS_KEY) || 'null');
-    if (r && r.date === dateStr(now) && r.items) return r; // 今日の分だけ使う
-  } catch (_) {}
-  return { date: dateStr(now), items: {} };
+  const r = Store.read(RECORDS_KEY);
+  if (r && r.date === todayKey(now) && r.items) return r; // 今日の分だけ使う
+  return { date: todayKey(now), items: {} };
 }
-function saveRecords(r) {
-  try { localStorage.setItem(RECORDS_KEY, JSON.stringify(r)); } catch (_) {} // 失敗しても画面は動かす
-}
+function saveRecords(r) { return Store.write(RECORDS_KEY, r); }
 function setDone(btn, time) {
   btn.classList.add('done');
   btn.textContent = `✓ ${btn.dataset.label} ${time}`;
@@ -289,32 +257,12 @@ function applyRecords(now = new Date()) {
 }
 
 // 取り消しの表示（5秒）
-const toast = document.getElementById('toast');
-let toastTimer = null;
-let toastFor = null; // { btn, prevLine, reactionLine } … prevLine は押した直後のときだけ
-function hideToast() {
-  toast.hidden = true;
-  toastFor = null;
-  clearTimeout(toastTimer);
+const homeToast = makeToast(document.getElementById('toast'));
+// info = { btn, prevLine, reactionLine } … prevLine は押した直後のときだけ
+function showRecordToast(info) {
+  homeToast.show(`「${info.btn.dataset.label}」を記録しました`, () => undoRecord(info));
 }
-function showToast(info) {
-  toastFor = info; // 前のトーストの記録はそのまま確定する
-  toast.textContent = '';
-  const msg = document.createElement('span');
-  msg.textContent = `「${info.btn.dataset.label}」を記録しました`;
-  const undo = document.createElement('button');
-  undo.type = 'button';
-  undo.className = 'undo';
-  undo.textContent = '取り消す';
-  undo.addEventListener('click', undoRecord);
-  toast.append(msg, undo);
-  toast.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(hideToast, 5000);
-}
-function undoRecord() {
-  if (!toastFor) return;
-  const { btn, prevLine, reactionLine } = toastFor;
+function undoRecord({ btn, prevLine, reactionLine }) {
   setUndone(btn);
   const r = loadRecords();
   delete r.items[btn.dataset.record];
@@ -324,27 +272,25 @@ function undoRecord() {
   if (prevLine !== undefined && bubble.textContent === reactionLine) {
     bubble.textContent = prevLine;
   }
-  hideToast();
   markPrimary();
 }
 
 for (const btn of document.querySelectorAll('.act')) {
   btn.addEventListener('click', () => {
     if (btn.classList.contains('done')) { // 記録済み：新しい記録はせず、取り消しを出し直す（セリフは変えない）
-      showToast({ btn });
+      showRecordToast({ btn });
       return;
     }
     const now = new Date();
+    const r = loadRecords(now);
+    r.items[btn.dataset.record] = hm(now);
+    if (!saveRecords(r)) { homeToast.show(SAVE_FAILED); return; } // 保存できなければ記録済みにしない
     const prevLine = document.getElementById('bubble-text').textContent;
     if (document.body.classList.contains('from-notification')) endNotificationState(); // 記録に移ったら通知の強調は終える（D-020）
     showLine(btn.dataset.trigger); // 反応のセリフ
-    const time = hm(now);
-    setDone(btn, time);
-    const r = loadRecords(now);
-    r.items[btn.dataset.record] = time;
-    saveRecords(r);
+    setDone(btn, hm(now));
     markPrimary(now);
-    showToast({ btn, prevLine, reactionLine: document.getElementById('bubble-text').textContent });
+    showRecordToast({ btn, prevLine, reactionLine: document.getElementById('bubble-text').textContent });
   });
 }
 applyRecords();
@@ -357,9 +303,10 @@ function onResume(away) {
   const now = new Date();
   applyRecords(now);
   if (away >= RESUME_REFRESH_MS) { // 長く裏にあった：通知から開いた状態を終え、今の時間帯の一言に戻す
-    hideToast();
+    homeToast.hide();
     endNotificationState();
     showIdle(now);
+    checkPush(); // 購読が切れていないか確かめ直す
   }
   lastMinute = ''; // 時計と次の予定をすぐ更新する
   tick();
@@ -418,6 +365,27 @@ async function enablePush() {
   await Settings.api('/api/subscribe', { method: 'POST', body: sub.toJSON() });
 }
 
+// 購読が切れていないかを確かめ、切れていたら登録し直す（D-033）。
+// 送信サーバーは、プッシュサービスに「購読が無効」と言われると購読を消す。そのままだと、利用者が設定で押し直すまで通知がすべて止まる。
+// 設定済み・通知を許可済みのときだけ動く（許可ダイアログは出ない）。通信できないときは何もしない
+let pushCheck = null;
+function checkPush() {
+  if (document.body.dataset.state !== 'ready' || !Settings.get('appToken')) return Promise.resolve(false);
+  if (!('Notification' in window) || Notification.permission !== 'granted') return Promise.resolve(false);
+  if (pushCheck) return pushCheck; // 同時に2回は動かさない
+  pushCheck = Settings.api('/api/status')
+    .then((st) => (st.subscribed === false ? repairPush() : false))
+    .catch(() => false)
+    .finally(() => { pushCheck = null; });
+  return pushCheck;
+}
+// 登録し直す。できたら true
+function repairPush() {
+  return enablePush()
+    .then(() => { setText('push-status', '有効（送信サーバーに登録し直しました）', 'ok'); return true; })
+    .catch((e) => { setText('push-status', '通知の登録が切れています。「通知を有効にする」を押してください（' + e.message + '）', 'ng'); return false; });
+}
+
 function explainError(e) {
   if (/許可されませんでした/.test(e.message)) {
     return e.message + '。iPhoneの「設定」→「通知」→「マネージャー」で通知をオンにしてから、もう一度押してください';
@@ -458,7 +426,7 @@ if ('serviceWorker' in navigator) {
       if (reg.pushManager) {
         reg.pushManager.getSubscription().then((sub) => {
           if (sub) setText('push-status', '購読あり（この端末）', 'ok');
-        }).catch(() => {});
+        }).catch(() => {}).then(checkPush);
       }
     })
     .catch((e) => setText('sw-status', '登録失敗: ' + e.message, 'ng'));

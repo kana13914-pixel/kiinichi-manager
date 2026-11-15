@@ -46,15 +46,18 @@
 | パス | 内容 |
 | --- | --- |
 | `app/index.html` | 本体の画面（初回導線・ホーム・各タブ・設定） |
-| `app/app.js` | 本体の動き（画面切替・時計・セリフ・主ボタン・記録・復帰時の判定・通知の購読・立ち絵の自動表示。声の再生はなし：D-023）。`APP_VERSION` |
+| `app/util.js` | 共通の小道具（日付、1日の区切り＝朝4時 `todayKey`：D-034、端末内の保存 `Store`）。最初に読み込む |
+| `app/dialogue.js` | セリフ集から選ぶ（`pickLine`・`dialogueReady`） |
+| `app/ui.js` | 共通の画面部品（確認ダイアログ・取り消しの表示 `makeToast`・ごみ箱・画面を開いたときの描き直し `onShow`） |
+| `app/app.js` | 本体の動き（画面切替・時計・セリフの表示・主ボタン・記録・復帰時の判定・通知の購読と登録し直し・立ち絵の自動表示。声の再生はなし：D-023）。`APP_VERSION` |
 | `app/style.css` | 見た目。`:root` がトークンの正本 |
-| `app/tasks.js` | タスク画面（追加・完了・削除（確認つき）・取り消し・期限の表示・状況に合わせた一言。完了したタスクは完了日から7日で自動で消す。仮に localStorage の `tasks.v1`。D-026, D-031） |
-| `app/report.js` | 日報画面（1日1件・4項目。朝4時で日付を区切る。これまでの日報は7日分ずつ表示。仮に localStorage の `reports.v1`。D-026, D-027, D-031） |
-| `app/timer.js` | タイマー画面（用途別・時間を指定・利用者が作るタイマー。同時に1つ。終了の通知を予約・取り消し。仮に localStorage の `timer.v1`。D-026, D-028） |
+| `app/tasks.js` | タスク画面（追加・完了・削除（確認つき）・取り消し・期限の表示・状況に合わせた一言。完了したタスクは完了日から7日で自動で消す。「今日」は朝4時区切り。仮に localStorage の `tasks.v1`。D-026, D-031, D-034） |
+| `app/report.js` | 日報画面（1日1件・4項目。朝4時で日付を区切る。これまでの日報は7日分ずつ表示。書きかけは `reports.draft` に残す。仮に localStorage の `reports.v1`。D-026, D-027, D-031, D-033） |
+| `app/timer.js` | タイマー画面（用途別・時間を指定・利用者が作るタイマー。同時に1つ。終了の通知を予約・取り消し（届かなかった取り消しはやり直す）。仮に localStorage の `timer.v1`。D-026, D-028, D-033） |
 | `app/schedule.js` | 予定画面（見るだけ。リスト＝今日から7日先まで／月＝マス目にタグ、を切り替える。フェーズ2までは `app/sample-data.js` の仮データ。D-026, D-030, D-032） |
 | `app/settings.js` | 送信サーバーの URL と合言葉（端末内保存） |
 | `app/sample-data.js` | 予定の仮データ（毎日の生活の時刻＋仮の予定）。ホーム・予定のリスト・月表示が共通で読む `eventsOn(日付)`（フェーズ 2 で置き換え。D-032） |
-| `app/sw.js` | Service Worker（キャッシュ・通知の表示とタップ）。`CACHE_VERSION` は `APP_VERSION` と同じにする |
+| `app/sw.js` | Service Worker（キャッシュ・遅い回線ではキャッシュを先に返す・通知の表示とタップ）。`CACHE_VERSION` は `APP_VERSION` と同じにする |
 | `app/manifest.webmanifest` | ホーム画面に追加したときの名前・色・アイコン |
 | `app/send.html`, `app/send.js` | 検証用の送信ページ（ntfy と Web Push） |
 | `app/data/dialogue.json` | セリフ集（`data/dialogue_template.yaml` から生成。直接編集しない） |
@@ -66,7 +69,7 @@
 | パス | 内容 |
 | --- | --- |
 | `data/dialogue_template.yaml` | セリフ集の正本。編集したら `python3 scripts/build_dialogue.py` |
-| `worker/worker.js` | 送信サーバー（Cloudflare のダッシュボードに貼り付けて使う）。即時送信・予約（`/api/send`）、キー付きの予約と取り消し（`/api/schedule`・`/api/cancel`。D-015, D-028） |
+| `worker/worker.js` | 送信サーバー（Cloudflare のダッシュボードに貼り付けて使う）。即時送信・予約（`/api/send`）、キー付きの予約と取り消し（`/api/schedule`・`/api/cancel`。D-015, D-028）、送れなかった予約のやり直しと送信結果の記録（D-033） |
 | `worker/package.json` | テストで読み込むための設定（デプロイには不要） |
 | `scripts/build_dialogue.py` | セリフ集の YAML → JSON |
 | `scripts/contrast_check.py` | 色の明暗差の計算（トークンを変えたら実行し、`docs/design.md` に貼る） |

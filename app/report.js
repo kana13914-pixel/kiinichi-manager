@@ -1,32 +1,53 @@
 // 日報画面（D-026 ②, D-027）。1日1件、「今日の調子（3段階）・できたこと・やり残したこと・明日いちばんにやること」。
-// 日付の区切りは朝4時（4時より前に書いた日報は前日の分。夜の時間帯 22〜4時と合わせる）。
-// 保存は仮に localStorage（D-026 ⑤）。app.js の pad / dateStr / pickLine / dialogueReady を使う。
+// 日付の区切りは朝4時（4時より前に書いた日報は前日の分。D-027, D-034）。
+// 書きかけは入力のたびに端末に保存し、開き直したら戻す（D-033）。
+// 保存は仮に localStorage（D-026 ⑤）。util.js（日付・保存）、dialogue.js（セリフ）、ui.js を使う。
 
 const Report = (() => {
   const KEY = 'reports.v1';
-  const DAY_STARTS_AT = 4; // 時
+  const DRAFT_KEY = 'reports.draft'; // { date, mood, done, left, tomorrow } … 保存前の書きかけ（1件だけ）
   const HISTORY_STEP = 7; // 「これまでの日報」は7日分ずつ出す（D-031）。データは消さない
   const MOODS = { good: '元気', normal: 'ふつう', tired: '疲れた' };
   const $ = (id) => document.getElementById(id);
 
   function load() {
-    try {
-      const r = JSON.parse(localStorage.getItem(KEY) || '{}');
-      return r && typeof r === 'object' && !Array.isArray(r) ? r : {};
-    } catch (_) { return {}; }
+    const r = Store.read(KEY, {});
+    return r && typeof r === 'object' && !Array.isArray(r) ? r : {};
   }
-  function save(all) {
-    try { localStorage.setItem(KEY, JSON.stringify(all)); return true; } catch (_) { return false; }
+  function save(all) { return Store.write(KEY, all); }
+  const reportDate = todayKey; // 日報の日付（4時より前は前日）
+  function dateLabel(key) { return labelLong(parseDay(key)); }
+  function hasContent(e) { return Boolean(e && (e.mood || e.done || e.left || e.tomorrow)); }
+
+  // ---------- 書きかけ（D-033） ----------
+  function loadDraft() {
+    const d = Store.read(DRAFT_KEY);
+    return d && typeof d === 'object' && typeof d.date === 'string' ? d : null;
   }
-  // 日報の日付（4時より前は前日）
-  function reportDate(now = new Date()) {
-    const d = new Date(now);
-    if (d.getHours() < DAY_STARTS_AT) d.setDate(d.getDate() - 1);
-    return dateStr(d);
+  function formEntry() {
+    return {
+      mood,
+      done: $('report-done').value.trim(),
+      left: $('report-left').value.trim(),
+      tomorrow: $('report-tomorrow').value.trim(),
+    };
   }
-  function dateLabel(key) {
-    const [y, m, d] = key.split('-').map(Number);
-    return new Date(y, m - 1, d).toLocaleDateString('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' });
+  // 入力のたびに呼ぶ。iPhone は裏に回したアプリをよく終了させるので、保存ボタンを押す前の文も残す
+  function saveDraft() {
+    if (!shownDate) return;
+    Store.write(DRAFT_KEY, { date: shownDate, mood, done: $('report-done').value, left: $('report-left').value, tomorrow: $('report-tomorrow').value });
+  }
+  // 日付が変わったあとに前の日の書きかけが残っていたら、その日の日報として保存する（消さない）
+  function keepOldDraft(today) {
+    const d = loadDraft();
+    if (!d || d.date === today) return;
+    const entry = { mood: d.mood || null, done: String(d.done || '').trim(), left: String(d.left || '').trim(), tomorrow: String(d.tomorrow || '').trim() };
+    if (hasContent(entry)) {
+      const all = load();
+      all[d.date] = { ...entry, savedAt: Date.now() };
+      if (!save(all)) return; // 保存できなければ書きかけを残す
+    }
+    Store.remove(DRAFT_KEY);
   }
 
   // ---------- 今日の日報のフォーム ----------
@@ -39,16 +60,19 @@ const Report = (() => {
   function fillForm(now = new Date()) {
     const key = reportDate(now);
     if (key === shownDate) return; // 書きかけを消さないよう、日付が変わったときだけ入れ直す
+    keepOldDraft(key);
     shownDate = key;
-    const r = load()[key] || {};
+    const saved = load()[key] || {};
+    const draft = loadDraft();
+    const r = draft || saved; // 書きかけがあれば、そちらを出す
     $('report-date').textContent = `${dateLabel(key)}の日報`;
     setMood(r.mood || null);
     $('report-done').value = r.done || '';
     $('report-left').value = r.left || '';
     $('report-tomorrow').value = r.tomorrow || '';
-    $('report-status').textContent = r.savedAt ? `保存済み（${hm(new Date(r.savedAt))}）` : '';
+    $('report-status').textContent = draft ? '書きかけを戻しました（まだ保存していません）' : saved.savedAt ? `保存済み（${hm(new Date(saved.savedAt))}）` : '';
     $('report-status').className = 'status';
-    $('report-save').textContent = r.savedAt ? '更新する' : '保存する';
+    $('report-save').textContent = saved.savedAt ? '更新する' : '保存する';
     $('report-reply').hidden = true;
   }
 
@@ -83,7 +107,7 @@ const Report = (() => {
   let historyShown = HISTORY_STEP;
   function renderHistory(now = new Date()) {
     const all = load();
-    const today = reportDate(now);
+    const today = shownDate || reportDate(now); // 入力欄に出している日は一覧に出さない
     const every = Object.keys(all).filter((k) => k !== today && /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().reverse();
     const keys = every.slice(0, historyShown);
     $('report-list').replaceChildren(...keys.map((k) => item(k, all[k])));
@@ -104,18 +128,13 @@ const Report = (() => {
   $('report-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const now = new Date();
-    const entry = {
-      mood,
-      done: $('report-done').value.trim(),
-      left: $('report-left').value.trim(),
-      tomorrow: $('report-tomorrow').value.trim(),
-    };
-    if (!entry.mood && !entry.done && !entry.left && !entry.tomorrow) {
+    const entry = formEntry();
+    if (!hasContent(entry)) {
       $('report-status').textContent = '今日の調子か、どれか1つの項目を入れてください';
       $('report-status').className = 'status ng';
       return;
     }
-    const key = reportDate(now);
+    const key = shownDate || reportDate(now); // 画面に出している日付の日報として保存する（4時をまたいで開いていても食い違わない）
     const all = load();
     all[key] = { ...entry, savedAt: now.getTime() };
     if (!save(all)) {
@@ -123,6 +142,7 @@ const Report = (() => {
       $('report-status').className = 'status ng';
       return;
     }
+    Store.remove(DRAFT_KEY);
     $('report-status').textContent = `保存済み（${hm(now)}）`;
     $('report-status').className = 'status ok';
     $('report-save').textContent = '更新する';
@@ -134,8 +154,9 @@ const Report = (() => {
     });
   });
   for (const b of document.querySelectorAll('#report-form .mood')) {
-    b.addEventListener('click', () => setMood(mood === b.dataset.mood ? null : b.dataset.mood)); // もう一度押すと解除
+    b.addEventListener('click', () => { setMood(mood === b.dataset.mood ? null : b.dataset.mood); saveDraft(); }); // もう一度押すと解除
   }
+  for (const id of ['report-done', 'report-left', 'report-tomorrow']) $(id).addEventListener('input', saveDraft);
 
   $('report-more').addEventListener('click', () => { historyShown += HISTORY_STEP; renderHistory(); });
 
@@ -143,8 +164,7 @@ const Report = (() => {
     fillForm(now);
     renderHistory(now);
   }
-  window.addEventListener('hashchange', () => { if (location.hash === '#report') render(); });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); });
+  onShow('report', () => render());
   render();
 
   return { load, reportDate, render };
