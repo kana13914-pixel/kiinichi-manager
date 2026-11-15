@@ -17,6 +17,7 @@
 2. 「作成」→「Hello World から開始」（Start with Hello World）を選ぶ
 3. 名前を `kiinichi-push` にして「デプロイ」
 4. 表示された URL（`https://kiinichi-push.<あなたのサブドメイン>.workers.dev`）を控える。これが「送信サーバーのURL」
+   - **サブドメインは公開される**（アプリのコードとリポジトリに載る）。Cloudflare が最初に付ける名前はメールアドレスをもとにしていることがあるので、メールアドレスや本名と無関係な名前に変えてから使う（「Workers & Pages」の画面の Subdomain →「Change」。D-035, D-036）。現在の URL は `app/settings.js` の既定値
 
 ## 2. コードを貼り付ける
 
