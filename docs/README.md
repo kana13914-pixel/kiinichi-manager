@@ -7,6 +7,7 @@
 | やること | 読む順 |
 | --- | --- |
 | 何をするにも | `CLAUDE.md` → この目次 → `docs/roadmap.md`（今のタスク）→ `NEEDS_HUMAN.md`（人間待ちの作業） |
+| 別のチャットから引き継ぐ | `docs/handoff.md`（現在地・進め方の約束・作業環境のくせ。末尾に新しいチャットに貼り付ける文）→ 上の「何をするにも」 |
 | 機能・会話を作る | `docs/spec.md` → `docs/decisions.md` → `data/dialogue_template.yaml` |
 | 画面の見た目を作る・直す | `docs/visual_rules.md`（CR-*）→ `docs/ui_knowledge.md`（V1〜M3）→ `docs/design.md`（トークン・コントラスト表）→ `app/style.css` の `:root` |
 | キャラクターらしさを判断する | `docs/research/2026-11-08_round3_visual/kinich_design_research_for_ai.md`（事実と権利の範囲） |
@@ -30,6 +31,7 @@
 | `docs/README.md` | この目次 | 最初に |
 | `docs/spec.md` | 機能と会話設計の仕様 | 機能を作る前 |
 | `docs/decisions.md` | 決定事項と理由（D-001〜） | 判断に迷ったとき、決定を変える前 |
+| `docs/handoff.md` | 引き継ぎ資料（ほかのファイルにない、現在地・利用者との進め方・作業環境のくせだけ。貼り付ける文つき） | 別のチャットで作業を始めるとき、作業を終えるとき（内容を最新にする） |
 | `docs/roadmap.md` | フェーズ別タスク、完了条件、実機確認手順、申し送り | 作業の始めと終わり |
 | `docs/visual_rules.md` | 見た目の決まり CR-*（色・形・線・文字・地・気配・動き） | 画面を作る・直す前 |
 | `docs/ui_knowledge.md` | UI/UX の知識ベース（ルール ID V1〜M3。原文のまま） | 画面を作る・直す前 |
