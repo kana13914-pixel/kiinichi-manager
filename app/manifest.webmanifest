@@ -1,7 +1,7 @@
 {
-  "name": "キィニチくん専属マネージャー（検証版）",
+  "name": "キィニチくん専属マネージャー",
   "short_name": "マネージャー",
-  "description": "フェーズ0 技術検証用の最小PWA",
+  "description": "生活全般を把握し、必要なときに声を掛けるマネージャー",
   "start_url": "./index.html?source=homescreen",
   "scope": "./",
   "display": "standalone",

@@ -118,10 +118,21 @@ $('wp-send').addEventListener('click', async () => {
   }
 });
 
+// 予約した通知の送信結果（新しい順に3件。届かなかった理由を確かめるため。D-033）
+const RESULT_LABEL = { sent: '送信', retry: 'やり直し', dropped: '中止' };
+function recentText(recent) {
+  if (!Array.isArray(recent) || !recent.length) return '';
+  const items = recent.slice(0, 3).map((x) => {
+    const [kind, ...why] = String(x.result).split(': ');
+    return `${hhmmss(new Date(x.at))} ${RESULT_LABEL[kind] || kind}${why.join(': ') ? `（${x.status} ${why.join(': ').slice(0, 60)}）` : ''}`;
+  });
+  return `／直近の予約の送信：${items.join('、')}`;
+}
+
 $('wp-status-btn').addEventListener('click', async () => {
   try {
     const r = await Settings.api('/api/status');
-    setWp(`購読：${r.subscribed ? 'あり' : 'なし'}／予約：${r.queue.length}件／予約の保存先：${r.queueStore === 'd1' ? 'D1' : 'KV'}`, r.subscribed ? 'ok' : 'ng');
+    setWp(`購読：${r.subscribed ? 'あり' : 'なし'}／予約：${r.queue.length}件／予約の保存先：${r.queueStore === 'd1' ? 'D1' : 'KV'}${recentText(r.recent)}`, r.subscribed ? 'ok' : 'ng');
   } catch (e) {
     setWp('失敗: ' + e.message, 'ng');
   }
