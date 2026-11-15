@@ -63,15 +63,11 @@
 
 ## ドキュメント一覧
 
-- `docs/spec.md` — 機能・会話設計の仕様
-- `docs/decisions.md` — 決定事項と理由の記録
-- `docs/roadmap.md` — フェーズ別タスクと完了条件
-- `docs/cloudflare_setup.md` — Web Push送信サーバー（Cloudflare Workers）の設定手順
-- `docs/ui_knowledge.md` — UI/UX の知識ベース（ルール ID 付き）。画面を作る・直す前に読む
-- `docs/design.md` — デザインの決まりごと（トークン・原則・コントラスト表）
-- `scripts/contrast_check.py` — 色の明暗差を計算する（トークンを変えたら実行）
-- `worker/worker.js` — 送信サーバーのコード（ダッシュボードに貼り付けて使う）
-- `app/` — PWA本体（`index.html` が本体、`send.html` は検証用の送信ページ）
-- `tests/` — 自動テスト（`python3 -m unittest discover -s tests` と `node --test tests/worker.test.mjs tests/sw.test.mjs`）
-- `data/dialogue_template.yaml` — セリフ集テンプレート（編集したら `python3 scripts/build_dialogue.py` で `app/data/dialogue.json` を作り直す）
+**すべてのファイルの場所と「いつ読むか」は `docs/README.md`（目次）にある。作業を始める前に開くこと。** ファイルを追加・移動したら目次も直す（`tests/test_docs_index.py` が確かめる）。
+
+よく使うもの：
+- `docs/roadmap.md` — 今のタスク、実機確認手順、申し送り
+- `docs/spec.md` / `docs/decisions.md` — 仕様と決定事項（決定は追記のみ）
+- `docs/visual_rules.md` → `docs/ui_knowledge.md` → `docs/design.md` — 画面の見た目を作る・直す前に
 - `NEEDS_HUMAN.md` — 人間への依頼キュー
+- テスト：`python3 -m unittest discover -s tests` と `node --test tests/worker.test.mjs tests/sw.test.mjs`

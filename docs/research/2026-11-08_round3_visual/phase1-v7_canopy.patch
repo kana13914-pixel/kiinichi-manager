@@ -1,0 +1,447 @@
+diff --git a/app/app.js b/app/app.js
+index 131a310..219a41e 100644
+--- a/app/app.js
++++ b/app/app.js
+@@ -1,7 +1,7 @@
+ // マネージャー本体。初回導線（D-009）、ホーム画面（D-018）、設定画面（確認用の起動状態）を扱う。
+ 
+ // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
+-const APP_VERSION = 'phase1-v6';
++const APP_VERSION = 'phase1-v7';
+ 
+ // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
+ document.addEventListener('touchstart', () => {}, { passive: true });
+@@ -170,7 +170,9 @@ function pickLine(key, { index } = {}) {
+ function showLine(key, { index, ready = false } = {}) {
+   const picked = pickLine(key, { index });
+   if (!picked) return false;
+-  document.getElementById('bubble-text').textContent = picked.text;
++  const bubble = document.getElementById('bubble-text');
++  bubble.textContent = picked.text;
++  bubble.classList.remove('line-enter'); void bubble.offsetWidth; bubble.classList.add('line-enter'); // CR-M01：入りの動きをやり直す
+   document.getElementById('play-voice').classList.toggle('ready', ready);
+   setVoiceState('idle'); // 新しいセリフが出たら「声を聞く」に戻す（C2-02）
+   return true;
+diff --git a/app/img/canopy-emblem.svg b/app/img/canopy-emblem.svg
+new file mode 100644
+index 0000000..94137ad
+--- /dev/null
++++ b/app/img/canopy-emblem.svg
+@@ -0,0 +1,9 @@
++<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 240' fill='none' stroke-linecap='round' stroke-linejoin='round'>
++<g stroke='#e8c45c'>
++<circle cx='120' cy='120' r='78' stroke-opacity='.42' stroke-width='1'/>
++<circle cx='120' cy='120' r='66' stroke-opacity='.22' stroke-width='1' stroke-dasharray='1.5 5'/>
++<g stroke-opacity='.38' stroke-width='1.2'><line x1='206.0' y1='120.0' x2='216.0' y2='120.0'/><line x1='199.5' y1='152.9' x2='204.1' y2='154.8'/><line x1='180.8' y1='180.8' x2='187.9' y2='187.9'/><line x1='152.9' y1='199.5' x2='154.8' y2='204.1'/><line x1='120.0' y1='206.0' x2='120.0' y2='216.0'/><line x1='87.1' y1='199.5' x2='85.2' y2='204.1'/><line x1='59.2' y1='180.8' x2='52.1' y2='187.9'/><line x1='40.5' y1='152.9' x2='35.9' y2='154.8'/><line x1='34.0' y1='120.0' x2='24.0' y2='120.0'/><line x1='40.5' y1='87.1' x2='35.9' y2='85.2'/><line x1='59.2' y1='59.2' x2='52.1' y2='52.1'/><line x1='87.1' y1='40.5' x2='85.2' y2='35.9'/><line x1='120.0' y1='34.0' x2='120.0' y2='24.0'/><line x1='152.9' y1='40.5' x2='154.8' y2='35.9'/><line x1='180.8' y1='59.2' x2='187.9' y2='52.1'/><line x1='199.5' y1='87.1' x2='204.1' y2='85.2'/></g>
++<g stroke-opacity='.55' stroke-width='1.3'><path d='M120 92 C128 100 128 108 120 114 C112 108 112 100 120 92Z' transform='rotate(0 120 120)'/><path d='M120 92 C128 100 128 108 120 114 C112 108 112 100 120 92Z' transform='rotate(90 120 120)'/><path d='M120 92 C128 100 128 108 120 114 C112 108 112 100 120 92Z' transform='rotate(180 120 120)'/><path d='M120 92 C128 100 128 108 120 114 C112 108 112 100 120 92Z' transform='rotate(270 120 120)'/></g>
++<rect x='115' y='115' width='10' height='10' transform='rotate(45 120 120)' stroke-opacity='.7' stroke-width='1.3'/>
++</g>
++<path d='M26 206 Q 128 214 206 46' stroke='#b9e35f' stroke-opacity='.5' stroke-width='1.1'/><path d='M206 46 C 208 36 218 34 220 42 C 222 49 214 52 211 47' stroke='#b9e35f' stroke-opacity='.75' stroke-width='1.4'/><circle cx='26' cy='206' r='2.4' fill='#b9e35f' fill-opacity='.75'/></svg>
+\ No newline at end of file
+diff --git a/app/img/canopy-vines.svg b/app/img/canopy-vines.svg
+new file mode 100644
+index 0000000..9235087
+--- /dev/null
++++ b/app/img/canopy-vines.svg
+@@ -0,0 +1 @@
++<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 390 300' fill='none' stroke='#e8c45c' stroke-width='1' stroke-linejoin='round'><line x1='30' y1='0' x2='30' y2='128' stroke-opacity='0.45'/><path d='M30 128 l4 6 l-4 6 l-4 -6z' stroke-opacity='0.65'/><path d='M30 140 q-5 10 -2 20 M30 140 q5 10 2 20' stroke-opacity='0.45'/><line x1='52' y1='0' x2='52' y2='196' stroke-opacity='0.24'/><path d='M52 196 l4 6 l-4 6 l-4 -6z' stroke-opacity='0.44'/><line x1='74' y1='0' x2='74' y2='92' stroke-opacity='0.36'/><path d='M74 92 l4 6 l-4 6 l-4 -6z' stroke-opacity='0.56'/></svg>
+\ No newline at end of file
+diff --git a/app/img/fret.svg b/app/img/fret.svg
+new file mode 100644
+index 0000000..3191fbb
+--- /dev/null
++++ b/app/img/fret.svg
+@@ -0,0 +1 @@
++<svg xmlns='http://www.w3.org/2000/svg' width='20' height='8' viewBox='0 0 20 8' fill='none' stroke='#e8c45c' stroke-width='1'><path d='M0 7.5H4V4.5H7V1.5H13V4.5H16V7.5H20' stroke-opacity='.5'/></svg>
+\ No newline at end of file
+diff --git a/app/img/grain.svg b/app/img/grain.svg
+new file mode 100644
+index 0000000..1ca3016
+--- /dev/null
++++ b/app/img/grain.svg
+@@ -0,0 +1 @@
++<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .045 0'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>
+\ No newline at end of file
+diff --git a/app/index.html b/app/index.html
+index 6783db8..0e0ed45 100644
+--- a/app/index.html
++++ b/app/index.html
+@@ -5,7 +5,7 @@
+   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+   <title>マネージャー</title>
+   <link rel="manifest" href="manifest.webmanifest">
+-  <meta name="theme-color" content="#1e4034">
++  <meta name="theme-color" content="#1f4738">
+   <!-- iOSのホーム画面追加用 -->
+   <meta name="apple-mobile-web-app-capable" content="yes">
+   <meta name="apple-mobile-web-app-title" content="マネージャー">
+@@ -52,8 +52,10 @@
+       </header>
+ 
+       <div class="stage">
+-        <!-- 公式素材は使わない（CLAUDE.md 禁止事項）。立ち絵はプレースホルダー -->
+-        <div id="portrait" class="portrait" role="img" aria-label="キィニチの立ち絵（仮）">立ち絵<br>（仮）</div>
++        <!-- 公式素材は使わない（CLAUDE.md 禁止事項）。立ち絵が入るまでは紋章と吊り線で気配を出す（D-021 CR-P01）。
++             立ち絵を入れるときは data-art="ready"・role="img"・aria-label を付け、aria-hidden を外す -->
++        <div id="portrait" class="portrait" data-art="none" aria-hidden="true"></div>
++        <span class="stage-mark" aria-hidden="true">KINICH</span>
+       </div>
+ 
+       <section class="dialogue" aria-label="キィニチのセリフ">
+@@ -70,7 +72,7 @@
+ 
+       <section class="next-strip" aria-label="次の予定">
+         <div class="next-head">
+-          <span class="next-label">次の予定 <small class="tag">仮</small></span>
++          <span class="next-label"><span class="label-en" aria-hidden="true">NEXT</span>次の予定 <small class="tag">仮</small></span>
+           <span id="next-rest" class="next-rest"></span>
+         </div>
+         <div id="next-event" class="next-event">-</div>
+@@ -84,14 +86,14 @@
+       <div id="toast" class="toast" role="status" hidden></div>
+     </section>
+ 
+-    <section id="view-schedule" class="view"><h1>予定</h1><p class="note">この画面は次のタスクで作ります。</p></section>
+-    <section id="view-tasks" class="view"><h1>タスク</h1><p class="note">この画面は次のタスクで作ります。</p></section>
+-    <section id="view-timer" class="view"><h1>タイマー</h1><p class="note">この画面は次のタスクで作ります。</p></section>
+-    <section id="view-report" class="view"><h1>日報</h1><p class="note">この画面は次のタスクで作ります。</p></section>
++    <section id="view-schedule" class="view"><h1><span class="label-en" aria-hidden="true">SCHEDULE</span>予定</h1><p class="note">この画面は次のタスクで作ります。</p></section>
++    <section id="view-tasks" class="view"><h1><span class="label-en" aria-hidden="true">TASKS</span>タスク</h1><p class="note">この画面は次のタスクで作ります。</p></section>
++    <section id="view-timer" class="view"><h1><span class="label-en" aria-hidden="true">TIMER</span>タイマー</h1><p class="note">この画面は次のタスクで作ります。</p></section>
++    <section id="view-report" class="view"><h1><span class="label-en" aria-hidden="true">REPORT</span>日報</h1><p class="note">この画面は次のタスクで作ります。</p></section>
+ 
+     <!-- 設定：フェーズ0の検証情報もここに移した -->
+     <section id="view-settings" class="view">
+-      <header class="sub-header"><a href="#home" class="back">‹ ホーム</a><h1>設定</h1></header>
++      <header class="sub-header"><a href="#home" class="back">‹ ホーム</a><h1><span class="label-en" aria-hidden="true">SETTINGS</span>設定</h1></header>
+       <section class="card">
+         <h2>通知の再設定</h2>
+         <p class="note">通知が届かなくなったときや、合言葉を変えたときに使います。</p>
+diff --git a/app/style.css b/app/style.css
+index e9657a8..595fdf5 100644
+--- a/app/style.css
++++ b/app/style.css
+@@ -4,11 +4,11 @@
+   color-scheme: dark; /* P1-08 */
+ 
+   /* 色：面（奥ほど暗い） */
+-  --color-bg: #1e4034;
+-  --color-bg-deep: #163128;             /* タブバー・入力欄・名前欄の地 */
+-  --color-surface-1: #2a4b3f;           /* カード・次の予定の帯 */
+-  --color-surface-2: #355749;           /* 控えめなボタン・トースト */
+-  --color-scrim: rgba(13, 31, 25, 0.9); /* セリフの面（bg に重ねると約 #0f221c） */
++  --color-bg: #183a2f;
++  --color-bg-deep: #0a1512;             /* タブバー・入力欄・名前欄の地 */
++  --color-surface-1: #10231d;           /* カード・次の予定の帯 */
++  --color-surface-2: #1a3229;           /* 控えめなボタン・トースト */
++  --color-scrim: rgba(7, 15, 12, 0.9); /* セリフの面（bg に重ねると約 #0f221c） */
+   /* 色：文字（半透明は使わない。V3-04） */
+   --color-text: #f4f1e8;
+   --color-text-secondary: #c8d4cb;
+@@ -21,7 +21,7 @@
+   --color-border: #7f9a8c;
+   --color-border-subtle: rgba(244, 241, 232, 0.12);
+   --color-stage-glow: rgba(244, 241, 232, 0.06);
+-  --color-success: #8fe3a5;
++  --color-success: #b9e35f;
+   --color-danger: #ffb3a6;              /* 旧 #ff9a8a はカード上 4.40:1 で不足 */
+ 
+   /* 文字（iOS の文字段階。rem = 16px。D-019 Q6 = 追従しない） */
+@@ -33,6 +33,7 @@
+   --fs-callout: 1rem;       /* 16 入力欄・既定 */
+   --fs-body: 1.0625rem;     /* 17 セリフ・本文 */
+   --fs-title3: 1.25rem;     /* 20 */
++  --fs-title2: 1.375rem;   /* 22 次の予定の時刻 */
+   --fs-title1: 1.75rem;     /* 28 */
+   --lh-tight: 1.25;
+   --lh-body: 1.7;
+@@ -57,6 +58,36 @@
+   --shadow-raised: 0 6px 24px rgba(0, 0, 0, 0.35);
+   --dur-fast: 120ms; --dur-base: 200ms; --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+ 
++  /* ---- 見た目の決まり v7「懸木の狩人」（D-021。R3-Q3-AI） ---- */
++  --color-bg-top: #1f4738;              /* 地のグラデーション上端 */
++  --color-bg-bottom: #0b1914;           /* 地のグラデーション下端（足元ほど黒） */
++  --color-ink: #070f0c;                 /* いちばん奥の黒：タブバー・控えめボタンの地 */
++  --color-line: #64897b;                /* 斜め角ボタンの縁。地の全域に 3:1 以上 */
++  --color-gold-line: rgba(232, 196, 92, 0.55); /* 金の細線 */
++  --color-gold-faint: rgba(232, 196, 92, 0.18);/* 金のごく薄い線・縁取り文字 */
++  --color-lime: #b9e35f;                /* 差し色（耳飾り）。面積は画面の 2% 以内 */
++  --color-ember: #f2a14a;               /* 差し色（ズボンの橙） */
++  --color-sky: #62b8e0;                 /* 差し色（ズボン・ブーツの青） */
++  --color-canopy-light: rgba(185, 227, 95, 0.12); /* 昼：樹冠から差す光 */
++  --color-ember-glow: rgba(242, 161, 74, 0.1);    /* 夜：足元の火 */
++  --color-strip-from: rgba(7, 15, 12, 0.6);
++  --color-strip-to: rgba(7, 15, 12, 0.12);
++  --color-card: rgba(7, 15, 12, 0.55);
++  --bg-glow: radial-gradient(120% 55% at 50% -12%, var(--color-canopy-light), transparent 62%);
++  --tex-grain: url("img/grain.svg");
++  --size-grain: 160px;
++  --cut-s: 6px; --cut-m: 10px; --cut-l: 14px; --cut-fix: 0.5px; /* 斜めに落とす角の量 */
++  --fs-display: 3rem;      /* 48 時刻だけ大きく細く（ジャンプ率 約 2.8） */
++  --fs-mark: 4.5rem;       /* 72 舞台の縦書き英字の上限 */
++  --track-label: 0.18em;   /* 英字の小見出しの字間 */
++  --size-fret-h: 8px; --size-fret-w: 20px; /* 段々の帯 */
++  --size-bead: 3px;        /* 数珠の幅 */
++  --size-diamond: 6px;     /* 名前の前の菱形 */
++  --size-tab-mark: 20px;   /* 選択中タブの金の線 */
++  --size-emblem: 260px;    /* 紋章の最大の高さ */
++  --shift-hook: 12px;      /* セリフが入るときの移動量 */
++  --dur-hook: 260ms; --ease-hook: cubic-bezier(0.05, 0.7, 0.1, 1); /* 減速して止まる（300ms 以内） */
++
+   /* セーフエリア（CSS では env() を直接書かずこれを使う。テストで上書きする。M1-04） */
+   --safe-top: env(safe-area-inset-top, 0px);
+   --safe-bottom: env(safe-area-inset-bottom, 0px);
+@@ -64,10 +95,13 @@
+ 
+ /* 夜（22〜4時。D-019 Q5）は面を一段暗くする。タブバーの地も下げ、背景より暗い関係を保つ（C9-02） */
+ body[data-period="night"] {
+-  --color-bg: #142c24;
+-  --color-surface-1: #1f3a30;
+-  --color-surface-2: #29473b;
+-  --color-bg-deep: #0f221b;
++  --color-bg: #10261f;
++  --color-bg-top: #142f26;
++  --color-bg-bottom: #060d0b;
++  --color-surface-1: #0c1b16;
++  --color-surface-2: #142820;
++  --color-bg-deep: #08120f;
++  --bg-glow: radial-gradient(90% 40% at 50% 108%, var(--color-ember-glow), transparent 70%);
+ }
+ 
+ /* ---------- 全体 ---------- */
+@@ -143,10 +177,8 @@ body[data-state="ready"] #main { display: block; }
+   background: radial-gradient(ellipse at 50% 70%, var(--color-stage-glow), transparent 65%);
+ }
+ .portrait {
+-  height: 100%; max-height: var(--portrait-max-h); aspect-ratio: 3 / 4;
+-  display: flex; align-items: center; justify-content: center; text-align: center;
+-  font-size: var(--fs-footnote); color: var(--color-text-secondary);
+-  border: 2px dashed var(--color-border); border-bottom: 0; border-radius: var(--radius-l) var(--radius-l) 0 0;
++  height: 100%; max-height: var(--portrait-max-h); /* 立ち絵の枠。立ち絵が入るまでは紋章を出す（D-021 CR-P01） */
++  display: flex; align-items: center; justify-content: center;
+   -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; /* P1-07 */
+ }
+ 
+@@ -260,6 +292,117 @@ body.from-notification button.voice.ready { animation: voice-pulse 1.2s var(--ea
+   color: var(--color-text-secondary); text-decoration: none; font-size: var(--fs-callout);
+ }
+ 
++/* ========== 見た目の決まり v7「懸木の狩人」（D-021。R3-Q3-AI の CR-*） ==========
++   静かな深緑と黒の面 ＋ 金は細線（塗りは主ボタン 1 つ）＋ 差し色は小さく ＋ 角は斜めに落とす。 */
++
++/* 地：樹冠の光（夜は足元の火）＋ 粒の質感 ＋ 上から下へ暗くなる（CR-B01〜03） */
++body {
++  background-color: var(--color-bg);
++  background-image: var(--tex-grain), var(--bg-glow),
++    linear-gradient(180deg, var(--color-bg-top) 0%, var(--color-bg) 42%, var(--color-bg-bottom) 100%);
++  background-size: var(--size-grain) var(--size-grain), 100% 100%, 100% 100%;
++  background-repeat: repeat, no-repeat, no-repeat;
++}
++
++/* 見出し行：日付を小さく上、時刻を大きく細く（CR-T01） */
++.home-header { align-items: flex-end; }
++.clock { flex-direction: column; align-items: flex-start; gap: 2px; }
++.clock-date { order: -1; font-size: var(--fs-footnote); letter-spacing: 0.08em; }
++.clock-time { font-size: var(--fs-display); font-weight: 300; letter-spacing: -0.02em; line-height: 1; }
++
++/* 舞台：立ち絵なしで成立させる（CR-P01〜04）。#portrait は立ち絵用の枠として残す */
++.stage { position: relative; align-items: center; background: none; overflow: hidden; container-type: size; }
++.stage::before { /* 吊り下がる線（ツタ・ロープ） */
++  content: ""; position: absolute; inset: 0; pointer-events: none;
++  background: url("img/canopy-vines.svg") top center / 100% auto no-repeat;
++}
++.portrait {
++  position: relative; width: 100%;
++  background: url("img/canopy-emblem.svg") center 42% / auto min(78%, var(--size-emblem)) no-repeat;
++}
++.portrait[data-art="ready"] { background: none; } /* 立ち絵が入ったら紋章は消す（CR-P04） */
++.stage-mark { /* 縁取りだけの縦書き英字。装飾なので読み上げない */
++  position: absolute; right: 0; top: 2%; writing-mode: vertical-rl; pointer-events: none;
++  font-size: min(var(--fs-mark), 17cqh); font-weight: 800; letter-spacing: 0.06em; line-height: 1;
++  color: transparent; -webkit-text-stroke: 1px var(--color-gold-faint);
++}
++
++/* セリフの面：角を斜めに落とした黒い板 ＋ 上辺に金の細線（CR-S01, CR-L01） */
++.dialogue {
++  --dlg-top: var(--color-gold-line);
++  padding-top: var(--space-3); border: 0; border-radius: 0;
++  background: linear-gradient(var(--dlg-top), var(--dlg-top)) top left / 100% 1px no-repeat, var(--color-scrim);
++  clip-path: polygon(var(--cut-l) 0, 100% 0, 100% calc(100% - var(--cut-l)), calc(100% - var(--cut-l)) 100%, 0 100%, 0 var(--cut-l));
++}
++body.from-notification .dialogue { --dlg-top: var(--color-accent); }
++.nameplate { /* 札ではなく「菱形＋名前＋そこから伸びる金の線」 */
++  position: static; display: flex; align-items: center; gap: var(--space-2);
++  margin-bottom: var(--space-2); padding: 0; border: 0; border-radius: 0; background: none;
++  letter-spacing: 0.14em; line-height: var(--lh-tight);
++}
++.nameplate::before { content: ""; flex: none; width: var(--size-diamond); height: var(--size-diamond); transform: rotate(45deg); background: var(--color-lime); }
++.nameplate::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--color-gold-line), transparent); }
++.line.line-enter { animation: hook-in var(--dur-hook) var(--ease-hook) both; } /* CR-M01 */
++@keyframes hook-in { from { opacity: 0; transform: translateX(calc(var(--shift-hook) * -1)); } to { opacity: 1; transform: none; } }
++
++/* ボタン：角を斜めに落とす。縁は ::before を 1px 内側に重ねて描く（CR-S02） */
++button.voice, .record-dock .act {
++  --btn-line: var(--color-line); --btn-fill: var(--color-surface-2); --btn-cut: var(--cut-s);
++  position: relative; isolation: isolate; border: 0; border-radius: 0; background: var(--btn-line);
++  clip-path: polygon(var(--btn-cut) 0, 100% 0, 100% calc(100% - var(--btn-cut)), calc(100% - var(--btn-cut)) 100%, 0 100%, 0 var(--btn-cut));
++}
++button.voice::before, .record-dock .act::before {
++  content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--btn-fill);
++  clip-path: polygon(calc(var(--btn-cut) - var(--cut-fix)) 0, 100% 0, 100% calc(100% - var(--btn-cut) + var(--cut-fix)), calc(100% - var(--btn-cut) + var(--cut-fix)) 100%, 0 100%, 0 calc(var(--btn-cut) - var(--cut-fix)));
++}
++button.voice { --btn-fill: var(--color-ink); letter-spacing: 0.04em; }
++button.voice.ready { --btn-line: var(--color-accent); --btn-fill: var(--color-accent); background: var(--btn-line); color: var(--color-on-accent); }
++button.voice[data-state="playing"] { --btn-line: var(--color-accent); --btn-fill: var(--color-ink); background: var(--btn-line); color: var(--color-text); }
++button.voice[data-state="error"] { --btn-line: var(--color-danger); background: var(--btn-line); }
++.record-dock { gap: var(--space-3); }
++.record-dock .act { --btn-fill: var(--color-surface-1); --btn-cut: var(--cut-m); letter-spacing: 0.06em; }
++.record-dock .act.primary { --btn-line: var(--color-accent); --btn-fill: var(--color-accent); background: var(--btn-line); color: var(--color-on-accent); font-weight: 700; }
++.record-dock .act.done { --btn-line: var(--color-success); --btn-fill: var(--color-ink); background: var(--btn-line); border: 0; color: var(--color-success); }
++
++/* 次の予定：箱をやめ、上下の細線と左の数珠（CR-L03, CR-C04） */
++.next-strip {
++  position: relative; border-radius: 0; padding-left: calc(var(--space-4) + var(--space-1));
++  background: linear-gradient(90deg, var(--color-strip-from), var(--color-strip-to));
++  box-shadow: inset 0 1px 0 var(--color-gold-faint), inset 0 -1px 0 var(--color-gold-faint);
++}
++.next-strip::before { /* 差し色 4 つ。多色はこの画面ではここだけ */
++  content: ""; position: absolute; left: 0; top: var(--space-2); bottom: var(--space-2); width: var(--size-bead);
++  background: linear-gradient(180deg,
++    var(--color-lime) 0 22%, transparent 22% 26%, var(--color-sky) 26% 48%, transparent 48% 52%,
++    var(--color-ember) 52% 74%, transparent 74% 78%, var(--color-text) 78% 100%);
++}
++.label-en { font-size: var(--fs-caption2); font-weight: 700; letter-spacing: var(--track-label); color: var(--color-text-tertiary); } /* 英字の小見出し（CR-T02）。金は使わない（V3-08） */
++.next-label .label-en { margin-right: var(--space-2); }
++h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(--lh-tight); } /* 各画面の見出しの上に 1 つ */
++.next-time { font-size: var(--fs-title2); letter-spacing: -0.01em; }
++
++/* タブバー：いちばん奥の黒 ＋ 上辺に段々の帯 ＋ 選択中は金の短い線（CR-L02） */
++.tabbar { background: var(--color-ink); border-top: 0; }
++.tabbar::before {
++  content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: var(--size-fret-h); opacity: 0.7; pointer-events: none;
++  background: url("img/fret.svg") left bottom / var(--size-fret-w) var(--size-fret-h) repeat-x;
++}
++.tabbar a { position: relative; }
++.tabbar a[aria-current="page"]::before {
++  content: ""; position: absolute; top: 0; left: 50%; width: var(--size-tab-mark); height: 2px;
++  transform: translateX(-50%); background: var(--color-accent);
++}
++
++/* 取り消しの表示・カード（ほかの画面も同じ決まり。CR-S01） */
++.toast {
++  background: var(--color-ink); border-color: var(--color-gold-faint); border-radius: 0;
++  clip-path: polygon(var(--cut-s) 0, 100% 0, 100% calc(100% - var(--cut-s)), calc(100% - var(--cut-s)) 100%, 0 100%, 0 var(--cut-s));
++}
++.card {
++  background: var(--color-card); border-radius: 0; box-shadow: inset 0 1px 0 var(--color-gold-faint);
++  clip-path: polygon(var(--cut-m) 0, 100% 0, 100% calc(100% - var(--cut-m)), calc(100% - var(--cut-m)) 100%, 0 100%, 0 var(--cut-m));
++}
++
+ /* ---------- 動きを減らす設定（I3-04） ---------- */
+ @media (prefers-reduced-motion: reduce) {
+   *, *::before, *::after { animation: none !important; transition: none !important; }
+diff --git a/app/sw.js b/app/sw.js
+index 06215a1..ce296d8 100644
+--- a/app/sw.js
++++ b/app/sw.js
+@@ -1,11 +1,15 @@
+ // フェーズ0用の最小Service Worker。オフラインでも画面が開けるよう、静的ファイルをキャッシュする。
+ // ファイルを更新したら CACHE_VERSION を上げること（古いキャッシュが残るのを防ぐ）。
+-const CACHE_VERSION = 'phase1-v6';
++const CACHE_VERSION = 'phase1-v7';
+ const ASSETS = [
+   './',
+   './index.html',
+   './app.js',
+   './style.css',
++  './img/canopy-emblem.svg',
++  './img/canopy-vines.svg',
++  './img/fret.svg',
++  './img/grain.svg',
+   './manifest.webmanifest',
+   './icons/icon-180.png',
+   './icons/icon-192.png',
+diff --git a/scripts/contrast_check.py b/scripts/contrast_check.py
+index 2d8011a..aa2e0ae 100644
+--- a/scripts/contrast_check.py
++++ b/scripts/contrast_check.py
+@@ -37,6 +37,17 @@ PAIRS = [
+     ("border", "bg", 3.0),
+     ("border", "surface-1", 3.0),
+     ("border", "scrim", 3.0),       # 「声を聞く」の枠はセリフの面の上
++    # D-021（見た目の決まり v7）
++    ("text", "bg-top", 4.5),
++    ("text-secondary", "bg-top", 4.5),
++    ("text-tertiary", "bg-bottom", 4.5),
++    ("text-tertiary", "ink", 4.5),       # タブのラベル
++    ("accent", "scrim", 4.5),            # 名前
++    ("accent", "ink", 4.5),              # 選択中のタブ・NEXT
++    ("success", "ink", 4.5),             # 記録済みボタン
++    ("line", "bg", 3.0),
++    ("line", "bg-bottom", 3.0),
++    ("line", "surface-1", 3.0),
+ ]
+ 
+ 
+diff --git a/tests/test_pwa.py b/tests/test_pwa.py
+index 0240cda..2a642fe 100644
+--- a/tests/test_pwa.py
++++ b/tests/test_pwa.py
+@@ -360,7 +360,7 @@ class PwaTest(unittest.TestCase):
+     def test_clock_size_matches_decision(self):
+         page = self.clock_page(9, 3)
+         size = page.eval_on_selector("#clock-time", "e => parseFloat(getComputedStyle(e).fontSize)")
+-        self.assertEqual(size, 28)
++        self.assertEqual(size, 48)  # D-021 で D-019 Q3（28px）を改訂
+ 
+     def test_home_dom_order(self):
+         page = self.clock_page(9, 3)
+@@ -581,9 +581,9 @@ class PwaTest(unittest.TestCase):
+     def test_night_palette(self):
+         page = self.clock_page(23, 48)
+         self.assertEqual(page.get_attribute("body", "data-period"), "night")
+-        self.assertEqual(page.evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(20, 44, 36)")
++        self.assertEqual(page.evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(16, 38, 31)")  # D-021
+         page = self.clock_page(13, 0)
+-        self.assertEqual(page.evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(30, 64, 52)")
++        self.assertEqual(page.evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(24, 58, 47)")  # D-021
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/tests/test_style.py b/tests/test_style.py
+index 125afef..b5166c0 100644
+--- a/tests/test_style.py
++++ b/tests/test_style.py
+@@ -41,6 +41,31 @@ class StyleTest(unittest.TestCase):
+         r = subprocess.run([sys.executable, str(ROOT / "scripts" / "contrast_check.py")], capture_output=True, text=True)
+         self.assertIn("| 夜 |", r.stdout.splitlines()[0])
+ 
++    # ---------- 見た目の決まり v7（D-021） ----------
++    def test_decoration_images_are_cached(self):
++        """装飾の画像はすべて Service Worker の ASSETS に入っている（オフラインでも同じ見た目）。"""
++        sw = (ROOT / "app" / "sw.js").read_text(encoding="utf-8")
++        imgs = sorted(p.name for p in (ROOT / "app" / "img").glob("*.svg"))
++        self.assertTrue(imgs)
++        for name in imgs:
++            self.assertIn(f"'./img/{name}'", sw, name)
++
++    def test_no_placeholder_frame(self):
++        """「立ち絵（仮）」の破線枠は出さない。立ち絵の枠（#portrait）は残す（CR-P01）。"""
++        html = (ROOT / "app" / "index.html").read_text(encoding="utf-8")
++        self.assertIn('id="portrait"', html)
++        self.assertNotIn("立ち絵<br>（仮）", html)
++        self.assertNotIn("dashed", CSS.read_text(encoding="utf-8").split(".portrait {", 1)[1].split("}", 1)[0])
++
++    def test_english_label_once_per_screen(self):
++        """英字の小見出しは各画面に 1 つまで・読み上げない（CR-T02, D-021 Q-R3）。"""
++        html = (ROOT / "app" / "index.html").read_text(encoding="utf-8")
++        for view in ("home", "schedule", "tasks", "timer", "report", "settings"):
++            part = html.split(f'id="view-{view}"', 1)[1].split("<section id=\"view-", 1)[0].split("</nav>", 1)[0]
++            labels = re.findall(r'<span class="label-en"([^>]*)>', part)
++            self.assertEqual(len(labels), 1, view)
++            self.assertIn('aria-hidden="true"', labels[0], view)
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
