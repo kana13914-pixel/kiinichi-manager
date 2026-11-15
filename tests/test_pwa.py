@@ -911,7 +911,7 @@ class PwaTest(unittest.TestCase):
         self.assertTrue(page.is_hidden("#timer-running"))
         self.assertEqual(page.text_content("#timer-done-title"), "歯磨き（3分）が終わった")
         self.assertEqual(page.text_content("#timer-done-at"), "10:03 に終了")
-        self.assertEqual(page.text_content("#timer-done-line"), "歯磨きの時間が終わった。それで十分だ。")
+        self.assertEqual(page.text_content("#timer-done-line"), "時間だ。口をゆすげ。")
         page.click("#timer-close")
         self.assertTrue(page.is_visible("#timer-idle"))
         self.assertIsNone(self.timer_state(page)["done"])
@@ -920,7 +920,7 @@ class PwaTest(unittest.TestCase):
         # 10:00 に開く。9:57 に終わっていたタイマーは「終了」として出る
         end = int(datetime(2026, 11, 9, 9, 57, 0).timestamp() * 1000)
         state = {"custom": [], "running": {"name": "入浴", "minutes": 20, "kind": "bath", "endAt": end,
-                                           "line": 0, "text": "入浴の時間が終わった。長湯はほどほどにしておけ。", "notify": "ok"}}
+                                           "line": 0, "text": "上がる時間だ。のぼせる前に出ろ。水分、忘れるな。", "notify": "ok"}}
         page = self.timer_page(state=state)
         self.assertTrue(page.is_visible("#timer-done"))
         self.assertEqual(page.text_content("#timer-done-title"), "入浴（20分）が終わった")
@@ -988,7 +988,7 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(body["at"], self.timer_state(page)["running"]["endAt"])
         self.assertIs(body["notBefore"], True)  # 終わる前には届けない
         self.assertEqual(body["title"], "キィニチ")
-        self.assertEqual(body["body"], "作業の時間が終わった。一度、手を止めろ。")
+        self.assertEqual(body["body"], "時間だ。……よくやった。手を止めろ。")
         self.assertTrue(body["url"].endswith("/index.html?source=webpush&trigger=timer_done.work&line=0#timer"), body["url"])
         page.wait_for_selector("#timer-notify.ok", timeout=3_000)
         self.assertIn("通知で知らせます", page.text_content("#timer-notify"))
@@ -1027,15 +1027,15 @@ class PwaTest(unittest.TestCase):
         # 通知のタップで画面の移動に失敗したとき（sw.js の open-url）も、タイマー画面を開く
         end = int(datetime(2026, 11, 9, 12, 40, 0).timestamp() * 1000)
         state = {"custom": [], "running": {"name": "休憩", "minutes": 5, "kind": "break", "endAt": end,
-                                           "line": 0, "text": "休憩の時間が終わった。戻るかどうかは任せる。", "notify": "ok"}}
+                                           "line": 0, "text": "休憩は終わりだ。戻るかどうかは任せる。", "notify": "ok"}}
         init = "localStorage.setItem('timer.v1', %s)" % json.dumps(json.dumps(state))
         page = self.clock_page(12, 41, init_script=init)
         self.assertTrue(page.is_visible("#view-home"))
         page.evaluate("""navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: {
           type: 'open-url', url: location.origin + '/index.html?source=webpush&trigger=timer_done.break&line=0#timer' } }))""")
         page.wait_for_selector("#timer-done", state="visible", timeout=3_000)
-        self.assertEqual(page.text_content("#timer-done-line"), "休憩の時間が終わった。戻るかどうかは任せる。")
-        self.assertEqual(page.text_content("#bubble-text"), "休憩の時間が終わった。戻るかどうかは任せる。")  # ホームのセリフも同じ
+        self.assertEqual(page.text_content("#timer-done-line"), "休憩は終わりだ。戻るかどうかは任せる。")
+        self.assertEqual(page.text_content("#bubble-text"), "休憩は終わりだ。戻るかどうかは任せる。")  # ホームのセリフも同じ
 
     def test_timer_shows_reason_when_reservation_fails(self):
         # 合言葉がない：送信サーバーは呼ばず、画面内の表示だけになることを伝える

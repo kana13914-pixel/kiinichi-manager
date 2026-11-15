@@ -8,7 +8,7 @@ const Timer = (() => {
   const NOTIFY_KEY = 'timer'; // 通知予約のキー。動かせるのは1つなので固定（同じキーは上書きされる）
   const MAX_MINUTES = 600;
   const NAME_MAX = 30;
-  const FALLBACK_LINE = '時間だ。タイマーが終わった。';
+  const FALLBACK_LINE = '時間だ。';
   // 用途別のタイマー（D-026 ③）。kind は終了時のセリフ（timer_done.*）の条件
   const BUILTIN = [
     { id: 'work', name: '作業', minutes: 25, kind: 'work' },
