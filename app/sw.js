@@ -1,4 +1,4 @@
-// フェーズ0用の最小Service Worker。オフラインでも画面が開けるよう、静的ファイルをキャッシュする。
+// Service Worker。オフラインでも画面が開けるよう静的ファイルをキャッシュし、通知の表示とタップを受け持つ。
 // ファイルを更新したら CACHE_VERSION を上げること（古いキャッシュが残るのを防ぐ）。
 const CACHE_VERSION = 'phase1-v14';
 const ASSETS = [
@@ -40,28 +40,40 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// ネットワーク優先、失敗時はキャッシュ。
+// ネットワーク優先、失敗時はキャッシュ。応答が NETWORK_WAIT_MS 以内に来なければ、待たずにキャッシュを返す
+// （つながってはいるが極端に遅い回線で、起動が止まったように見えるのを防ぐ。D-033）。
+// 遅れて届いた応答はキャッシュに入れるので、次に開いたときは新しい版になる。
 // cache:'no-cache' … GitHub Pagesはファイルを最大10分ブラウザに保存させるため、毎回サーバーに更新の有無を確認する
 // （変わっていなければ304で軽く済む）。これで更新後すぐ新しい版が表示される。
+const NETWORK_WAIT_MS = 2500;
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (new URL(event.request.url).origin !== self.location.origin) return; // 送信サーバー等の外部APIはキャッシュしない
+  const cached = () => caches.match(event.request, { ignoreSearch: true });
+  // navigate リクエストに初期化オプションは付けられないため、URLから作り直す
+  const network = fetch(event.request.url, { cache: 'no-cache', credentials: 'same-origin' })
+    .then((res) => {
+      if (res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE_VERSION).then((c) => c.put(event.request, copy));
+      }
+      return res;
+    });
+  let timer;
+  const slow = new Promise((resolve) => { timer = setTimeout(resolve, NETWORK_WAIT_MS); }).then(cached);
+  network.then(() => clearTimeout(timer), () => clearTimeout(timer)); // 先に決着したら待つのをやめる
   event.respondWith(
-    // navigate リクエストに初期化オプションは付けられないため、URLから作り直す
-    fetch(event.request.url, { cache: 'no-cache', credentials: 'same-origin' })
-      .then((res) => {
-        if (res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE_VERSION).then((c) => c.put(event.request, copy));
-        }
-        return res;
-      })
-      .catch(() => caches.match(event.request, { ignoreSearch: true }))
+    Promise.race([
+      network,
+      slow.then((hit) => hit || network), // キャッシュになければ、そのままネットワークを待つ
+    ]).catch(() => cached())
   );
+  if (event.waitUntil) event.waitUntil(network.catch(() => {})); // 遅れて届いた応答をキャッシュに入れ終えるまで動かしておく
 });
 
 // ---- Web Push ----
-// 送信サーバー（worker/worker.js）から {title, body, url} が届く
+// 送信サーバー（worker/worker.js）から {title, body, url, tag} が届く。
+// tag は通知の種類。同じ種類は新しい通知で置き換わり、違う種類は並んで残る（D-033）
 self.addEventListener('push', (event) => {
   let msg = {};
   try { msg = event.data ? event.data.json() : {}; } catch (_) { msg = { body: event.data && event.data.text() }; }
@@ -70,7 +82,7 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(msg.title || 'キィニチくん', {
       body: msg.body || '',
       icon: 'icons/icon-192.png',
-      tag: 'kiinichi-phase0',
+      tag: msg.tag || 'kiinichi',
       data: { url },
     })
   );

@@ -6,7 +6,7 @@ import vm from 'node:vm';
 
 const SCOPE = 'https://kana13914-pixel.github.io/x/app/';
 
-function loadSw({ windows = [], fetchImpl = () => {}, cachesImpl = {} } = {}) {
+function loadSw({ windows = [], fetchImpl = () => {}, cachesImpl = {}, timers = {} } = {}) {
   const handlers = {};
   const shown = [];
   const opened = [];
@@ -21,7 +21,7 @@ function loadSw({ windows = [], fetchImpl = () => {}, cachesImpl = {} } = {}) {
     skipWaiting: () => {},
     addEventListener: (type, fn) => { handlers[type] = fn; },
   };
-  vm.runInNewContext(readFileSync(new URL('../app/sw.js', import.meta.url), 'utf8'), { self, caches: cachesImpl, fetch: fetchImpl, URL, Request });
+  vm.runInNewContext(readFileSync(new URL('../app/sw.js', import.meta.url), 'utf8'), { self, caches: cachesImpl, fetch: fetchImpl, URL, Request, setTimeout: timers.setTimeout || setTimeout, clearTimeout });
   return { handlers, shown, opened };
 }
 
@@ -100,4 +100,54 @@ test('通知タップ：navigate が null なら、画面に URL を postMessage
   const { handlers } = loadSw({ windows: [win] });
   await fire(handlers.notificationclick, { notification: { close() {}, data: { url: SCOPE + 'index.html?source=webpush' } } });
   assert.deepEqual(JSON.parse(JSON.stringify(sent)), [{ type: 'open-url', url: SCOPE + 'index.html?source=webpush' }]);
+});
+
+test('回線が極端に遅いときは、待たずにキャッシュを返し、遅れて届いた応答はキャッシュに入れる（D-033）', async () => {
+  const put = [];
+  let arrive;
+  const fetchImpl = () => new Promise((resolve) => { arrive = () => resolve({ ok: true, clone() { return this; } }); });
+  const cachesImpl = { open: async () => ({ put: (req) => put.push(req) }), match: async () => 'CACHED' };
+  let timeout;
+  const timers = { setTimeout: (fn, ms) => { timeout = { fn, ms }; return 1; } };
+  const { handlers } = loadSw({ fetchImpl, cachesImpl, timers });
+  let responded, kept;
+  handlers.fetch({ request: { method: 'GET', url: SCOPE + 'app.js' }, respondWith: (p) => { responded = p; }, waitUntil: (p) => { kept = p; } });
+  assert.ok(timeout.ms >= 2000 && timeout.ms <= 3000, '待つのは2〜3秒');
+  timeout.fn(); // 時間切れ
+  assert.equal(await responded, 'CACHED');
+  arrive(); // 遅れて届く
+  await kept;
+  await new Promise((r) => setImmediate(r));
+  assert.equal(put.length, 1);
+});
+
+test('回線が遅くてもキャッシュにないファイルは、ネットワークの応答を待つ', async () => {
+  let arrive;
+  const res = { ok: true, clone() { return this; } };
+  const fetchImpl = () => new Promise((resolve) => { arrive = () => resolve(res); });
+  const cachesImpl = { open: async () => ({ put() {} }), match: async () => undefined };
+  let timeout;
+  const { handlers } = loadSw({ fetchImpl, cachesImpl, timers: { setTimeout: (fn) => { timeout = fn; return 1; } } });
+  let responded;
+  handlers.fetch({ request: { method: 'GET', url: SCOPE + 'new.js' }, respondWith: (p) => { responded = p; } });
+  timeout();
+  await new Promise((r) => setImmediate(r));
+  arrive();
+  assert.equal(await responded, res);
+});
+
+test('通信できないときはキャッシュを返す', async () => {
+  const fetchImpl = async () => { throw new TypeError('offline'); };
+  const cachesImpl = { open: async () => ({ put() {} }), match: async () => 'CACHED' };
+  const { handlers } = loadSw({ fetchImpl, cachesImpl });
+  let responded;
+  handlers.fetch({ request: { method: 'GET', url: SCOPE + 'app.js' }, respondWith: (p) => { responded = p; } });
+  assert.equal(await responded, 'CACHED');
+});
+
+test('通知の種類（tag）：届いた種類を使い、なければ共通の名前（D-033）', async () => {
+  const { handlers, shown } = loadSw();
+  await fire(handlers.push, { data: { json: () => ({ title: 't', body: 'b', tag: 'timer' }) } });
+  await fire(handlers.push, { data: { json: () => ({ title: 't', body: 'b' }) } });
+  assert.deepEqual(shown.map((x) => x.opts.tag), ['timer', 'kiinichi']);
 });
