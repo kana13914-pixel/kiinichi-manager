@@ -113,12 +113,21 @@ html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
 body {
   margin: 0; min-height: 100dvh; overscroll-behavior: none; /* V4-03, P1-09 */
   padding: max(var(--safe-top), var(--space-3)) var(--space-4) var(--space-6); /* P1-01 */
-  font-family: var(--font-sans); font-size: var(--fs-callout);
-  background: var(--color-bg); color: var(--color-text);
+  font-family: var(--font-sans); font-size: var(--fs-callout); color: var(--color-text);
+  /* 地：樹冠の光（夜は足元の火）＋ 粒の質感 ＋ 上から下へ暗くなる（CR-B01〜03） */
+  background-color: var(--color-bg);
+  background-image: var(--tex-grain), var(--bg-glow),
+    linear-gradient(180deg, var(--color-bg-top) 0%, var(--color-bg) 42%, var(--color-bg-bottom) 100%);
+  background-size: var(--size-grain) var(--size-grain), 100% 100%, 100% 100%;
+  background-repeat: repeat, no-repeat, no-repeat;
 }
 body[data-state="ready"] { padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4)); }
 h1 { font-size: var(--fs-title3); margin: var(--space-5) 0 var(--space-2); }
-.card { background: var(--color-surface-1); border-radius: var(--radius-m); padding: var(--space-3) var(--space-4); margin: var(--space-3) 0; }
+.card { /* 角を斜めに落とした面（CR-S01） */
+  padding: var(--space-3) var(--space-4); margin: var(--space-3) 0;
+  background: var(--color-card); box-shadow: inset 0 1px 0 var(--color-gold-faint);
+  clip-path: polygon(var(--cut-m) 0, 100% 0, 100% calc(100% - var(--cut-m)), calc(100% - var(--cut-m)) 100%, 0 100%, 0 var(--cut-m));
+}
 .card h2 { font-size: var(--fs-subhead); margin: 0 0 var(--space-2); }
 dl { display: grid; grid-template-columns: auto 1fr; gap: var(--space-1) var(--space-3); margin: 0; font-size: var(--fs-footnote); }
 dt { color: var(--color-text-tertiary); }
@@ -154,6 +163,21 @@ body[data-state="ready"] #main { display: block; }
 .onboard p, .onboard ol { font-size: var(--fs-subhead); line-height: var(--lh-body); }
 .status { font-size: var(--fs-footnote); min-height: calc(1em * var(--lh-body)); }
 
+/* ========== 見た目の決まり v7「懸木の狩人」（D-021。CR-*） ==========
+   静かな深緑と黒の面 ＋ 金は細線（塗りは主ボタン 1 つ）＋ 差し色は小さく ＋ 角は斜めに落とす。 */
+
+/* 斜めに角を落とした部品（記録ボタン・取り消しの表示・各画面のボタン。CR-S01〜02）。
+   clip-path は border・影・outline を切り落とすので、外側を縁の色（--btn-line）で塗り、::before を 1px 内側に重ねて塗り（--btn-fill）にする。
+   角の量は --btn-cut */
+.record-dock .act, .toast, .cut-btn {
+  isolation: isolate; border: 0; border-radius: 0; background: var(--btn-line);
+  clip-path: polygon(var(--btn-cut) 0, 100% 0, 100% calc(100% - var(--btn-cut)), calc(100% - var(--btn-cut)) 100%, 0 100%, 0 var(--btn-cut));
+}
+.record-dock .act::before, .toast::before, .cut-btn::before {
+  content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--btn-fill);
+  clip-path: polygon(calc(var(--btn-cut) - var(--cut-fix)) 0, 100% 0, 100% calc(100% - var(--btn-cut) + var(--cut-fix)), calc(100% - var(--btn-cut) + var(--cut-fix)) 100%, 0 100%, 0 calc(var(--btn-cut) - var(--cut-fix)));
+}
+
 /* ---------- ホーム（D-019 / A配置） ---------- */
 .view h1 { margin-top: var(--space-5); }
 .tag {
@@ -167,139 +191,26 @@ body[data-state="ready"] #main { display: block; }
   min-height: var(--home-min-h);
 }
 
-/* 見出し行：時刻と日付を横1行（D-019 Q3=28px, V1-02） */
-.home-header { display: flex; align-items: center; justify-content: space-between; min-height: var(--tap); }
-.clock { display: flex; align-items: baseline; gap: var(--space-2); }
-.clock-time { font-size: var(--fs-title1); font-weight: 700; line-height: var(--lh-tight); font-variant-numeric: tabular-nums; }
-.clock-date { font-size: var(--fs-subhead); color: var(--color-text-secondary); }
+/* 見出し行：日付を小さく上、時刻を大きく細く（CR-T01, V1-02） */
+.home-header { display: flex; align-items: flex-end; justify-content: space-between; min-height: var(--tap); }
+.clock { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.clock-time { font-size: var(--fs-display); font-weight: 300; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.clock-date { order: -1; font-size: var(--fs-footnote); letter-spacing: 0.08em; color: var(--color-text-secondary); }
 
-/* 舞台：伸び縮みする唯一の部分（V4-04, C1-05） */
+/* 舞台：伸び縮みする唯一の部分（V4-04, C1-05）。立ち絵なしで成立させる（CR-P01〜04） */
 .stage {
-  flex: 1 1 auto; min-height: var(--stage-min-h); display: flex; align-items: flex-end; justify-content: center;
-  background: radial-gradient(ellipse at 50% 70%, var(--color-stage-glow), transparent 65%);
-}
-.portrait {
-  height: 100%; max-height: var(--portrait-max-h); /* 立ち絵の枠。立ち絵が入るまでは紋章を出す（D-021 CR-P01） */
+  position: relative; flex: 1 1 auto; min-height: var(--stage-min-h); overflow: hidden; container-type: size;
   display: flex; align-items: center; justify-content: center;
-  -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; /* P1-07 */
 }
-
-/* 会話ウィンドウ：立ち絵の足元に重ねる（C2-01, V3-06） */
-.dialogue {
-  position: relative; margin-top: calc(var(--space-6) * -1);
-  background: var(--color-scrim); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-l);
-  padding: var(--space-4) var(--space-4) var(--space-3);
-  -webkit-backdrop-filter: blur(var(--blur-dialogue)); backdrop-filter: blur(var(--blur-dialogue));
-}
-.nameplate {
-  position: absolute; top: calc(var(--space-3) * -1); left: var(--space-4);
-  padding: 0 var(--space-2); font-size: var(--fs-footnote); font-weight: 700; line-height: calc(var(--space-5) - 2px);
-  color: var(--color-accent); background: var(--color-bg-deep);
-  border: 1px solid var(--color-accent); border-radius: var(--radius-s);
-}
-.line {
-  margin: 0; font-size: var(--fs-body); line-height: var(--lh-body);
-  min-height: calc(2em * var(--lh-body)); /* P3-02：セリフが入る前に高さを確保 */
-  line-break: strict; text-wrap: pretty; /* V2-07 */
-}
-/* 次の予定の帯（C7-02, C7-03） */
-.next-strip { background: var(--color-surface-1); border-radius: var(--radius-m); padding: var(--space-2) var(--space-4) var(--space-3); }
-.next-head { display: flex; justify-content: space-between; align-items: baseline; }
-.next-label { font-size: var(--fs-caption); color: var(--color-text-tertiary); }
-.next-rest { font-size: var(--fs-footnote); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
-.next-event { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
-.next-day { font-size: var(--fs-subhead); color: var(--color-text-secondary); }
-.next-time { font-size: var(--fs-title3); font-weight: 700; font-variant-numeric: tabular-nums; }
-.next-title { flex: 1; min-width: 0; font-size: var(--fs-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* 記録（I4-04：1行に3個まで） */
-.record-dock { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--space-2); }
-.record-dock .act {
-  margin-top: 0; min-height: var(--size-record); padding: 0 var(--space-2);
-  font-size: var(--fs-body); white-space: nowrap;
-  background: var(--color-surface-2); color: var(--color-text); border: 1px solid var(--color-border);
-}
-/* 今押すもの（主ボタン）は 1 つだけ金で塗る（V3-02, C4-02） */
-.record-dock .act.primary { background: var(--color-accent); color: var(--color-on-accent); border-color: var(--color-accent); }
-
-/* 記録済み（I3-02, V3-05）：塗りなし・成功色の文字・破線の枠 */
-.record-dock .act.done {
-  background: transparent; color: var(--color-success); border: 1px dashed var(--color-success);
-  font-size: var(--fs-subhead);
-}
-
-/* 取り消しの表示（I3-02）：記録ボタンの真上に 5 秒 */
-.toast {
-  position: fixed; left: var(--space-4); right: var(--space-4);
-  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4) + var(--size-record) + var(--space-2));
-  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
-  padding: 0 var(--space-2) 0 var(--space-4); font-size: var(--fs-subhead);
-  background: var(--color-surface-2); color: var(--color-text);
-  border: 1px solid var(--color-border); border-radius: var(--radius-m); box-shadow: var(--shadow-raised);
-}
-.toast .undo {
-  width: auto; margin: 0; min-height: var(--tap); padding: 0 var(--space-3);
-  background: transparent; color: var(--color-text); font-weight: 700; text-decoration: underline;
-}
-
-/* ---------- 下のタブ（D-019 Q1：5個。I2-01〜03） ---------- */
-.tabbar {
-  position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr);
-  height: calc(var(--tabbar-h) + var(--safe-bottom)); padding-bottom: var(--safe-bottom);
-  background: var(--color-bg-deep); border-top: 1px solid var(--color-border-subtle);
-}
-.tabbar a {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  color: var(--color-text-tertiary); text-decoration: none; font-size: var(--fs-caption2);
-}
-.tabbar svg, .icon-btn svg {
-  width: var(--size-icon); height: var(--size-icon);
-  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
-}
-.tabbar a[aria-current="page"] { color: var(--color-accent); font-weight: 700; }
-.tabbar a[aria-current="page"] svg { stroke-width: 2.2; }
-
-/* 右上の設定ボタン（P2-02：aria-label あり） */
-.icon-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: var(--tap); height: var(--tap); margin-right: calc(var(--space-2) * -1);
-  color: var(--color-text-secondary); border-radius: var(--radius-pill);
-}
-/* 子画面の戻る導線（I2-04） */
-.sub-header { display: flex; align-items: center; gap: var(--space-3); min-height: var(--tap); }
-.sub-header h1 { margin: 0; }
-.back {
-  display: inline-flex; align-items: center; min-height: var(--tap); padding-right: var(--space-2);
-  color: var(--color-text-secondary); text-decoration: none; font-size: var(--fs-callout);
-}
-
-/* ========== 見た目の決まり v7「懸木の狩人」（D-021。R3-Q3-AI の CR-*） ==========
-   静かな深緑と黒の面 ＋ 金は細線（塗りは主ボタン 1 つ）＋ 差し色は小さく ＋ 角は斜めに落とす。 */
-
-/* 地：樹冠の光（夜は足元の火）＋ 粒の質感 ＋ 上から下へ暗くなる（CR-B01〜03） */
-body {
-  background-color: var(--color-bg);
-  background-image: var(--tex-grain), var(--bg-glow),
-    linear-gradient(180deg, var(--color-bg-top) 0%, var(--color-bg) 42%, var(--color-bg-bottom) 100%);
-  background-size: var(--size-grain) var(--size-grain), 100% 100%, 100% 100%;
-  background-repeat: repeat, no-repeat, no-repeat;
-}
-
-/* 見出し行：日付を小さく上、時刻を大きく細く（CR-T01） */
-.home-header { align-items: flex-end; }
-.clock { flex-direction: column; align-items: flex-start; gap: 2px; }
-.clock-date { order: -1; font-size: var(--fs-footnote); letter-spacing: 0.08em; }
-.clock-time { font-size: var(--fs-display); font-weight: 300; letter-spacing: -0.02em; line-height: 1; }
-
-/* 舞台：立ち絵なしで成立させる（CR-P01〜04）。#portrait は立ち絵用の枠として残す */
-.stage { position: relative; align-items: center; background: none; overflow: hidden; container-type: size; }
 .stage::before { /* 吊り下がる線（ツタ・ロープ） */
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: url("img/canopy-vines.svg") top center / 100% auto no-repeat;
 }
-.portrait {
-  position: relative; width: 100%;
+.portrait { /* 立ち絵の枠。立ち絵が入るまでは紋章を出す（D-021 CR-P01） */
+  position: relative; width: 100%; height: 100%; max-height: var(--portrait-max-h);
+  display: flex; align-items: center; justify-content: center;
   background: url("img/canopy-emblem.svg") center 42% / auto min(78%, var(--size-emblem)) no-repeat;
+  -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; /* P1-07 */
 }
 /* 立ち絵が入ったら紋章の代わりに立ち絵を出す（CR-P04, D-022 ④）。--portrait-art は app.js が読み込めた画像で設定する */
 .portrait[data-art="ready"] { background: var(--portrait-art) center bottom / contain no-repeat; }
@@ -309,42 +220,32 @@ body {
   color: transparent; -webkit-text-stroke: 1px var(--color-gold-faint);
 }
 
-/* セリフの面：角を斜めに落とした黒い板 ＋ 上辺に金の細線（CR-S01, CR-L01） */
+/* セリフの面：立ち絵の足元に重ねる（C2-01, V3-06）。角を斜めに落とした黒い板 ＋ 上辺に金の細線（CR-S01, CR-L01） */
 .dialogue {
   --dlg-top: var(--color-gold-line);
-  padding-top: var(--space-3); border: 0; border-radius: 0;
+  position: relative; margin-top: calc(var(--space-6) * -1); padding: var(--space-3) var(--space-4);
   background: linear-gradient(var(--dlg-top), var(--dlg-top)) top left / 100% 1px no-repeat, var(--color-scrim);
+  -webkit-backdrop-filter: blur(var(--blur-dialogue)); backdrop-filter: blur(var(--blur-dialogue));
   clip-path: polygon(var(--cut-l) 0, 100% 0, 100% calc(100% - var(--cut-l)), calc(100% - var(--cut-l)) 100%, 0 100%, 0 var(--cut-l));
 }
 body.from-notification .dialogue { --dlg-top: var(--color-accent); }
-.nameplate { /* 札ではなく「菱形＋名前＋そこから伸びる金の線」 */
-  position: static; display: flex; align-items: center; gap: var(--space-2);
-  margin-bottom: var(--space-2); padding: 0; border: 0; border-radius: 0; background: none;
-  letter-spacing: 0.14em; line-height: var(--lh-tight);
+.nameplate { /* 「菱形＋名前＋そこから伸びる金の線」 */
+  display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2);
+  font-size: var(--fs-footnote); font-weight: 700; letter-spacing: 0.14em; line-height: var(--lh-tight); color: var(--color-accent);
 }
 .nameplate::before { content: ""; flex: none; width: var(--size-diamond); height: var(--size-diamond); transform: rotate(45deg); background: var(--color-lime); }
 .nameplate::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--color-gold-line), transparent); }
+.line {
+  margin: 0; font-size: var(--fs-body); line-height: var(--lh-body);
+  min-height: calc(2em * var(--lh-body)); /* P3-02：セリフが入る前に高さを確保 */
+  line-break: strict; text-wrap: pretty; /* V2-07 */
+}
 .line.line-enter { animation: hook-in var(--dur-hook) var(--ease-hook) both; } /* CR-M01 */
 @keyframes hook-in { from { opacity: 0; transform: translateX(calc(var(--shift-hook) * -1)); } to { opacity: 1; transform: none; } }
 
-/* 記録ボタン：角を斜めに落とす。縁は ::before を 1px 内側に重ねて描く（CR-S02） */
-.record-dock .act {
-  --btn-line: var(--color-line); --btn-fill: var(--color-surface-2); --btn-cut: var(--cut-s);
-  position: relative; isolation: isolate; border: 0; border-radius: 0; background: var(--btn-line);
-  clip-path: polygon(var(--btn-cut) 0, 100% 0, 100% calc(100% - var(--btn-cut)), calc(100% - var(--btn-cut)) 100%, 0 100%, 0 var(--btn-cut));
-}
-.record-dock .act::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--btn-fill);
-  clip-path: polygon(calc(var(--btn-cut) - var(--cut-fix)) 0, 100% 0, 100% calc(100% - var(--btn-cut) + var(--cut-fix)), calc(100% - var(--btn-cut) + var(--cut-fix)) 100%, 0 100%, 0 calc(var(--btn-cut) - var(--cut-fix)));
-}
-.record-dock { gap: var(--space-3); }
-.record-dock .act { --btn-fill: var(--color-surface-1); --btn-cut: var(--cut-m); letter-spacing: 0.06em; }
-.record-dock .act.primary { --btn-line: var(--color-accent); --btn-fill: var(--color-accent); background: var(--btn-line); color: var(--color-on-accent); font-weight: 700; }
-.record-dock .act.done { --btn-line: var(--color-success); --btn-fill: var(--color-ink); background: var(--btn-line); border: 0; color: var(--color-success); }
-
-/* 次の予定：箱をやめ、上下の細線と左の数珠（CR-L03, CR-C04） */
+/* 次の予定：上下の細線と左の数珠（C7-02, C7-03, CR-L03, CR-C04） */
 .next-strip {
-  position: relative; border-radius: 0; padding-left: calc(var(--space-4) + var(--space-1));
+  position: relative; padding: var(--space-2) var(--space-4) var(--space-3) calc(var(--space-4) + var(--space-1));
   background: linear-gradient(90deg, var(--color-strip-from), var(--color-strip-to));
   box-shadow: inset 0 1px 0 var(--color-gold-faint), inset 0 -1px 0 var(--color-gold-faint);
 }
@@ -354,58 +255,91 @@ body.from-notification .dialogue { --dlg-top: var(--color-accent); }
     var(--color-lime) 0 22%, transparent 22% 26%, var(--color-sky) 26% 48%, transparent 48% 52%,
     var(--color-ember) 52% 74%, transparent 74% 78%, var(--color-text) 78% 100%);
 }
+.next-head { display: flex; justify-content: space-between; align-items: baseline; }
+.next-label { font-size: var(--fs-caption); color: var(--color-text-tertiary); }
 .label-en { font-size: var(--fs-caption2); font-weight: 700; letter-spacing: var(--track-label); color: var(--color-text-tertiary); } /* 英字の小見出し（CR-T02）。金は使わない（V3-08） */
 .next-label .label-en { margin-right: var(--space-2); }
-.next-time { font-size: var(--fs-title2); letter-spacing: -0.01em; }
+.next-rest { font-size: var(--fs-footnote); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.next-event { display: flex; align-items: baseline; gap: var(--space-2); min-width: 0; }
+.next-day { font-size: var(--fs-subhead); color: var(--color-text-secondary); }
+.next-time { font-size: var(--fs-title2); font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.next-title { flex: 1; min-width: 0; font-size: var(--fs-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* 記録（I4-04：1行に3個まで） */
+.record-dock { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--space-3); }
+.record-dock .act {
+  --btn-line: var(--color-line); --btn-fill: var(--color-surface-1); --btn-cut: var(--cut-m);
+  position: relative; margin-top: 0; min-height: var(--size-record); padding: 0 var(--space-2);
+  font-size: var(--fs-body); letter-spacing: 0.06em; white-space: nowrap; color: var(--color-text);
+}
+/* 今押すもの（主ボタン）は 1 つだけ金で塗る（V3-02, C4-02） */
+.record-dock .act.primary { --btn-line: var(--color-accent); --btn-fill: var(--color-accent); color: var(--color-on-accent); font-weight: 700; }
+/* 記録済み（I3-02, V3-05）：最奥の黒・ライムの縁と文字 */
+.record-dock .act.done { --btn-line: var(--color-success); --btn-fill: var(--color-ink); color: var(--color-success); font-size: var(--fs-subhead); }
 /* 選択中（フォーカス）：clip-path が outline を切り落とすので、縁を金にして示す（CR-S05, D-022 ②, P2-04） */
-.record-dock .act:focus-visible { outline: none; --btn-line: var(--color-accent); background: var(--btn-line); }
+.record-dock .act:focus-visible { outline: none; --btn-line: var(--color-accent); }
 
-/* タブバー：いちばん奥の黒 ＋ 上辺に段々の帯 ＋ 選択中は金の短い線（CR-L02） */
-.tabbar { background: var(--color-ink); border-top: 0; }
+/* 5秒で消える知らせ（取り消し・保存の失敗。I3-02）：記録ボタンの真上。ボタンと同じ描き方（D-022 ③） */
+.toast {
+  --btn-line: var(--color-line); --btn-fill: var(--color-ink); --btn-cut: var(--cut-s);
+  position: fixed; left: var(--space-4); right: var(--space-4);
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4) + var(--size-record) + var(--space-2));
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  min-height: var(--tap); padding: 0 var(--space-2) 0 var(--space-4); font-size: var(--fs-subhead); color: var(--color-text);
+}
+/* 文は 1 行に収め、「取り消す」は折り返さない（狭い画面でも押しやすく） */
+.toast > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast .undo {
+  flex: none; width: auto; margin: 0; min-height: var(--tap); padding: 0 var(--space-3); white-space: nowrap;
+  background: transparent; color: var(--color-text); font-weight: 700; text-decoration: underline;
+}
+
+/* ---------- 下のタブ（D-019 Q1：5個。I2-01〜03）。いちばん奥の黒 ＋ 上辺に段々の帯 ＋ 選択中は金の短い線（CR-L02） ---------- */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr);
+  height: calc(var(--tabbar-h) + var(--safe-bottom)); padding-bottom: var(--safe-bottom);
+  background: var(--color-ink);
+}
 .tabbar::before {
   content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: var(--size-fret-h); opacity: 0.7; pointer-events: none;
   background: url("img/fret.svg") left bottom / var(--size-fret-w) var(--size-fret-h) repeat-x;
 }
-.tabbar a { position: relative; }
+.tabbar a {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  color: var(--color-text-tertiary); text-decoration: none; font-size: var(--fs-caption2);
+}
+.tabbar svg, .icon-btn svg {
+  width: var(--size-icon); height: var(--size-icon);
+  fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.tabbar a[aria-current="page"] { color: var(--color-accent); font-weight: 700; }
+.tabbar a[aria-current="page"] svg { stroke-width: 2.2; }
 .tabbar a[aria-current="page"]::before {
   content: ""; position: absolute; top: 0; left: 50%; width: var(--size-tab-mark); height: 2px;
   transform: translateX(-50%); background: var(--color-accent);
 }
 
+/* 右上の設定ボタン（P2-02：aria-label あり） */
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--tap); height: var(--tap); margin-right: calc(var(--space-2) * -1);
+  color: var(--color-text-secondary); border-radius: var(--radius-pill);
+}
+/* 子画面の戻る導線（I2-04）。「‹ ホーム」と 2 行の見出しの下端をそろえる（D-022 ⑥） */
+.sub-header { display: flex; align-items: flex-end; gap: var(--space-3); min-height: var(--tap); }
+.sub-header h1 { margin: 0; }
+.back {
+  display: inline-flex; align-items: center; min-height: var(--tap); padding-right: var(--space-2);
+  color: var(--color-text-secondary); text-decoration: none; font-size: var(--fs-callout);
+}
 /* 各画面の見出しの上に英字の小見出しを 1 つ（CR-T02） */
 h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(--lh-tight); }
-/* 設定の「‹ ホーム」と 2 行の見出しの下端をそろえる（D-022 ⑥） */
-.sub-header { align-items: flex-end; }
-
-/* 取り消しの表示：ボタンと同じ描き方（外側を縁の色、::before を 1px 内側に塗り。CR-S02, D-022 ③）。
-   clip-path で外側の影は切れるので影は付けない */
-.toast {
-  --btn-line: var(--color-line); --btn-fill: var(--color-ink); --btn-cut: var(--cut-s);
-  isolation: isolate; border: 0; border-radius: 0; box-shadow: none; background: var(--btn-line);
-  clip-path: polygon(var(--btn-cut) 0, 100% 0, 100% calc(100% - var(--btn-cut)), calc(100% - var(--btn-cut)) 100%, 0 100%, 0 var(--btn-cut));
-}
-.toast::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--btn-fill);
-  clip-path: polygon(calc(var(--btn-cut) - var(--cut-fix)) 0, 100% 0, 100% calc(100% - var(--btn-cut) + var(--cut-fix)), calc(100% - var(--btn-cut) + var(--cut-fix)) 100%, 0 100%, 0 calc(var(--btn-cut) - var(--cut-fix)));
-}
-/* カード（ほかの画面も同じ決まり。CR-S01） */
-.card {
-  background: var(--color-card); border-radius: 0; box-shadow: inset 0 1px 0 var(--color-gold-faint);
-  clip-path: polygon(var(--cut-m) 0, 100% 0, 100% calc(100% - var(--cut-m)), calc(100% - var(--cut-m)) 100%, 0 100%, 0 var(--cut-m));
-}
 
 /* ========== 各機能画面の共通部品（D-026。見た目の決まり CR-* に従う） ========== */
-/* 斜めの角のボタン（CR-S01〜02）。primary＝金の塗り（1 画面 1 つ）、quiet＝黒地に縁 */
+/* 斜めの角のボタン（形は上の「斜めに角を落とした部品」）。primary＝金の塗り（1 画面 1 つ）、quiet＝黒地に縁 */
 .cut-btn {
   --btn-line: var(--color-line); --btn-fill: var(--color-ink); --btn-cut: var(--cut-s);
-  position: relative; isolation: isolate; border: 0; border-radius: 0;
-  background: var(--btn-line); color: var(--color-text); letter-spacing: 0.04em;
-  clip-path: polygon(var(--btn-cut) 0, 100% 0, 100% calc(100% - var(--btn-cut)), calc(100% - var(--btn-cut)) 100%, 0 100%, 0 var(--btn-cut));
-}
-.cut-btn::before {
-  content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--btn-fill);
-  clip-path: polygon(calc(var(--btn-cut) - var(--cut-fix)) 0, 100% 0, 100% calc(100% - var(--btn-cut) + var(--cut-fix)), calc(100% - var(--btn-cut) + var(--cut-fix)) 100%, 0 100%, 0 calc(var(--btn-cut) - var(--cut-fix)));
+  position: relative; color: var(--color-text); letter-spacing: 0.04em;
 }
 .cut-btn.primary { --btn-line: var(--color-accent); --btn-fill: var(--color-accent); --btn-cut: var(--cut-m); color: var(--color-on-accent); font-weight: 700; }
 .cut-btn.quiet { font-weight: 600; }
@@ -456,10 +390,6 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
 .form-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: var(--space-3); }
 .form-actions .cut-btn { margin-top: 0; }
 #task-toast, #timer-toast { bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4)); }
-/* トーストの文は 1 行に収め、「取り消す」は折り返さない（狭い画面でも押しやすく） */
-.toast > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.toast { min-height: var(--tap); } /* 「取り消す」のない知らせ（保存の失敗など）でも同じ高さ */
-.toast .undo { flex: none; white-space: nowrap; }
 
 /* ---------- 日報（D-026 ②, D-027） ---------- */
 .report-form { display: flex; flex-direction: column; gap: var(--space-1); }
