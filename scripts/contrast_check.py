@@ -37,6 +37,17 @@ PAIRS = [
     ("border", "bg", 3.0),
     ("border", "surface-1", 3.0),
     ("border", "scrim", 3.0),       # 「声を聞く」の枠はセリフの面の上
+    # D-021（見た目の決まり v7）
+    ("text", "bg-top", 4.5),
+    ("text-secondary", "bg-top", 4.5),
+    ("text-tertiary", "bg-bottom", 4.5),
+    ("text-tertiary", "ink", 4.5),       # タブのラベル
+    ("accent", "scrim", 4.5),            # 名前
+    ("accent", "ink", 4.5),              # 選択中のタブの文字と印（NEXT は金ではない。D-022）
+    ("success", "ink", 4.5),             # 記録済みボタン
+    ("line", "bg", 3.0),
+    ("line", "bg-bottom", 3.0),
+    ("line", "surface-1", 3.0),
 ]
 
 

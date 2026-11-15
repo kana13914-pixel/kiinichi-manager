@@ -4,11 +4,11 @@
   color-scheme: dark; /* P1-08 */
 
   /* 色：面（奥ほど暗い） */
-  --color-bg: #1e4034;
-  --color-bg-deep: #163128;             /* タブバー・入力欄・名前欄の地 */
-  --color-surface-1: #2a4b3f;           /* カード・次の予定の帯 */
-  --color-surface-2: #355749;           /* 控えめなボタン・トースト */
-  --color-scrim: rgba(13, 31, 25, 0.9); /* セリフの面（bg に重ねると約 #0f221c） */
+  --color-bg: #183a2f;
+  --color-bg-deep: #0a1512;             /* タブバー・入力欄・名前欄の地 */
+  --color-surface-1: #10231d;           /* カード・次の予定の帯 */
+  --color-surface-2: #1a3229;           /* 控えめなボタン・トースト */
+  --color-scrim: rgba(7, 15, 12, 0.9); /* セリフの面（bg に重ねると約 #0f221c） */
   /* 色：文字（半透明は使わない。V3-04） */
   --color-text: #f4f1e8;
   --color-text-secondary: #c8d4cb;
@@ -21,7 +21,7 @@
   --color-border: #7f9a8c;
   --color-border-subtle: rgba(244, 241, 232, 0.12);
   --color-stage-glow: rgba(244, 241, 232, 0.06);
-  --color-success: #8fe3a5;
+  --color-success: #b9e35f;
   --color-danger: #ffb3a6;              /* 旧 #ff9a8a はカード上 4.40:1 で不足 */
 
   /* 文字（iOS の文字段階。rem = 16px。D-019 Q6 = 追従しない） */
@@ -33,6 +33,7 @@
   --fs-callout: 1rem;       /* 16 入力欄・既定 */
   --fs-body: 1.0625rem;     /* 17 セリフ・本文 */
   --fs-title3: 1.25rem;     /* 20 */
+  --fs-title2: 1.375rem;   /* 22 次の予定の時刻 */
   --fs-title1: 1.75rem;     /* 28 */
   --lh-tight: 1.25;
   --lh-body: 1.7;
@@ -57,6 +58,36 @@
   --shadow-raised: 0 6px 24px rgba(0, 0, 0, 0.35);
   --dur-fast: 120ms; --dur-base: 200ms; --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 
+  /* ---- 見た目の決まり v7「懸木の狩人」（D-021。R3-Q3-AI） ---- */
+  --color-bg-top: #1f4738;              /* 地のグラデーション上端 */
+  --color-bg-bottom: #0b1914;           /* 地のグラデーション下端（足元ほど黒） */
+  --color-ink: #070f0c;                 /* いちばん奥の黒：タブバー・控えめボタンの地 */
+  --color-line: #64897b;                /* 斜め角ボタンの縁。地の全域に 3:1 以上 */
+  --color-gold-line: rgba(232, 196, 92, 0.55); /* 金の細線 */
+  --color-gold-faint: rgba(232, 196, 92, 0.18);/* 金のごく薄い線・縁取り文字 */
+  --color-lime: #b9e35f;                /* 差し色（耳飾り）。面積は画面の 2% 以内 */
+  --color-ember: #f2a14a;               /* 差し色（ズボンの橙） */
+  --color-sky: #62b8e0;                 /* 差し色（ズボン・ブーツの青） */
+  --color-canopy-light: rgba(185, 227, 95, 0.12); /* 昼：樹冠から差す光 */
+  --color-ember-glow: rgba(242, 161, 74, 0.1);    /* 夜：足元の火 */
+  --color-strip-from: rgba(7, 15, 12, 0.6);
+  --color-strip-to: rgba(7, 15, 12, 0.12);
+  --color-card: rgba(7, 15, 12, 0.55);
+  --bg-glow: radial-gradient(120% 55% at 50% -12%, var(--color-canopy-light), transparent 62%);
+  --tex-grain: url("img/grain.svg");
+  --size-grain: 160px;
+  --cut-s: 6px; --cut-m: 10px; --cut-l: 14px; --cut-fix: 0.5px; /* 斜めに落とす角の量 */
+  --fs-display: 3rem;      /* 48 時刻だけ大きく細く（ジャンプ率 約 2.8） */
+  --fs-mark: 4.5rem;       /* 72 舞台の縦書き英字の上限 */
+  --track-label: 0.18em;   /* 英字の小見出しの字間 */
+  --size-fret-h: 8px; --size-fret-w: 20px; /* 段々の帯 */
+  --size-bead: 3px;        /* 数珠の幅 */
+  --size-diamond: 6px;     /* 名前の前の菱形 */
+  --size-tab-mark: 20px;   /* 選択中タブの金の線 */
+  --size-emblem: 260px;    /* 紋章の最大の高さ */
+  --shift-hook: 12px;      /* セリフが入るときの移動量 */
+  --dur-hook: 260ms; --ease-hook: cubic-bezier(0.05, 0.7, 0.1, 1); /* 減速して止まる（300ms 以内） */
+
   /* セーフエリア（CSS では env() を直接書かずこれを使う。テストで上書きする。M1-04） */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -64,10 +95,13 @@
 
 /* 夜（22〜4時。D-019 Q5）は面を一段暗くする。タブバーの地も下げ、背景より暗い関係を保つ（C9-02） */
 body[data-period="night"] {
-  --color-bg: #142c24;
-  --color-surface-1: #1f3a30;
-  --color-surface-2: #29473b;
-  --color-bg-deep: #0f221b;
+  --color-bg: #10261f;
+  --color-bg-top: #142f26;
+  --color-bg-bottom: #060d0b;
+  --color-surface-1: #0c1b16;
+  --color-surface-2: #142820;
+  --color-bg-deep: #08120f;
+  --bg-glow: radial-gradient(90% 40% at 50% 108%, var(--color-ember-glow), transparent 70%);
 }
 
 /* ---------- 全体 ---------- */
@@ -258,6 +292,18 @@ body.from-notification button.voice.ready { animation: voice-pulse 1.2s var(--ea
 .back {
   display: inline-flex; align-items: center; min-height: var(--tap); padding-right: var(--space-2);
   color: var(--color-text-secondary); text-decoration: none; font-size: var(--fs-callout);
+}
+
+/* ========== 見た目の決まり v7「懸木の狩人」（D-021。R3-Q3-AI の CR-*） ==========
+   静かな深緑と黒の面 ＋ 金は細線（塗りは主ボタン 1 つ）＋ 差し色は小さく ＋ 角は斜めに落とす。 */
+
+/* 地：樹冠の光（夜は足元の火）＋ 粒の質感 ＋ 上から下へ暗くなる（CR-B01〜03） */
+body {
+  background-color: var(--color-bg);
+  background-image: var(--tex-grain), var(--bg-glow),
+    linear-gradient(180deg, var(--color-bg-top) 0%, var(--color-bg) 42%, var(--color-bg-bottom) 100%);
+  background-size: var(--size-grain) var(--size-grain), 100% 100%, 100% 100%;
+  background-repeat: repeat, no-repeat, no-repeat;
 }
 
 /* ---------- 動きを減らす設定（I3-04） ---------- */

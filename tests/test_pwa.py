@@ -581,9 +581,9 @@ class PwaTest(unittest.TestCase):
     def test_night_palette(self):
         page = self.clock_page(23, 48)
         self.assertEqual(page.get_attribute("body", "data-period"), "night")
-        self.assertEqual(page.evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(20, 44, 36)")
+        self.assertEqual(page.evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(16, 38, 31)")  # D-021
         page = self.clock_page(13, 0)
-        self.assertEqual(page.evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(30, 64, 52)")
+        self.assertEqual(page.evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(24, 58, 47)")  # D-021
 
 
 if __name__ == "__main__":
