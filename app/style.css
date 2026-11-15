@@ -385,6 +385,40 @@ button.voice[data-state="error"] { --btn-line: var(--color-danger); background: 
 /* 選択中（フォーカス）：clip-path が outline を切り落とすので、縁を金にして示す（CR-S05, D-022 ②, P2-04） */
 button.voice:focus-visible, .record-dock .act:focus-visible { outline: none; --btn-line: var(--color-accent); background: var(--btn-line); }
 
+/* タブバー：いちばん奥の黒 ＋ 上辺に段々の帯 ＋ 選択中は金の短い線（CR-L02） */
+.tabbar { background: var(--color-ink); border-top: 0; }
+.tabbar::before {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: var(--size-fret-h); opacity: 0.7; pointer-events: none;
+  background: url("img/fret.svg") left bottom / var(--size-fret-w) var(--size-fret-h) repeat-x;
+}
+.tabbar a { position: relative; }
+.tabbar a[aria-current="page"]::before {
+  content: ""; position: absolute; top: 0; left: 50%; width: var(--size-tab-mark); height: 2px;
+  transform: translateX(-50%); background: var(--color-accent);
+}
+
+/* 各画面の見出しの上に英字の小見出しを 1 つ（CR-T02） */
+h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(--lh-tight); }
+/* 設定の「‹ ホーム」と 2 行の見出しの下端をそろえる（D-022 ⑥） */
+.sub-header { align-items: flex-end; }
+
+/* 取り消しの表示：ボタンと同じ描き方（外側を縁の色、::before を 1px 内側に塗り。CR-S02, D-022 ③）。
+   clip-path で外側の影は切れるので影は付けない */
+.toast {
+  --btn-line: var(--color-line); --btn-fill: var(--color-ink); --btn-cut: var(--cut-s);
+  isolation: isolate; border: 0; border-radius: 0; box-shadow: none; background: var(--btn-line);
+  clip-path: polygon(var(--btn-cut) 0, 100% 0, 100% calc(100% - var(--btn-cut)), calc(100% - var(--btn-cut)) 100%, 0 100%, 0 var(--btn-cut));
+}
+.toast::before {
+  content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--btn-fill);
+  clip-path: polygon(calc(var(--btn-cut) - var(--cut-fix)) 0, 100% 0, 100% calc(100% - var(--btn-cut) + var(--cut-fix)), calc(100% - var(--btn-cut) + var(--cut-fix)) 100%, 0 100%, 0 calc(var(--btn-cut) - var(--cut-fix)));
+}
+/* カード（ほかの画面も同じ決まり。CR-S01） */
+.card {
+  background: var(--color-card); border-radius: 0; box-shadow: inset 0 1px 0 var(--color-gold-faint);
+  clip-path: polygon(var(--cut-m) 0, 100% 0, 100% calc(100% - var(--cut-m)), calc(100% - var(--cut-m)) 100%, 0 100%, 0 var(--cut-m));
+}
+
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

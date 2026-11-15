@@ -636,6 +636,27 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.get_attribute("#portrait", "aria-hidden"), "true")
         self.assertIn("canopy-emblem", page.eval_on_selector("#portrait", "e => getComputedStyle(e).backgroundImage"))
 
+    def test_fret_band_does_not_overlap_record_buttons(self):
+        for size, safe in DEVICES:
+            with self.subTest(size=size):
+                page = self.clock_page(9, 3, size=size, safe=safe)
+                gap = page.evaluate("""() => {
+                  const act = document.querySelector('.act').getBoundingClientRect();
+                  const tb = document.querySelector('.tabbar');
+                  const h = parseFloat(getComputedStyle(tb, '::before').height);
+                  return tb.getBoundingClientRect().top - h - act.bottom;
+                }""")
+                self.assertGreaterEqual(gap, 0)
+
+    def test_toast_edge_drawn_with_before(self):
+        page = self.clock_page(7, 12)
+        page.click(".act[data-record=wake]")
+        r = page.evaluate("""() => { const t = document.getElementById('toast'); const cs = getComputedStyle(t);
+          return { border: cs.borderTopStyle, clip: cs.clipPath !== 'none', before: getComputedStyle(t, '::before').content }; }""")
+        self.assertEqual(r["border"], "none")
+        self.assertTrue(r["clip"])
+        self.assertEqual(r["before"], '""')
+
 
 if __name__ == "__main__":
     unittest.main()
