@@ -79,7 +79,25 @@
       <div id="toast" class="toast" role="status" hidden></div>
     </section>
 
-    <section id="view-schedule" class="view"><h1><span class="label-en" aria-hidden="true">SCHEDULE</span>予定</h1><p class="note">この画面は次のタスクで作ります。</p></section>
+    <!-- 予定（D-026 ④, D-030）：今日と明日の予定を見るだけ。フェーズ2までは仮データ。操作がないので金の塗りはない -->
+    <section id="view-schedule" class="view schedule">
+      <h1><span class="label-en" aria-hidden="true">SCHEDULE</span>予定 <small class="tag">仮</small></h1>
+
+      <section id="schedule-empty" class="dialogue dialogue-mini" aria-label="キィニチのセリフ" hidden>
+        <div class="nameplate" aria-hidden="true">キィニチ</div>
+        <p id="schedule-empty-line" class="line">…</p>
+      </section>
+
+      <h2 id="schedule-today-title" class="section-title schedule-first">今日</h2>
+      <ul id="schedule-today" class="schedule-list" aria-labelledby="schedule-today-title"></ul>
+      <p id="schedule-today-none" class="note" hidden>予定はありません</p>
+
+      <h2 id="schedule-tomorrow-title" class="section-title">明日</h2>
+      <ul id="schedule-tomorrow" class="schedule-list" aria-labelledby="schedule-tomorrow-title"></ul>
+      <p id="schedule-tomorrow-none" class="note" hidden>予定はありません</p>
+
+      <p class="note schedule-note">仮の予定を表示しています。Google カレンダーとつなぐと、ここに実際の予定が出ます。</p>
+    </section>
     <!-- タスク（D-026 ①）：未完了（期限の近い順）→ 完了（下にまとめる）→ 追加。主ボタンは「＋ タスクを追加」1つ -->
     <section id="view-tasks" class="view tasks">
       <h1><span class="label-en" aria-hidden="true">TASKS</span>タスク</h1>
@@ -247,5 +265,6 @@
   <script src="tasks.js"></script>
   <script src="report.js"></script>
   <script src="timer.js"></script>
+  <script src="schedule.js"></script>
 </body>
 </html>

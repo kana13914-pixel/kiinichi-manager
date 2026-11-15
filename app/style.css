@@ -490,6 +490,21 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
 .timer-rest { margin: var(--space-3) 0 var(--space-2); font-size: var(--fs-display); font-weight: 300; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .timer-run .cut-btn { margin-top: var(--space-4); }
 
+/* ---------- 予定（D-026 ④, D-030）。見るだけの一覧。過ぎた予定は薄く、次の予定は左に金の線（CR-C02：金の線） ---------- */
+.section-title.schedule-first { margin-top: var(--space-3); }
+.schedule-list { list-style: none; margin: 0; padding: 0; }
+.schedule-row {
+  display: flex; align-items: center; gap: var(--space-3); min-height: var(--size-record);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  box-shadow: inset 0 -1px 0 var(--color-gold-faint);
+}
+.schedule-time { flex: none; min-width: 3.2em; font-size: var(--fs-title3); font-weight: 700; font-variant-numeric: tabular-nums; }
+.schedule-title { flex: 1; min-width: 0; font-size: var(--fs-body); overflow-wrap: anywhere; }
+.schedule-rest { flex: none; font-size: var(--fs-footnote); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.schedule-row.past .schedule-time, .schedule-row.past .schedule-title { color: var(--color-text-tertiary); font-weight: 400; }
+.schedule-row.next { box-shadow: inset 2px 0 0 var(--color-accent), inset 0 -1px 0 var(--color-gold-faint); }
+.schedule-note { margin-top: var(--space-5); }
+
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

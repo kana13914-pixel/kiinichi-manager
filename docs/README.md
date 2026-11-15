@@ -51,6 +51,7 @@
 | `app/tasks.js` | タスク画面（追加・完了・削除・取り消し・期限の表示。仮に localStorage の `tasks.v1` に保存。D-026） |
 | `app/report.js` | 日報画面（1日1件・4項目。朝4時で日付を区切る。仮に localStorage の `reports.v1`。D-026, D-027） |
 | `app/timer.js` | タイマー画面（用途別・時間を指定・利用者が作るタイマー。同時に1つ。終了の通知を予約・取り消し。仮に localStorage の `timer.v1`。D-026, D-028） |
+| `app/schedule.js` | 予定画面（今日と明日の予定を見るだけ。過ぎた予定は薄く、次の予定に印。フェーズ2までは `app/sample-data.js` の仮データ。D-026, D-030） |
 | `app/settings.js` | 送信サーバーの URL と合言葉（端末内保存） |
 | `app/sample-data.js` | 次の予定の仮データ（フェーズ 2 で置き換え） |
 | `app/sw.js` | Service Worker（キャッシュ・通知の表示とタップ）。`CACHE_VERSION` は `APP_VERSION` と同じにする |

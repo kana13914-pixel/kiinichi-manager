@@ -106,6 +106,10 @@ screen_empty:
       lines:
         - "今は抱えているものはないな。"
         - "やることが出てきたら、ここに書いておけ。"
+    - id: schedule
+      when: "今日も明日も予定がない"
+      lines:
+        - "予定は入っていない。好きに使えばいい。"
     - id: reports
       when: "まだ日報が1件もない"
       lines:

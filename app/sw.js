@@ -1,6 +1,6 @@
 // フェーズ0用の最小Service Worker。オフラインでも画面が開けるよう、静的ファイルをキャッシュする。
 // ファイルを更新したら CACHE_VERSION を上げること（古いキャッシュが残るのを防ぐ）。
-const CACHE_VERSION = 'phase1-v12';
+const CACHE_VERSION = 'phase1-v13';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './tasks.js',
   './report.js',
   './timer.js',
+  './schedule.js',
   './style.css',
   './img/canopy-emblem.svg',
   './img/canopy-vines.svg',

@@ -1074,5 +1074,69 @@ class PwaTest(unittest.TestCase):
         page.clock.run_for(25 * 60_000 + 500)
         self.assertEqual(page.evaluate(self.GOLD_FILLS), ["timer-close"])
 
+    # ---------- 予定画面（D-026 ④, D-030） ----------
+    def schedule_page(self, hour=10, minute=0, day=9, size=(393, 852)):
+        page = self.clock_page(hour, minute, "#schedule", day=day, size=size)
+        page.wait_for_selector("#view-schedule", state="visible", timeout=3_000)
+        return page
+
+    def schedule_rows(self, page, which):
+        return page.eval_on_selector_all(f"#schedule-{which} .schedule-row", """els => els.map(e => [
+          e.querySelector('.schedule-time').textContent, e.querySelector('.schedule-title').textContent,
+          e.classList.contains('past'), e.classList.contains('next'),
+          e.querySelector('.schedule-rest') ? e.querySelector('.schedule-rest').textContent : null])""")
+
+    def test_schedule_lists_today_and_tomorrow_with_next_marked(self):
+        page = self.schedule_page()
+        self.assertEqual(page.text_content("#schedule-today-title"), "今日 11月9日(月)")
+        self.assertEqual(page.text_content("#schedule-tomorrow-title"), "明日 11月10日(火)")
+        today = self.schedule_rows(page, "today")
+        self.assertEqual(len(today), 8)
+        self.assertEqual(today[0], ["07:00", "起床", True, False, None])
+        self.assertEqual(today[1], ["09:00", "仕事開始", True, False, None])
+        self.assertEqual(today[2], ["12:00", "昼食", False, True, "次 ・ あと2時間"])
+        self.assertEqual([r[3] for r in today].count(True), 1)
+        tomorrow = self.schedule_rows(page, "tomorrow")
+        self.assertEqual(len(tomorrow), 8)
+        self.assertFalse(any(r[2] or r[3] for r in tomorrow))
+        self.assertTrue(page.is_hidden("#schedule-empty"))
+        self.assertIn("仮", page.text_content("#view-schedule h1"))
+        # ホームの「次の予定」と同じ予定を指している
+        page.evaluate("location.hash = '#home'")
+        self.assertIn("昼食", page.text_content("#next-event"))
+
+    def test_schedule_next_moves_as_time_passes(self):
+        page = self.schedule_page(hour=11, minute=59)
+        self.assertEqual(self.schedule_rows(page, "today")[2][4], "次 ・ あと1分")
+        page.clock.run_for(62_000)  # 12:00 を過ぎる
+        today = self.schedule_rows(page, "today")
+        self.assertEqual(today[2][2:], [True, False, None])
+        self.assertEqual(today[3], ["15:00", "休憩", False, True, "次 ・ あと3時間"])
+
+    def test_schedule_after_last_event_marks_tomorrow_first(self):
+        page = self.schedule_page(hour=23, minute=45)
+        self.assertTrue(all(r[2] for r in self.schedule_rows(page, "today")))
+        tomorrow = self.schedule_rows(page, "tomorrow")
+        self.assertEqual(tomorrow[0], ["07:00", "起床", False, True, "次 ・ あと7時間15分"])
+
+    def test_schedule_empty_shows_character_line(self):
+        page = self.schedule_page()
+        page.evaluate("SampleData.todayEvents = () => []; Schedule.render()")
+        page.wait_for_function("document.getElementById('schedule-empty-line').textContent !== '…'", timeout=3_000)
+        self.assertTrue(page.is_visible("#schedule-empty"))
+        self.assertEqual(page.text_content("#schedule-empty-line"), "予定は入っていない。好きに使えばいい。")
+        self.assertTrue(page.is_visible("#schedule-today-none"))
+
+    def test_schedule_screen_no_gold_fill_row_height_and_width(self):
+        page = self.schedule_page(size=(375, 667))
+        fills = page.evaluate("""() => [...document.querySelectorAll('#view-schedule *')]
+          .filter((e) => e.getClientRects().length && getComputedStyle(e).backgroundColor === 'rgb(232, 196, 92)')
+          .map((e) => e.id || e.className)""")
+        self.assertEqual(fills, [])  # 見るだけの画面なので金の塗りはない
+        heights = page.eval_on_selector_all("#view-schedule .schedule-row", "els => els.map(e => e.getBoundingClientRect().height)")
+        self.assertTrue(all(h >= 52 for h in heights), heights)
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
+        self.assertEqual(page.eval_on_selector(".schedule-time", "e => getComputedStyle(e).fontVariantNumeric"), "tabular-nums")
+
 if __name__ == "__main__":
     unittest.main()
