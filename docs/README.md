@@ -46,6 +46,7 @@
 | `app/index.html` | 本体の画面（初回導線・ホーム・各タブ・設定） |
 | `app/app.js` | 本体の動き（画面切替・時計・セリフ・主ボタン・記録・復帰時の判定・通知の購読・立ち絵の自動表示。声の再生はなし：D-023）。`APP_VERSION` |
 | `app/style.css` | 見た目。`:root` がトークンの正本 |
+| `app/tasks.js` | タスク画面（追加・完了・削除・取り消し・期限の表示。仮に localStorage の `tasks.v1` に保存。D-026） |
 | `app/settings.js` | 送信サーバーの URL と合言葉（端末内保存） |
 | `app/sample-data.js` | 次の予定の仮データ（フェーズ 2 で置き換え） |
 | `app/sw.js` | Service Worker（キャッシュ・通知の表示とタップ）。`CACHE_VERSION` は `APP_VERSION` と同じにする |

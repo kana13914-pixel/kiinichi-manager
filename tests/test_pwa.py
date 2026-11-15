@@ -630,6 +630,131 @@ class PwaTest(unittest.TestCase):
         self.assertNotIn("audio", sw)
         self.assertFalse((APP_DIR / "audio").exists())
 
+    # ---------- タスク画面（D-026 ①） ----------
+    def tasks_page(self, hour=10, minute=0, day=9, tasks=None, size=(393, 852)):
+        init = None
+        if tasks is not None:
+            init = "localStorage.setItem('tasks.v1', %s)" % json.dumps(json.dumps(tasks))
+        page = self.clock_page(hour, minute, "#tasks", day=day, init_script=init, size=size)
+        page.wait_for_selector("#view-tasks", state="visible", timeout=3_000)
+        return page
+
+    def open_titles(self, page):
+        return page.eval_on_selector_all("#task-list .task-title", "els => els.map(e => e.textContent)")
+
+    def test_tasks_empty_state_shows_character_line(self):
+        page = self.tasks_page()
+        page.wait_for_function("document.getElementById('tasks-empty-line').textContent !== '…'", timeout=3_000)
+        self.assertTrue(page.is_visible("#tasks-empty"))
+        data = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))
+        lines = data["screen_empty"]["conditions"][0]["lines"]
+        self.assertIn(page.text_content("#tasks-empty-line"), lines)
+        self.assertTrue(page.is_hidden("#done-section"))
+
+    def test_add_task_with_due_chip_and_persist(self):
+        page = self.tasks_page()
+        page.click("#task-add-open")
+        self.assertTrue(page.is_hidden("#task-add-open"))
+        page.fill("#task-title", "資料を送る")
+        page.click("#task-form .chip[data-due=tomorrow]")
+        self.assertEqual(page.input_value("#task-due"), "2026-11-10")
+        page.click("#task-submit")
+        self.assertEqual(self.open_titles(page), ["資料を送る"])
+        self.assertEqual(page.text_content("#task-list .task-due"), "明日まで")
+        self.assertTrue(page.is_hidden("#tasks-empty"))
+        self.assertTrue(page.is_visible("#task-add-open"))
+        page.reload()
+        page.wait_for_selector("#view-tasks", state="visible")
+        self.assertEqual(self.open_titles(page), ["資料を送る"])
+
+    def test_empty_title_is_not_added(self):
+        page = self.tasks_page()
+        page.click("#task-add-open")
+        page.fill("#task-title", "   ")
+        page.click("#task-submit")
+        self.assertIn("入力してください", page.text_content("#task-form-status"))
+        self.assertEqual(self.open_titles(page), [])
+
+    def test_open_tasks_sorted_by_due(self):
+        tasks = [
+            {"id": "a", "title": "期限なし", "due": None, "done": False, "createdAt": 1},
+            {"id": "b", "title": "今日", "due": "2026-11-09", "done": False, "createdAt": 2},
+            {"id": "c", "title": "期限切れ", "due": "2026-11-07", "done": False, "createdAt": 3},
+            {"id": "d", "title": "来週", "due": "2026-11-16", "done": False, "createdAt": 4},
+        ]
+        page = self.tasks_page(tasks=tasks)
+        self.assertEqual(self.open_titles(page), ["期限切れ", "今日", "来週", "期限なし"])
+        dues = page.eval_on_selector_all("#task-list .task-due", "els => els.map(e => [e.textContent, e.classList.contains('overdue')])")
+        self.assertEqual(dues[0], ["期限切れ（11/7(土)）", True])
+        self.assertEqual(dues[1], ["今日まで", False])
+        self.assertEqual(dues[2][0], "11/16(月)まで")
+
+    def test_complete_and_undo(self):
+        tasks = [{"id": "a", "title": "洗濯", "due": None, "done": False, "createdAt": 1}]
+        page = self.tasks_page(tasks=tasks)
+        page.click("#task-list .task-main")
+        self.assertEqual(self.open_titles(page), [])
+        self.assertEqual(page.text_content("#done-count"), "1")
+        self.assertTrue(page.is_visible("#task-toast"))
+        self.assertIn("完了にしました", page.text_content("#task-toast"))
+        page.click("#task-toast .undo")
+        self.assertEqual(self.open_titles(page), ["洗濯"])
+        self.assertTrue(page.is_hidden("#done-section"))
+        # 完了→未完了に戻す操作はトーストを出さない
+        page.click("#task-list .task-main")
+        page.click("#done-section summary")
+        page.click("#done-list .task-main")
+        self.assertEqual(self.open_titles(page), ["洗濯"])
+        self.assertTrue(page.is_hidden("#task-toast"))
+
+    def test_delete_and_undo_restores_position(self):
+        tasks = [{"id": k, "title": k, "due": None, "done": False, "createdAt": i} for i, k in enumerate(["一", "二", "三"])]
+        page = self.tasks_page(tasks=tasks)
+        page.click("#task-list li[data-id='二'] .task-del")
+        self.assertEqual(self.open_titles(page), ["一", "三"])
+        self.assertIn("削除しました", page.text_content("#task-toast"))
+        page.click("#task-toast .undo")
+        self.assertEqual(self.open_titles(page), ["一", "二", "三"])
+        page.click("#task-list li[data-id='三'] .task-del")
+        page.clock.run_for(5_100)
+        self.assertTrue(page.is_hidden("#task-toast"))
+        stored = json.loads(page.evaluate("localStorage.getItem('tasks.v1')"))
+        self.assertEqual([t["title"] for t in stored], ["一", "二"])
+
+    def test_tasks_screen_one_gold_fill_and_touch_sizes(self):
+        tasks = [{"id": "a", "title": "とても長いタスクの名前" * 4, "due": "2026-11-09", "done": False, "createdAt": 1}]
+        page = self.tasks_page(tasks=tasks, size=(375, 667))
+        fills = page.evaluate("""() => [...document.querySelectorAll('#view-tasks *')]
+          .filter((e) => e.getClientRects().length && getComputedStyle(e).backgroundColor === 'rgb(232, 196, 92)')
+          .map((e) => e.id || e.className)""")
+        self.assertEqual(fills, ["task-add-open"])
+        h = page.eval_on_selector("#task-list .task-main", "e => e.getBoundingClientRect().height")
+        w = page.eval_on_selector("#task-list .task-del", "e => e.getBoundingClientRect().width")
+        self.assertGreaterEqual(h, 52)
+        self.assertGreaterEqual(w, 44)
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)  # 長い名前でも横にはみ出さない
+        page.click("#task-add-open")
+        self.assertGreaterEqual(page.eval_on_selector("#task-title", "e => parseFloat(getComputedStyle(e).fontSize)"), 16)
+        fills = page.evaluate("""() => [...document.querySelectorAll('#view-tasks *')]
+          .filter((e) => e.getClientRects().length && getComputedStyle(e).backgroundColor === 'rgb(232, 196, 92)')
+          .map((e) => e.id || e.className)""")
+        self.assertEqual(fills, ["task-submit"])
+
+    def test_task_toast_fits_on_small_screen(self):
+        tasks = [{"id": "a", "title": "とても長いタスクの名前を入れておく", "due": None, "done": False, "createdAt": 1}]
+        page = self.tasks_page(tasks=tasks, size=(375, 667))
+        page.click("#task-list .task-main")
+        undo_h = page.eval_on_selector("#task-toast .undo", "e => e.getBoundingClientRect().height")
+        self.assertGreaterEqual(undo_h, 44)
+        self.assertEqual(page.eval_on_selector("#task-toast .undo", "e => getComputedStyle(e).whiteSpace"), "nowrap")
+
+    def test_task_form_buttons_visible_after_open(self):
+        page = self.tasks_page(tasks=[{"id": k, "title": k, "due": None, "done": False, "createdAt": i} for i, k in enumerate("あいうえおかきくけこさしすせそ")])
+        page.click("#task-add-open")
+        r = page.evaluate("""() => { const b = document.getElementById('task-submit').getBoundingClientRect();
+          const tb = document.querySelector('.tabbar').getBoundingClientRect(); return [b.bottom, tb.top]; }""")
+        self.assertLessEqual(r[0], r[1])
+
 
 if __name__ == "__main__":
     unittest.main()

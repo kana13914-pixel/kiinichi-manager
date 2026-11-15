@@ -393,6 +393,71 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
   clip-path: polygon(var(--cut-m) 0, 100% 0, 100% calc(100% - var(--cut-m)), calc(100% - var(--cut-m)) 100%, 0 100%, 0 var(--cut-m));
 }
 
+/* ========== 各機能画面の共通部品（D-026。見た目の決まり CR-* に従う） ========== */
+/* 斜めの角のボタン（CR-S01〜02）。primary＝金の塗り（1 画面 1 つ）、quiet＝黒地に縁 */
+.cut-btn {
+  --btn-line: var(--color-line); --btn-fill: var(--color-ink); --btn-cut: var(--cut-s);
+  position: relative; isolation: isolate; border: 0; border-radius: 0;
+  background: var(--btn-line); color: var(--color-text); letter-spacing: 0.04em;
+  clip-path: polygon(var(--btn-cut) 0, 100% 0, 100% calc(100% - var(--btn-cut)), calc(100% - var(--btn-cut)) 100%, 0 100%, 0 var(--btn-cut));
+}
+.cut-btn::before {
+  content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--btn-fill);
+  clip-path: polygon(calc(var(--btn-cut) - var(--cut-fix)) 0, 100% 0, 100% calc(100% - var(--btn-cut) + var(--cut-fix)), calc(100% - var(--btn-cut) + var(--cut-fix)) 100%, 0 100%, 0 calc(var(--btn-cut) - var(--cut-fix)));
+}
+.cut-btn.primary { --btn-line: var(--color-accent); --btn-fill: var(--color-accent); --btn-cut: var(--cut-m); color: var(--color-on-accent); font-weight: 700; }
+.cut-btn.quiet { font-weight: 600; }
+.cut-btn:focus-visible { outline: none; --btn-line: var(--color-accent); } /* CR-S05 */
+.cut-btn.chip { width: auto; min-height: var(--tap); margin-top: 0; padding: 0 var(--space-4); font-size: var(--fs-subhead); }
+.cut-btn.chip[aria-pressed="true"] { --btn-line: var(--color-text); --btn-fill: var(--color-surface-2); font-weight: 700; }
+
+/* 画面の中の小さなセリフ（空の状態など。C1-01） */
+.dialogue.dialogue-mini { margin: var(--space-3) 0; padding-bottom: var(--space-3); }
+.dialogue.dialogue-mini .line { min-height: 0; }
+
+/* ---------- タスク（D-026 ①） ---------- */
+.task-list { list-style: none; margin: var(--space-2) 0 0; padding: 0; }
+.task-row { display: flex; align-items: stretch; box-shadow: inset 0 -1px 0 var(--color-gold-faint); }
+.task-main {
+  flex: 1; display: flex; align-items: center; gap: var(--space-3); min-width: 0;
+  min-height: var(--size-record); margin: 0; padding: var(--space-2) 0; text-align: left;
+  background: transparent; color: var(--color-text); font-weight: 400; border-radius: 0;
+}
+.task-check {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: var(--space-5); height: var(--space-5); border: 1px solid var(--color-line);
+  color: var(--color-success); font-weight: 700; font-size: var(--fs-subhead);
+}
+.task-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.task-title { font-size: var(--fs-body); overflow-wrap: anywhere; }
+.task-due { font-size: var(--fs-footnote); color: var(--color-text-secondary); }
+.task-due.overdue { color: var(--color-danger); }
+.task-row.done .task-title { color: var(--color-text-tertiary); text-decoration: line-through; }
+.task-row.done .task-check { border-color: var(--color-success); }
+.task-del {
+  flex: none; width: var(--tap); margin: 0; padding: 0; background: transparent;
+  color: var(--color-text-tertiary); border-radius: 0;
+}
+.task-del svg { width: var(--size-icon); height: var(--size-icon); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.done-section { margin-top: var(--space-5); }
+.done-section summary {
+  min-height: var(--tap); display: flex; align-items: center; gap: var(--space-2); cursor: pointer; list-style: none;
+  font-size: var(--fs-subhead); color: var(--color-text-secondary);
+}
+.done-section summary::-webkit-details-marker { display: none; }
+.done-section summary::after { content: "▾"; transition: transform var(--dur-fast) var(--ease-out); } /* 開閉の印（I3-02） */
+.done-section[open] summary::after { transform: rotate(180deg); }
+.task-add { margin-top: var(--space-5); }
+.task-form { display: flex; flex-direction: column; gap: var(--space-1); scroll-margin-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4)); } /* 下のタブに隠れないように */
+.form-label { display: block; margin-top: var(--space-2); }
+.due-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.form-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: var(--space-3); }
+.form-actions .cut-btn { margin-top: 0; }
+#task-toast { bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4)); }
+/* トーストの文は 1 行に収め、「取り消す」は折り返さない（狭い画面でも押しやすく） */
+.toast > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast .undo { flex: none; white-space: nowrap; }
+
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

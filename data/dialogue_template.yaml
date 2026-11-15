@@ -98,6 +98,15 @@ idle_greeting:
         - "夜だな。続けるか休むかは、自分で決めればいい。"
         - "遅い時間だ。無理はするなよ。"
 
+screen_empty:
+  description: "各画面に表示するものがないときの一言（仮案。ユーザー確認待ち。D-026）"
+  conditions:
+    - id: tasks
+      when: "未完了のタスクがない"
+      lines:
+        - "今は抱えているものはないな。"
+        - "やることが出てきたら、ここに書いておけ。"
+
 evening_suggestion:
   description: "LLM呼び出し。セリフ集は使わない"
   prompt_guidance: >

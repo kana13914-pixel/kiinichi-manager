@@ -80,7 +80,45 @@
     </section>
 
     <section id="view-schedule" class="view"><h1><span class="label-en" aria-hidden="true">SCHEDULE</span>予定</h1><p class="note">この画面は次のタスクで作ります。</p></section>
-    <section id="view-tasks" class="view"><h1><span class="label-en" aria-hidden="true">TASKS</span>タスク</h1><p class="note">この画面は次のタスクで作ります。</p></section>
+    <!-- タスク（D-026 ①）：未完了（期限の近い順）→ 完了（下にまとめる）→ 追加。主ボタンは「＋ タスクを追加」1つ -->
+    <section id="view-tasks" class="view tasks">
+      <h1><span class="label-en" aria-hidden="true">TASKS</span>タスク</h1>
+
+      <section id="tasks-empty" class="dialogue dialogue-mini" aria-label="キィニチのセリフ" hidden>
+        <div class="nameplate" aria-hidden="true">キィニチ</div>
+        <p id="tasks-empty-line" class="line">…</p>
+      </section>
+
+      <ul id="task-list" class="task-list" aria-label="未完了のタスク"></ul>
+
+      <details id="done-section" class="done-section" hidden>
+        <summary><span>完了したタスク（<span id="done-count">0</span>）</span></summary>
+        <ul id="done-list" class="task-list" aria-label="完了したタスク"></ul>
+      </details>
+
+      <div class="task-add">
+        <button id="task-add-open" type="button" class="cut-btn primary">＋ タスクを追加</button>
+        <form id="task-form" class="task-form" hidden>
+          <label for="task-title">やること</label>
+          <input id="task-title" type="text" maxlength="100" autocomplete="off" enterkeyhint="done" required>
+          <span class="form-label" id="task-due-label">期限</span>
+          <div class="due-chips" role="group" aria-labelledby="task-due-label">
+            <button type="button" class="cut-btn quiet chip" data-due="today" aria-pressed="false">今日</button>
+            <button type="button" class="cut-btn quiet chip" data-due="tomorrow" aria-pressed="false">明日</button>
+            <button type="button" class="cut-btn quiet chip" data-due="none" aria-pressed="true">なし</button>
+          </div>
+          <label for="task-due">日付を選ぶ</label>
+          <input id="task-due" type="date">
+          <div class="form-actions">
+            <button id="task-cancel" type="button" class="cut-btn quiet">やめる</button>
+            <button id="task-submit" type="submit" class="cut-btn primary">追加</button>
+          </div>
+          <p id="task-form-status" class="status ng" role="status"></p>
+        </form>
+      </div>
+
+      <div id="task-toast" class="toast" role="status" hidden></div>
+    </section>
     <section id="view-timer" class="view"><h1><span class="label-en" aria-hidden="true">TIMER</span>タイマー</h1><p class="note">この画面は次のタスクで作ります。</p></section>
     <section id="view-report" class="view"><h1><span class="label-en" aria-hidden="true">REPORT</span>日報</h1><p class="note">この画面は次のタスクで作ります。</p></section>
 
@@ -122,5 +160,6 @@
   <script src="sample-data.js"></script>
   <script src="settings.js"></script>
   <script src="app.js"></script>
+  <script src="tasks.js"></script>
 </body>
 </html>
