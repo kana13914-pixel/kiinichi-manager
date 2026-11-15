@@ -644,11 +644,11 @@ class PwaTest(unittest.TestCase):
 
     def test_tasks_empty_state_shows_character_line(self):
         page = self.tasks_page()
-        page.wait_for_function("document.getElementById('tasks-empty-line').textContent !== '…'", timeout=3_000)
-        self.assertTrue(page.is_visible("#tasks-empty"))
+        page.wait_for_function("document.getElementById('tasks-say-line').textContent !== '…'", timeout=3_000)
+        self.assertTrue(page.is_visible("#tasks-say"))
         data = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))
         lines = data["screen_empty"]["conditions"][0]["lines"]
-        self.assertIn(page.text_content("#tasks-empty-line"), lines)
+        self.assertIn(page.text_content("#tasks-say-line"), lines)
         self.assertTrue(page.is_hidden("#done-section"))
 
     def test_add_task_with_due_chip_and_persist(self):
@@ -661,7 +661,7 @@ class PwaTest(unittest.TestCase):
         page.click("#task-submit")
         self.assertEqual(self.open_titles(page), ["資料を送る"])
         self.assertEqual(page.text_content("#task-list .task-due"), "明日まで")
-        self.assertTrue(page.is_hidden("#tasks-empty"))
+        self.assertEqual(page.text_content("#tasks-say-line"), "残りはこれだけだ。一つずつ片づけろ。")  # 0件のときとは別の一言
         self.assertTrue(page.is_visible("#task-add-open"))
         page.reload()
         page.wait_for_selector("#view-tasks", state="visible")
@@ -711,15 +711,61 @@ class PwaTest(unittest.TestCase):
         tasks = [{"id": k, "title": k, "due": None, "done": False, "createdAt": i} for i, k in enumerate(["一", "二", "三"])]
         page = self.tasks_page(tasks=tasks)
         page.click("#task-list li[data-id='二'] .task-del")
+        self.assertEqual(page.text_content("#confirm-text"), "「二」を削除しますか？")
+        self.assertEqual(self.open_titles(page), ["一", "二", "三"])  # 確認するまで消えない
+        page.click("#confirm-cancel")
+        self.assertTrue(page.is_hidden("#confirm"))
+        self.assertEqual(self.open_titles(page), ["一", "二", "三"])
+        page.click("#task-list li[data-id='二'] .task-del")
+        page.click("#confirm-ok")
+        page.wait_for_selector("#task-toast", state="visible", timeout=3_000)  # 確認の結果は非同期で届く
         self.assertEqual(self.open_titles(page), ["一", "三"])
         self.assertIn("削除しました", page.text_content("#task-toast"))
         page.click("#task-toast .undo")
         self.assertEqual(self.open_titles(page), ["一", "二", "三"])
         page.click("#task-list li[data-id='三'] .task-del")
+        page.click("#confirm-ok")
+        page.wait_for_selector("#task-toast", state="visible", timeout=3_000)  # 確認の結果は非同期で届く
         page.clock.run_for(5_100)
         self.assertTrue(page.is_hidden("#task-toast"))
         stored = json.loads(page.evaluate("localStorage.getItem('tasks.v1')"))
         self.assertEqual([t["title"] for t in stored], ["一", "二"])
+
+    def test_tasks_line_follows_situation(self):
+        def task(i, due):
+            return {"id": str(i), "title": f"t{i}", "due": due, "done": False, "createdAt": i}
+        page = self.tasks_page(tasks=[task(1, "2026-11-08"), task(2, "2026-11-09"), task(3, None)])
+        page.wait_for_function("document.getElementById('tasks-say-line').textContent !== '…'", timeout=3_000)
+        self.assertEqual(page.text_content("#tasks-say-line"), "期限を過ぎたものがある。やるか、期限を引き直すか決めろ。")
+        page.click("#task-list li[data-id='1'] .task-main")  # 期限切れを完了にする → 今日までが残る
+        page.wait_for_function("document.getElementById('tasks-say-line').textContent.startsWith('今日まで')", timeout=3_000)
+        self.assertEqual(page.text_content("#tasks-say-line"), "今日までのものがある。先にそっちだ。")
+        page.click("#task-list li[data-id='2'] .task-main")
+        page.wait_for_function("document.getElementById('tasks-say-line').textContent.startsWith('残り')", timeout=3_000)
+        page.click("#task-list li[data-id='3'] .task-main")  # 全部終わったら 0件のときの一言
+        lines = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))["screen_empty"]["conditions"][0]["lines"]
+        page.wait_for_function("lines => lines.includes(document.getElementById('tasks-say-line').textContent)", arg=lines, timeout=3_000)
+
+    def test_done_tasks_show_date_and_vanish_after_a_week(self):
+        def ms(day, hour=12):
+            return int(datetime(2026, 11, day, hour, 0, 0).timestamp() * 1000)
+        tasks = [
+            {"id": "old", "title": "先週", "due": None, "done": True, "doneAt": ms(2, 23), "createdAt": 1},   # 11/2 完了 → 11/9 に消える
+            {"id": "keep", "title": "七日目", "due": None, "done": True, "doneAt": ms(3, 0), "createdAt": 2},  # 11/3 完了 → 11/9 はまだ残る
+            {"id": "nodate", "title": "日付なし", "due": None, "done": True, "createdAt": 3},                  # 完了日なし → 今日完了した扱い
+            {"id": "open", "title": "未完了", "due": "2026-10-01", "done": False, "createdAt": 4},              # 未完了は古くても消さない
+        ]
+        page = self.tasks_page(tasks=tasks)
+        stored = {t["id"]: t for t in json.loads(page.evaluate("localStorage.getItem('tasks.v1')"))}
+        self.assertEqual(sorted(stored), ["keep", "nodate", "open"])
+        self.assertAlmostEqual(stored["nodate"]["doneAt"], ms(9, 10), delta=5_000)
+        self.assertEqual(page.text_content("#done-count"), "2")
+        page.click("#done-section summary")
+        self.assertIn("11/3(火) に完了", page.text_content("#done-list li[data-id=keep]"))
+        self.assertIn("1週間", page.text_content("#done-section .note"))
+        page.clock.fast_forward(14 * 3600_000 + 60_000)  # 日付が変わって 11/10 → 11/3 完了のものも消える
+        page.evaluate("Tasks.render()")
+        self.assertEqual(sorted(t["id"] for t in json.loads(page.evaluate("localStorage.getItem('tasks.v1')"))), ["nodate", "open"])
 
     def test_tasks_screen_one_gold_fill_and_touch_sizes(self):
         tasks = [{"id": "a", "title": "とても長いタスクの名前" * 4, "due": "2026-11-09", "done": False, "createdAt": 1}]
@@ -809,6 +855,33 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.input_value("#report-done"), "今日")
         page.click("#report-list li:first-child summary")
         self.assertIn("残り", page.text_content("#report-list li:first-child dl"))
+
+    def test_report_history_shows_seven_days_then_more(self):
+        reports = {f"2026-10-{d:02d}": {"mood": "normal", "done": f"{d}日", "savedAt": d} for d in range(10, 26)}  # 16日分
+        page = self.report_page(reports=reports)
+        self.assertEqual(len(page.query_selector_all("#report-list li")), 7)
+        self.assertEqual(page.text_content("#report-list li:first-child .report-item-date"), "10月25日(日)")
+        self.assertEqual(page.text_content("#report-more"), "もっと見る（残り9日分）")
+        page.click("#report-more")
+        self.assertEqual(len(page.query_selector_all("#report-list li")), 14)
+        page.click("#report-more")
+        self.assertEqual(len(page.query_selector_all("#report-list li")), 16)
+        self.assertTrue(page.is_hidden("#report-more"))
+        self.assertEqual(len(json.loads(page.evaluate("localStorage.getItem('reports.v1')"))), 16)  # データは消さない
+
+    def test_report_selected_mood_is_gold_outline_with_check(self):
+        page = self.report_page()
+        sel = "#report-form .mood[data-mood=good]"
+        self.assertTrue(page.is_hidden(sel + " .mood-check"))
+        page.click(sel)
+        self.assertTrue(page.is_visible(sel + " .mood-check"))
+        style = page.eval_on_selector(sel, """e => [getComputedStyle(e).color, getComputedStyle(e).backgroundColor,
+          getComputedStyle(e, '::before').backgroundColor]""")
+        self.assertEqual(style[:2], ["rgb(232, 196, 92)", "rgb(232, 196, 92)"])  # 金の文字・金の縁
+        self.assertNotEqual(style[2], "rgb(232, 196, 92)")  # 中は金で塗らない（金の塗りは「保存する」だけ）
+        other = page.eval_on_selector("#report-form .mood[data-mood=tired]", "e => getComputedStyle(e).color")
+        self.assertNotEqual(other, "rgb(232, 196, 92)")
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 393)
 
     def test_report_screen_one_gold_fill_and_inputs(self):
         page = self.report_page(size=(375, 667))
@@ -966,11 +1039,19 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.text_content("#timer-name"), "ストレッチ（10分）")
         page.click("#timer-stop")
         page.click("#timer-list li:last-child .task-del")
+        self.assertEqual(page.text_content("#confirm-text"), "「ストレッチ」を削除しますか？")
+        page.keyboard.press("Escape")  # Esc は「やめる」と同じ
+        self.assertEqual(len(page.query_selector_all("#timer-list li")), 5)
+        page.click("#timer-list li:last-child .task-del")
+        page.click("#confirm-ok")
+        page.wait_for_selector("#timer-toast", state="visible", timeout=3_000)  # 確認の結果は非同期で届く
         self.assertEqual(len(page.query_selector_all("#timer-list li")), 4)
         self.assertIn("削除しました", page.text_content("#timer-toast"))
         page.click("#timer-toast .undo")
         self.assertEqual(len(page.query_selector_all("#timer-list li")), 5)
         page.click("#timer-list li:last-child .task-del")
+        page.click("#confirm-ok")
+        page.wait_for_selector("#timer-toast", state="visible", timeout=3_000)  # 確認の結果は非同期で届く
         page.clock.run_for(5_100)
         self.assertTrue(page.is_hidden("#timer-toast"))
         self.assertEqual(self.timer_state(page)["custom"], [])

@@ -1,10 +1,12 @@
-// タスク画面（D-026 ①）。1件は「名前・期限（日付。なくてもよい）・完了」。
+// タスク画面（D-026 ①, D-031）。1件は「名前・期限（日付。なくてもよい）・完了」。
+// 完了したタスクは完了日を持ち、完了日から7日たつと自動で消す。削除は確認してから行う。
 // 保存は仮に localStorage（D-026 ⑤）。フェーズ2のデータ設計で移すか捨てるかを決める。
 // app.js の pad / dateStr / pickLine / dialogueReady を使うため、app.js の後に読み込む。
 
 const Tasks = (() => {
   const KEY = 'tasks.v1';
   const DONE_SHOWN = 30; // 完了したものは新しい順にここまで表示する
+  const KEEP_DONE_DAYS = 7; // 完了したタスクを残す日数（完了日を1日目として7日間。D-031）
 
   // ---------- 保存 ----------
   function load() {
@@ -33,6 +35,20 @@ const Tasks = (() => {
     if (due === today) return { text: '今日まで', overdue: false };
     if (due === tomorrow) return { text: '明日まで', overdue: false };
     return { text: `${label}まで`, overdue: false };
+  }
+  // 完了日から7日たったものを除く。完了日のない完了済み（古いデータ）は今日完了したことにする
+  function tidy(list, now = new Date()) {
+    const limit = dateStr(addDays(now, -KEEP_DONE_DAYS)); // この日までに完了したものを消す
+    let changed = false;
+    const kept = list.filter((t) => {
+      if (!t.done) return true;
+      if (!t.doneAt) { t.doneAt = now.getTime(); changed = true; }
+      return dateStr(new Date(t.doneAt)) > limit;
+    });
+    return { list: kept, changed: changed || kept.length !== list.length };
+  }
+  function dayLabel(ms) {
+    return new Date(ms).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short' });
   }
   // 未完了の並び：期限切れ・期限の近い順、期限なしは最後、同じなら作った順
   function sortOpen(list) {
@@ -75,6 +91,12 @@ const Tasks = (() => {
       due.textContent = info.text;
       body.append(due);
     }
+    if (task.done && task.doneAt) {
+      const at = document.createElement('span');
+      at.className = 'task-due';
+      at.textContent = `${dayLabel(task.doneAt)} に完了`;
+      body.append(at);
+    }
     main.append(box, body);
     main.addEventListener('click', () => toggle(task.id));
 
@@ -89,24 +111,34 @@ const Tasks = (() => {
     return li;
   }
 
-  let emptyShown = false;
+  // 一言の条件：0件 → 期限切れあり → 今日まであり → それ以外
+  function sayKey(open, now) {
+    if (open.length === 0) return 'screen_empty.tasks';
+    const today = dateStr(now);
+    if (open.some((t) => t.due && t.due < today)) return 'tasks_status.overdue';
+    if (open.some((t) => t.due === today)) return 'tasks_status.today';
+    return 'tasks_status.open';
+  }
+  let shownSay = null;
   function render(now = new Date()) {
-    const list = load();
+    const tidied = tidy(load(), now);
+    if (tidied.changed) save(tidied.list);
+    const list = tidied.list;
     const open = sortOpen(list);
     const done = sortDone(list);
     $('task-list').replaceChildren(...open.map((t) => row(t, now)));
     $('done-list').replaceChildren(...done.map((t) => row(t, now)));
     $('done-count').textContent = String(list.filter((t) => t.done).length);
     $('done-section').hidden = done.length === 0;
-    const empty = open.length === 0;
-    $('tasks-empty').hidden = !empty;
-    if (empty && !emptyShown) { // 空になったときだけセリフを選び直す（開くたびに変わらないように）
+    const key = sayKey(open, now);
+    if (key !== shownSay) { // 状況が変わったときだけセリフを選び直す（開くたびに変わらないように）
+      shownSay = key;
       dialogueReady.then(() => {
-        const picked = pickLine('screen_empty.tasks');
-        $('tasks-empty-line').textContent = picked ? picked.text : '…';
+        if (shownSay !== key) return;
+        const picked = pickLine(key);
+        $('tasks-say-line').textContent = picked ? picked.text : '…';
       });
     }
-    emptyShown = empty;
   }
 
   // ---------- 取り消し（5秒） ----------
@@ -157,7 +189,9 @@ const Tasks = (() => {
       hideToast(); // 完了→未完了に戻すのは、それ自体が取り消しなのでトーストは出さない
     }
   }
-  function remove(id) {
+  async function remove(id) {
+    const target = load().find((x) => x.id === id);
+    if (!target || !(await confirmDialog(`「${target.title}」を削除しますか？`))) return;
     const list = load();
     const index = list.findIndex((x) => x.id === id);
     if (index < 0) return;
@@ -228,5 +262,5 @@ const Tasks = (() => {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); });
   render();
 
-  return { load, dueInfo, sortOpen, render };
+  return { load, dueInfo, sortOpen, tidy, render };
 })();

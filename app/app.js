@@ -93,6 +93,20 @@ function renderClock(now = new Date()) {
 
 // ---------- 次の予定（今は仮データ） ----------
 // 今日の予定が尽きたら、明日の最初の予定を「明日」付きで出す（C7-03）
+// 削除の前の確認（I1-04, D-031）。「やめる」に最初のフォーカスを置く。枠の外を押す・Esc は「やめる」と同じ
+function confirmDialog(message, okLabel = '削除する') {
+  const dlg = document.getElementById('confirm');
+  document.getElementById('confirm-text').textContent = message;
+  document.getElementById('confirm-ok').textContent = okLabel;
+  return new Promise((resolve) => {
+    dlg.returnValue = '';
+    dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok'), { once: true });
+    dlg.showModal();
+    document.getElementById('confirm-cancel').focus();
+  });
+}
+document.getElementById('confirm').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+
 function nextEvent(now = new Date()) {
   const today = SampleData.todayEvents(now).find((e) => e.at > now);
   if (today) return { ...today, tomorrow: false };

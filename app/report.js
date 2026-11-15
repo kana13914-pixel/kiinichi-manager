@@ -5,7 +5,7 @@
 const Report = (() => {
   const KEY = 'reports.v1';
   const DAY_STARTS_AT = 4; // 時
-  const HISTORY_SHOWN = 60;
+  const HISTORY_STEP = 7; // 「これまでの日報」は7日分ずつ出す（D-031）。データは消さない
   const MOODS = { good: '元気', normal: 'ふつう', tired: '疲れた' };
   const $ = (id) => document.getElementById(id);
 
@@ -80,11 +80,16 @@ const Report = (() => {
     li.append(det);
     return li;
   }
+  let historyShown = HISTORY_STEP;
   function renderHistory(now = new Date()) {
     const all = load();
     const today = reportDate(now);
-    const keys = Object.keys(all).filter((k) => k !== today && /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().reverse().slice(0, HISTORY_SHOWN);
+    const every = Object.keys(all).filter((k) => k !== today && /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().reverse();
+    const keys = every.slice(0, historyShown);
     $('report-list').replaceChildren(...keys.map((k) => item(k, all[k])));
+    const rest = every.length - keys.length;
+    $('report-more').hidden = rest === 0;
+    $('report-more').textContent = `もっと見る（残り${rest}日分）`;
     const empty = keys.length === 0;
     $('report-history-empty').hidden = !empty;
     if (empty) {
@@ -131,6 +136,8 @@ const Report = (() => {
   for (const b of document.querySelectorAll('#report-form .mood')) {
     b.addEventListener('click', () => setMood(mood === b.dataset.mood ? null : b.dataset.mood)); // もう一度押すと解除
   }
+
+  $('report-more').addEventListener('click', () => { historyShown += HISTORY_STEP; renderHistory(); });
 
   function render(now = new Date()) {
     fillForm(now);

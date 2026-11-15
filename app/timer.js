@@ -218,7 +218,9 @@ const Timer = (() => {
   }
 
   // ---------- 利用者が作るタイマー ----------
-  function removeCustom(id) {
+  async function removeCustom(id) {
+    const target = load().custom.find((t) => t.id === id);
+    if (!target || !(await confirmDialog(`「${target.name}」を削除しますか？`))) return;
     const state = load();
     const index = state.custom.findIndex((t) => t.id === id);
     if (index < 0) return;
