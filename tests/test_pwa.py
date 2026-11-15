@@ -755,6 +755,72 @@ class PwaTest(unittest.TestCase):
           const tb = document.querySelector('.tabbar').getBoundingClientRect(); return [b.bottom, tb.top]; }""")
         self.assertLessEqual(r[0], r[1])
 
+    # ---------- 日報画面（D-026 ②, D-027） ----------
+    def report_page(self, hour=21, minute=0, day=9, reports=None, size=(393, 852)):
+        init = None
+        if reports is not None:
+            init = "localStorage.setItem('reports.v1', %s)" % json.dumps(json.dumps(reports))
+        page = self.clock_page(hour, minute, "#report", day=day, init_script=init, size=size)
+        page.wait_for_selector("#view-report", state="visible", timeout=3_000)
+        return page
+
+    def test_report_save_and_reload(self):
+        page = self.report_page()
+        self.assertEqual(page.text_content("#report-date"), "11月9日(月)の日報")
+        page.click("#report-form .mood[data-mood=tired]")
+        page.fill("#report-done", "資料を送った\n洗濯した")
+        page.fill("#report-left", "請求書")
+        page.fill("#report-tomorrow", "請求書を確認する")
+        page.click("#report-save")
+        self.assertEqual(page.text_content("#report-status"), "保存済み（21:00）")
+        self.assertEqual(page.text_content("#report-save"), "更新する")
+        page.wait_for_selector("#report-reply", state="visible", timeout=3_000)
+        self.assertEqual(page.text_content("#report-reply-line"), "記録した。疲れているなら、今日は早めに休め。")
+        stored = json.loads(page.evaluate("localStorage.getItem('reports.v1')"))["2026-11-09"]
+        self.assertEqual((stored["mood"], stored["done"], stored["left"], stored["tomorrow"]),
+                         ("tired", "資料を送った\n洗濯した", "請求書", "請求書を確認する"))
+        page.reload()
+        page.wait_for_selector("#view-report", state="visible")
+        self.assertEqual(page.input_value("#report-left"), "請求書")
+        self.assertEqual(page.get_attribute("#report-form .mood[data-mood=tired]", "aria-pressed"), "true")
+
+    def test_report_empty_is_not_saved(self):
+        page = self.report_page()
+        page.click("#report-save")
+        self.assertIn("1つの項目", page.text_content("#report-status"))
+        self.assertIsNone(page.evaluate("localStorage.getItem('reports.v1')"))
+
+    def test_report_before_4am_counts_as_previous_day(self):
+        page = self.report_page(hour=1, minute=30, day=10)
+        self.assertEqual(page.text_content("#report-date"), "11月9日(月)の日報")
+        page.fill("#report-done", "夜ふかし")
+        page.click("#report-save")
+        self.assertIn("2026-11-09", json.loads(page.evaluate("localStorage.getItem('reports.v1')")))
+
+    def test_report_history_newest_first_and_excludes_today(self):
+        reports = {
+            "2026-11-07": {"mood": "good", "done": "七日", "savedAt": 1},
+            "2026-11-08": {"mood": "normal", "done": "八日", "left": "残り", "savedAt": 2},
+            "2026-11-09": {"mood": "tired", "done": "今日", "savedAt": 3},
+        }
+        page = self.report_page(reports=reports)
+        dates = page.eval_on_selector_all("#report-list .report-item-date", "els => els.map(e => e.textContent)")
+        self.assertEqual(dates, ["11月8日(日)", "11月7日(土)"])
+        self.assertEqual(page.input_value("#report-done"), "今日")
+        page.click("#report-list li:first-child summary")
+        self.assertIn("残り", page.text_content("#report-list li:first-child dl"))
+
+    def test_report_screen_one_gold_fill_and_inputs(self):
+        page = self.report_page(size=(375, 667))
+        fills = page.evaluate("""() => [...document.querySelectorAll('#view-report *')]
+          .filter((e) => e.getClientRects().length && getComputedStyle(e).backgroundColor === 'rgb(232, 196, 92)')
+          .map((e) => e.id || e.className)""")
+        self.assertEqual(fills, ["report-save"])
+        sizes = page.eval_on_selector_all("#view-report input, #view-report textarea", "els => els.map(e => parseFloat(getComputedStyle(e).fontSize))")
+        self.assertTrue(all(sz >= 16 for sz in sizes), sizes)
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
+        page.wait_for_function("document.getElementById('report-history-empty').textContent.startsWith('キィニチ')", timeout=3_000)
+
 
 if __name__ == "__main__":
     unittest.main()

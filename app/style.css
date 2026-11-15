@@ -129,7 +129,7 @@ button {
 }
 button:active { transform: scale(0.97); filter: brightness(0.92); } /* I3-06 */
 :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; } /* P2-04 */
-input, .field {
+input, textarea, .field {
   width: 100%; min-height: var(--tap); padding: var(--space-2) var(--space-3);
   font: inherit; font-size: var(--fs-callout); /* V2-04：16px 未満だと iOS が画面を拡大する */
   color: var(--color-text); background: var(--color-bg-deep);
@@ -457,6 +457,26 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
 /* トーストの文は 1 行に収め、「取り消す」は折り返さない（狭い画面でも押しやすく） */
 .toast > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toast .undo { flex: none; white-space: nowrap; }
+
+/* ---------- 日報（D-026 ②, D-027） ---------- */
+.report-form { display: flex; flex-direction: column; gap: var(--space-1); }
+.report-date { margin: 0 0 var(--space-1); font-size: var(--fs-body); font-weight: 700; }
+.report-form textarea { resize: vertical; line-height: var(--lh-body); }
+.report-form #report-save { margin-top: var(--space-4); }
+.section-title { margin: var(--space-6) 0 var(--space-2); font-size: var(--fs-subhead); color: var(--color-text-secondary); }
+.report-list { list-style: none; margin: 0; padding: 0; }
+.report-item { box-shadow: inset 0 -1px 0 var(--color-gold-faint); }
+.report-item summary {
+  min-height: var(--size-record); display: flex; align-items: center; gap: var(--space-3); cursor: pointer; list-style: none;
+}
+.report-item summary::-webkit-details-marker { display: none; }
+.report-item summary::after { content: "▾"; margin-left: auto; color: var(--color-text-tertiary); }
+.report-item[open] summary::after { transform: rotate(180deg); }
+.report-item-date { font-size: var(--fs-body); }
+.report-item-mood { font-size: var(--fs-footnote); color: var(--color-text-secondary); }
+.report-item dl { display: block; padding: 0 0 var(--space-3); }
+.report-item dt { margin-top: var(--space-2); }
+.report-item dd { white-space: pre-wrap; font-size: var(--fs-body); line-height: var(--lh-body); }
 
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {

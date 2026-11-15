@@ -106,6 +106,26 @@ screen_empty:
       lines:
         - "今は抱えているものはないな。"
         - "やることが出てきたら、ここに書いておけ。"
+    - id: reports
+      when: "まだ日報が1件もない"
+      lines:
+        - "一日の終わりに、ここに書いておけ。"
+
+report_saved:
+  description: "日報を保存したときの一言。今日の調子で分ける（仮案。ユーザー確認待ち。D-027）"
+  conditions:
+    - id: good
+      when: "今日の調子＝元気"
+      lines:
+        - "記録した。明日はそこから始めればいい。"
+    - id: normal
+      when: "今日の調子＝ふつう、または未選択"
+      lines:
+        - "記録した。今日の分はこれで終わりだ。"
+    - id: tired
+      when: "今日の調子＝疲れた"
+      lines:
+        - "記録した。疲れているなら、今日は早めに休め。"
 
 evening_suggestion:
   description: "LLM呼び出し。セリフ集は使わない"

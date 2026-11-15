@@ -120,7 +120,39 @@
       <div id="task-toast" class="toast" role="status" hidden></div>
     </section>
     <section id="view-timer" class="view"><h1><span class="label-en" aria-hidden="true">TIMER</span>タイマー</h1><p class="note">この画面は次のタスクで作ります。</p></section>
-    <section id="view-report" class="view"><h1><span class="label-en" aria-hidden="true">REPORT</span>日報</h1><p class="note">この画面は次のタスクで作ります。</p></section>
+    <!-- 日報（D-026 ②, D-027）：今日の日報（4項目）→ 保存 → これまでの日報。主ボタンは「保存する」1つ -->
+    <section id="view-report" class="view report">
+      <h1><span class="label-en" aria-hidden="true">REPORT</span>日報</h1>
+
+      <form id="report-form" class="report-form">
+        <p id="report-date" class="report-date">-</p>
+        <span class="form-label" id="report-mood-label">今日の調子</span>
+        <div class="due-chips" role="group" aria-labelledby="report-mood-label">
+          <button type="button" class="cut-btn quiet chip mood" data-mood="good" aria-pressed="false">元気</button>
+          <button type="button" class="cut-btn quiet chip mood" data-mood="normal" aria-pressed="false">ふつう</button>
+          <button type="button" class="cut-btn quiet chip mood" data-mood="tired" aria-pressed="false">疲れた</button>
+        </div>
+        <label for="report-done">できたこと</label>
+        <textarea id="report-done" rows="3" maxlength="1000"></textarea>
+        <label for="report-left">やり残したこと</label>
+        <textarea id="report-left" rows="3" maxlength="1000"></textarea>
+        <label for="report-tomorrow">明日いちばんにやること</label>
+        <input id="report-tomorrow" type="text" maxlength="200" autocomplete="off" enterkeyhint="done">
+        <button id="report-save" type="submit" class="cut-btn primary">保存する</button>
+        <p id="report-status" class="status" role="status"></p>
+      </form>
+
+      <section id="report-reply" class="dialogue dialogue-mini" aria-label="キィニチのセリフ" hidden>
+        <div class="nameplate" aria-hidden="true">キィニチ</div>
+        <p id="report-reply-line" class="line">…</p>
+      </section>
+
+      <section class="report-history" aria-labelledby="report-history-title">
+        <h2 id="report-history-title" class="section-title">これまでの日報</h2>
+        <p id="report-history-empty" class="note" hidden>…</p>
+        <ul id="report-list" class="report-list"></ul>
+      </section>
+    </section>
 
     <!-- 設定：フェーズ0の検証情報もここに移した -->
     <section id="view-settings" class="view">
@@ -161,5 +193,6 @@
   <script src="settings.js"></script>
   <script src="app.js"></script>
   <script src="tasks.js"></script>
+  <script src="report.js"></script>
 </body>
 </html>
