@@ -33,10 +33,10 @@ PAIRS = [
     ("success", "bg", 4.5),
     ("success", "surface-1", 4.5),
     ("danger", "surface-1", 4.5),
-    ("danger", "scrim", 4.5),       # 「再生できません」はセリフの面の上
+    ("danger", "scrim", 4.5),       # セリフの面の上に注意の文字を出す場合
     ("border", "bg", 3.0),
     ("border", "surface-1", 3.0),
-    ("border", "scrim", 3.0),       # 「声を聞く」の枠はセリフの面の上
+    ("border", "scrim", 3.0),       # セリフの面の上に部品を置く場合
     # D-021（見た目の決まり v7）
     ("text", "bg-top", 4.5),
     ("text-secondary", "bg-top", 4.5),

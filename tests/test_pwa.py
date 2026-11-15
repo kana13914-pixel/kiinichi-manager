@@ -92,15 +92,6 @@ class PwaTest(unittest.TestCase):
         page.goto(self.base + "index.html?source=ntfy")
         self.assertEqual(page.text_content("#source"), "通知（ntfy）のタップ")
 
-    def test_one_tap_plays_audio_after_opening_from_notification(self):
-        page = self.new_page(permissions=["notifications"], init_script=READY)
-        page.goto(self.base + "index.html?source=webpush&mode=standalone")
-        self.assertEqual(page.get_attribute("body", "data-state"), "ready")
-        self.assertEqual(page.text_content("#audio-status"), "未再生")
-        page.click("#play-voice")  # ボタン1回
-        page.wait_for_selector("#audio-status.ok", timeout=5_000)
-        page.wait_for_function("document.getElementById('audio-status').textContent === '再生完了'", timeout=5_000)
-
     def test_send_page_posts_scheduled_notification_to_ntfy(self):
         page = self.new_page()
         sent = []
@@ -303,7 +294,10 @@ class PwaTest(unittest.TestCase):
     def test_opened_from_notification_shows_that_triggers_line(self):
         page = self.ready_page("&source=webpush&trigger=midday_check.meal_overdue")
         page.wait_for_function("document.getElementById('bubble-text').textContent.includes('飯の時間')", timeout=3_000)
-        self.assertIn("ready", page.get_attribute("#play-voice", "class"))
+        # 声の再生は見送り（D-023）。通知のセリフはセリフの面の上辺を金にして示す（D-024）
+        self.assertTrue(page.evaluate("document.body.classList.contains('from-notification')"))
+        top = page.eval_on_selector(".dialogue", "e => getComputedStyle(e).getPropertyValue('--dlg-top')")
+        self.assertIn("e8c45c", top.lower())
 
     def test_record_button_shows_template_line(self):
         page = self.ready_page()
@@ -342,17 +336,16 @@ class PwaTest(unittest.TestCase):
             with self.subTest(size=size):
                 page = self.clock_page(9, 3, size=size, safe=safe)
                 m = page.evaluate("""() => {
-                  const v = document.getElementById('play-voice').getBoundingClientRect();
+                  const d = document.querySelector('.dialogue').getBoundingClientRect();
                   const acts = [...document.querySelectorAll('.act')].map((b) => {
                     const lh = parseFloat(getComputedStyle(b).lineHeight) || parseFloat(getComputedStyle(b).fontSize) * 1.3;
                     return { h: b.getBoundingClientRect().height, sw: b.scrollWidth, cw: b.clientWidth, top: b.getBoundingClientRect().top };
                   });
                   return { sh: document.documentElement.scrollHeight, ih: innerHeight,
-                           vTop: v.top, vH: v.height, acts };
+                           dBottom: d.bottom, acts };
                 }""")
                 self.assertLessEqual(m["sh"], m["ih"], f"{size} ではみ出している")
-                self.assertGreaterEqual(m["vH"], 44)
-                self.assertGreater(m["vTop"], m["ih"] / 2, "声を聞くは下半分に（I1-02）")
+                self.assertLess(m["dBottom"], min(a["top"] for a in m["acts"]), "セリフの面は記録ボタンより上")
                 for a in m["acts"]:
                     self.assertLessEqual(a["sw"], a["cw"], "記録ボタンのラベルが収まっていない")
                     self.assertGreater(a["top"], m["ih"] / 2)
@@ -393,7 +386,6 @@ class PwaTest(unittest.TestCase):
                 page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
                 self.assertIn(page.text_content("#bubble-text"), self.idle_lines(period))
                 self.assertEqual(page.get_attribute("body", "data-period"), period)
-                self.assertNotIn("ready", page.get_attribute("#play-voice", "class") or "")
 
     def test_line_is_not_repeated(self):
         page = self.clock_page(13, 0)
@@ -410,22 +402,6 @@ class PwaTest(unittest.TestCase):
         self.assertIn(page.text_content("#bubble-text"),
                       ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"])
 
-    # ---------- 声を聞く（T06） ----------
-    def test_voice_label_resets_on_new_line(self):
-        page = self.clock_page(12, 41, "&source=webpush&trigger=midday_check.meal_overdue&line=0")
-        page.wait_for_function("document.getElementById('bubble-text').textContent.includes('飯')", timeout=3_000)
-        self.assertEqual(page.get_attribute("#play-voice", "data-state"), "idle")
-        self.assertEqual(page.text_content("#play-voice .voice-label"), "声を聞く")
-        page.click("#play-voice")
-        page.clock.run_for(3_000)
-        page.wait_for_function("document.getElementById('play-voice').dataset.state === 'ended'", timeout=5_000)
-        self.assertEqual(page.text_content("#play-voice .voice-label"), "もう一度聞く")
-        self.assertNotIn("ready", page.get_attribute("#play-voice", "class"))
-        page.click(".act[data-record=work_start]")
-        self.assertEqual(page.get_attribute("#play-voice", "data-state"), "idle")
-        self.assertEqual(page.text_content("#play-voice .voice-label"), "声を聞く")
-
-    # ---------- 主ボタンは 1 つ（T08, D-019 Q7=保存する） ----------
     def primaries(self, page):
         return page.eval_on_selector_all(".act.primary", "els => els.map(e => e.dataset.record)")
 
@@ -438,8 +414,8 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(self.primaries(page), ["work_start"])
         page = self.clock_page(12, 41, "&source=webpush&trigger=midday_check.meal_overdue&line=0")
         page.wait_for_function("document.body.classList.contains('from-notification')", timeout=3_000)
-        self.assertEqual(self.primaries(page), [])
-        self.assertIn("ready", page.get_attribute("#play-voice", "class"))
+        self.assertEqual(self.primaries(page), ["work_start"])  # 通知から開いても記録ボタンは普段どおり（D-024）
+        self.assertIsNone(page.query_selector("#play-voice"))
 
     ACCENT_SCAN = """(allowedBorder) => {
       const ACCENT = 'rgb(232, 196, 92)';
@@ -465,11 +441,11 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(len(r["bg"]), 1, r)
         self.assertEqual(r["colorBad"], [], r)
         self.assertEqual(r["borderBad"], [], r)
-        # 通知から開いた直後（12:41）：塗りは「声を聞く」だけ、枠は名前欄・セリフの面・声を聞くだけ
+        # 通知から開いた直後（12:41）：塗りは主ボタン（仕事開始）1つだけ（D-024）
         page = self.clock_page(12, 41, "&source=webpush&trigger=midday_check.meal_overdue&line=0")
         page.wait_for_function("document.body.classList.contains('from-notification')", timeout=3_000)
-        r = page.evaluate(self.ACCENT_SCAN, [".nameplate", ".dialogue", "#play-voice"])
-        self.assertEqual(r["bg"], ["play-voice"], r)
+        r = page.evaluate(self.ACCENT_SCAN, [".nameplate"])
+        self.assertEqual(len(r["bg"]), 1, r)
         self.assertEqual(r["borderBad"], [], r)
 
     # ---------- 記録の完了表示・取り消し・当日分の保存（T09, D-019 Q7=保存する） ----------
@@ -548,7 +524,6 @@ class PwaTest(unittest.TestCase):
         self.hide_and_return(page, 15 * 3600 * 1000)  # 15時間後（22:12）に戻る
         self.assertEqual(page.get_attribute("body", "data-period"), "night")
         self.assertFalse(page.evaluate("document.body.classList.contains('from-notification')"))
-        self.assertNotIn("ready", page.get_attribute("#play-voice", "class") or "")
         self.assertIn(page.text_content("#bubble-text"), self.idle_lines("night"))
         self.assertEqual(page.text_content("#clock-time"), "22:12")
 
@@ -567,8 +542,7 @@ class PwaTest(unittest.TestCase):
           type: 'open-url', url: location.origin + '/index.html?source=webpush&trigger=midday_check.meal_overdue&line=0' } }))""")
         page.wait_for_function("document.body.classList.contains('from-notification')", timeout=3_000)
         self.assertEqual(page.text_content("#bubble-text"), "そろそろ飯の時間、過ぎてるぞ。")
-        self.assertIn("ready", page.get_attribute("#play-voice", "class"))
-        self.assertEqual(self.primaries(page), [])
+        self.assertEqual(self.primaries(page), ["work_start"])
 
     def test_records_reload_when_date_changes(self):
         page = self.clock_page(23, 58)
@@ -592,16 +566,6 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.eval_on_selector("#bubble-text", "e => getComputedStyle(e).animationName"), "hook-in")
         page.emulate_media(reduced_motion="reduce")
         self.assertEqual(page.eval_on_selector("#bubble-text", "e => getComputedStyle(e).animationName"), "none")
-
-    def test_notification_pulse_uses_transform(self):
-        # clip-path は外側の光を切るので、脈動は拡大縮小で示す（D-022 ①）
-        page = self.clock_page(12, 41, "&source=webpush&trigger=midday_check.meal_overdue&line=0")
-        page.wait_for_function("document.body.classList.contains('from-notification')", timeout=3_000)
-        self.assertEqual(page.eval_on_selector("#play-voice", "e => getComputedStyle(e).animationName"), "voice-pulse")
-        css = (APP_DIR / "style.css").read_text(encoding="utf-8")
-        frames = css.split("@keyframes voice-pulse", 1)[1].split("}\n}", 1)[0]
-        self.assertIn("transform", frames)
-        self.assertNotIn("box-shadow", frames)
 
     def test_focus_shows_gold_edge_on_cut_buttons(self):
         page = self.clock_page(13, 30)  # 主ボタンなしの時間
@@ -656,6 +620,15 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(r["border"], "none")
         self.assertTrue(r["clip"])
         self.assertEqual(r["before"], '""')
+
+    def test_no_voice_button(self):
+        # 声の再生は見送り（D-023）。ボタンも音のファイルもない
+        page = self.clock_page(12, 41, "&source=webpush&trigger=midday_check.meal_overdue&line=0")
+        self.assertIsNone(page.query_selector("#play-voice"))
+        self.assertIsNone(page.query_selector("#audio-status"))
+        sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")
+        self.assertNotIn("audio", sw)
+        self.assertFalse((APP_DIR / "audio").exists())
 
 
 if __name__ == "__main__":

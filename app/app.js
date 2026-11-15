@@ -1,7 +1,7 @@
 // マネージャー本体。初回導線（D-009）、ホーム画面（D-019・見た目は D-021）、設定画面（確認用の起動状態）を扱う。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase1-v7';
+const APP_VERSION = 'phase1-v8';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -185,15 +185,13 @@ function pickLine(key, { index } = {}) {
   return { text: lines[i], index: i };
 }
 
-// セリフを表示する。ready が真なら「声を聞く」を主ボタンにする
-function showLine(key, { index, ready = false } = {}) {
+// セリフを表示する（声の再生は見送り。D-023）
+function showLine(key, { index } = {}) {
   const picked = pickLine(key, { index });
   if (!picked) return false;
   const bubble = document.getElementById('bubble-text');
   bubble.textContent = picked.text;
   bubble.classList.remove('line-enter'); void bubble.offsetWidth; bubble.classList.add('line-enter'); // CR-M01：入りの動きをやり直す
-  document.getElementById('play-voice').classList.toggle('ready', ready);
-  setVoiceState('idle'); // 新しいセリフが出たら「声を聞く」に戻す（C2-02）
   return true;
 }
 
@@ -201,8 +199,6 @@ function showLine(key, { index, ready = false } = {}) {
 function showIdle(now = new Date()) {
   if (showLine('idle_greeting.' + periodOf(now))) return;
   document.getElementById('bubble-text').textContent = '…';
-  document.getElementById('play-voice').classList.remove('ready');
-  setVoiceState('idle');
 }
 
 // ---------- 主ボタン（金の塗り）は 1 つ（V3-02, C4-02） ----------
@@ -214,22 +210,19 @@ function inHours(btn, hour) {
 }
 function markPrimary(now = new Date()) {
   const acts = [...document.querySelectorAll('.act')];
-  let primary = null;
-  if (!document.body.classList.contains('from-notification')) { // 通知から開いた直後は「声を聞く」が主
-    primary = acts.find((b) => !b.classList.contains('done') && inHours(b, now.getHours())) || null;
-  }
+  // 通知から開いた直後も普段どおり（「声を聞く」を見送ったため、通知のセリフは面の金の上辺だけで示す。D-024）
+  const primary = acts.find((b) => !b.classList.contains('done') && inHours(b, now.getHours())) || null;
   for (const b of acts) b.classList.toggle('primary', b === primary);
 }
 
 // ---------- 通知から開いた状態（C5-03。source=webpush のときだけ。ntfy は PWA で開かない） ----------
+// セリフの面の上辺を金にする。記録するか、10分以上裏に置くと終わる（D-024）
 function startNotificationState() {
   document.body.classList.add('from-notification');
-  voiceBtn.classList.add('ready');
   markPrimary();
 }
 function endNotificationState() {
   document.body.classList.remove('from-notification');
-  voiceBtn.classList.remove('ready');
   markPrimary();
 }
 
@@ -238,7 +231,7 @@ function applyOpenParams(params, now = new Date()) {
   const trigger = params.get('trigger');
   const index = params.has('line') ? Number(params.get('line')) : undefined; // Number(null) は 0 になるため has を確かめる
   const fromPush = params.get('source') === 'webpush';
-  if (trigger && showLine(trigger, { index, ready: fromPush })) {
+  if (trigger && showLine(trigger, { index })) {
     if (fromPush) startNotificationState(); else markPrimary(now);
     return;
   }
@@ -316,7 +309,6 @@ function undoRecord() {
   const bubble = document.getElementById('bubble-text');
   if (prevLine !== undefined && bubble.textContent === reactionLine) {
     bubble.textContent = prevLine;
-    setVoiceState('idle');
   }
   hideToast();
   markPrimary();
@@ -331,7 +323,7 @@ for (const btn of document.querySelectorAll('.act')) {
     const now = new Date();
     const prevLine = document.getElementById('bubble-text').textContent;
     if (document.body.classList.contains('from-notification')) endNotificationState(); // 記録に移ったら通知の強調は終える（D-020）
-    showLine(btn.dataset.trigger, { ready: false }); // 反応のセリフ。主ボタンが2つにならないよう ready は付けない
+    showLine(btn.dataset.trigger); // 反応のセリフ
     const time = hm(now);
     setDone(btn, time);
     const r = loadRecords(now);
@@ -376,39 +368,6 @@ if ('serviceWorker' in navigator) {
     dialogueReady.then(() => applyOpenParams(new URL(e.data.url, location.href).searchParams));
   });
   if (navigator.serviceWorker.startMessages) navigator.serviceWorker.startMessages();
-}
-
-// ---------- 声を聞く（C2-02）：idle「声を聞く」/ playing「再生中」/ ended「もう一度聞く」/ error「再生できません」 ----------
-// 今はテスト用チャイム（合成音）。本番の声素材は人間が用意する（H-005）。
-const VOICE_LABELS = { idle: '声を聞く', playing: '再生中', ended: 'もう一度聞く', error: '再生できません' };
-const voiceBtn = document.getElementById('play-voice');
-function setVoiceState(state) {
-  voiceBtn.dataset.state = state;
-  voiceBtn.querySelector('.voice-label').textContent = VOICE_LABELS[state];
-}
-// 読み上げ専用の状態テキスト。setText は className を上書きして .sr-only を消すので使わない（I4-02）
-function setAudioStatus(text, cls) {
-  const el = document.getElementById('audio-status');
-  el.textContent = text;
-  el.classList.remove('ok', 'ng');
-  if (cls) el.classList.add(cls);
-}
-const voice = new Audio('audio/test-chime.wav');
-voice.preload = 'auto';
-voice.addEventListener('playing', () => { setVoiceState('playing'); setAudioStatus('再生中', 'ok'); });
-voice.addEventListener('ended', () => {
-  setVoiceState('ended');
-  setAudioStatus('再生完了', 'ok');
-  onVoiceEnded();
-});
-voiceBtn.addEventListener('click', () => {
-  voice.currentTime = 0;
-  voice.play().catch((e) => { setVoiceState('error'); setAudioStatus('再生失敗: ' + e.name, 'ng'); }); // error で押すと再試行
-});
-// 再生が終わったら主ボタンの塗りを外し、通知から開いた状態を終える（C5-03）
-function onVoiceEnded() {
-  voiceBtn.classList.remove('ready');
-  if (document.body.classList.contains('from-notification')) endNotificationState();
 }
 
 // Web Push：ボタン操作 → 通知許可 → 購読 → 送信サーバーに登録

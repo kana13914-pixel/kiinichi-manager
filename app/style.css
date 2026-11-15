@@ -200,19 +200,6 @@ body[data-state="ready"] #main { display: block; }
   min-height: calc(2em * var(--lh-body)); /* P3-02：セリフが入る前に高さを確保 */
   line-break: strict; text-wrap: pretty; /* V2-07 */
 }
-.dialogue-foot { display: flex; justify-content: flex-end; margin-top: var(--space-2); }
-/* 「声を聞く」（C2-02, V3-08）：通常は金を使わない。主ボタンのときだけ塗る。再生中は枠だけ金 */
-button.voice {
-  display: inline-flex; align-items: center; gap: var(--space-2);
-  width: auto; margin-top: 0; min-height: var(--tap); padding: 0 var(--space-4);
-  font-size: var(--fs-subhead); font-weight: 700; border-radius: var(--radius-pill);
-  background: transparent; color: var(--color-text); border: 1px solid var(--color-border);
-}
-button.voice svg { width: var(--size-icon-s); height: var(--size-icon-s); fill: currentColor; }
-button.voice.ready { background: var(--color-accent); color: var(--color-on-accent); border-color: var(--color-accent); }
-button.voice[data-state="playing"] { background: var(--color-accent-soft); color: var(--color-text); border-color: var(--color-accent); }
-button.voice[data-state="error"] { color: var(--color-danger); border-color: var(--color-danger); }
-
 /* 次の予定の帯（C7-02, C7-03） */
 .next-strip { background: var(--color-surface-1); border-radius: var(--radius-m); padding: var(--space-2) var(--space-4) var(--space-3); }
 .next-head { display: flex; justify-content: space-between; align-items: baseline; }
@@ -232,15 +219,6 @@ button.voice[data-state="error"] { color: var(--color-danger); border-color: var
 }
 /* 今押すもの（主ボタン）は 1 つだけ金で塗る（V3-02, C4-02） */
 .record-dock .act.primary { background: var(--color-accent); color: var(--color-on-accent); border-color: var(--color-accent); }
-
-/* 通知から開いた直後（C5-03）：セリフの面の縁を金に、「声を聞く」を 2 回だけ脈動させる */
-body.from-notification .dialogue { border-color: var(--color-accent); }
-body.from-notification button.voice.ready { animation: voice-pulse 1.2s var(--ease-out) 2; }
-/* 斜めの部品は clip-path で外側の光が切れるため、拡大縮小で脈動させる（CR-S05, D-022 ①） */
-@keyframes voice-pulse {
-  0%, 100% { transform: none; }
-  45% { transform: scale(1.06); }
-}
 
 /* 記録済み（I3-02, V3-05）：塗りなし・成功色の文字・破線の枠 */
 .record-dock .act.done {
@@ -347,20 +325,16 @@ body.from-notification .dialogue { --dlg-top: var(--color-accent); }
 .line.line-enter { animation: hook-in var(--dur-hook) var(--ease-hook) both; } /* CR-M01 */
 @keyframes hook-in { from { opacity: 0; transform: translateX(calc(var(--shift-hook) * -1)); } to { opacity: 1; transform: none; } }
 
-/* ボタン：角を斜めに落とす。縁は ::before を 1px 内側に重ねて描く（CR-S02） */
-button.voice, .record-dock .act {
+/* 記録ボタン：角を斜めに落とす。縁は ::before を 1px 内側に重ねて描く（CR-S02） */
+.record-dock .act {
   --btn-line: var(--color-line); --btn-fill: var(--color-surface-2); --btn-cut: var(--cut-s);
   position: relative; isolation: isolate; border: 0; border-radius: 0; background: var(--btn-line);
   clip-path: polygon(var(--btn-cut) 0, 100% 0, 100% calc(100% - var(--btn-cut)), calc(100% - var(--btn-cut)) 100%, 0 100%, 0 var(--btn-cut));
 }
-button.voice::before, .record-dock .act::before {
+.record-dock .act::before {
   content: ""; position: absolute; inset: 1px; z-index: -1; background: var(--btn-fill);
   clip-path: polygon(calc(var(--btn-cut) - var(--cut-fix)) 0, 100% 0, 100% calc(100% - var(--btn-cut) + var(--cut-fix)), calc(100% - var(--btn-cut) + var(--cut-fix)) 100%, 0 100%, 0 calc(var(--btn-cut) - var(--cut-fix)));
 }
-button.voice { --btn-fill: var(--color-ink); letter-spacing: 0.04em; }
-button.voice.ready { --btn-line: var(--color-accent); --btn-fill: var(--color-accent); background: var(--btn-line); color: var(--color-on-accent); }
-button.voice[data-state="playing"] { --btn-line: var(--color-accent); --btn-fill: var(--color-ink); background: var(--btn-line); color: var(--color-text); }
-button.voice[data-state="error"] { --btn-line: var(--color-danger); background: var(--btn-line); }
 .record-dock { gap: var(--space-3); }
 .record-dock .act { --btn-fill: var(--color-surface-1); --btn-cut: var(--cut-m); letter-spacing: 0.06em; }
 .record-dock .act.primary { --btn-line: var(--color-accent); --btn-fill: var(--color-accent); background: var(--btn-line); color: var(--color-on-accent); font-weight: 700; }
@@ -383,7 +357,7 @@ button.voice[data-state="error"] { --btn-line: var(--color-danger); background: 
 .next-time { font-size: var(--fs-title2); letter-spacing: -0.01em; }
 
 /* 選択中（フォーカス）：clip-path が outline を切り落とすので、縁を金にして示す（CR-S05, D-022 ②, P2-04） */
-button.voice:focus-visible, .record-dock .act:focus-visible { outline: none; --btn-line: var(--color-accent); background: var(--btn-line); }
+.record-dock .act:focus-visible { outline: none; --btn-line: var(--color-accent); background: var(--btn-line); }
 
 /* タブバー：いちばん奥の黒 ＋ 上辺に段々の帯 ＋ 選択中は金の短い線（CR-L02） */
 .tabbar { background: var(--color-ink); border-top: 0; }
