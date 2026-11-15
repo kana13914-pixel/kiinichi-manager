@@ -1,4 +1,5 @@
 """スタイルの決まりごとの検証（M2-01, V3-01）。"""
+import json
 import re
 import subprocess
 import sys
@@ -56,6 +57,20 @@ class StyleTest(unittest.TestCase):
             labels = re.findall(r'<span class="label-en"([^>]*)>', part)
             self.assertEqual(len(labels), 1, view)
             self.assertIn('aria-hidden="true"', labels[0], view)
+
+    def test_decoration_images_are_cached(self):
+        """装飾の画像はすべて Service Worker の ASSETS に入っている（オフラインでも同じ見た目）。立ち絵は任意なので除く。"""
+        sw = (ROOT / "app" / "sw.js").read_text(encoding="utf-8")
+        imgs = sorted(p.name for p in (ROOT / "app" / "img").glob("*.svg"))
+        self.assertTrue(imgs)
+        for name in imgs:
+            self.assertIn(f"'./img/{name}'", sw, name)
+
+    def test_manifest_colors_match_ground(self):
+        m = json.loads((ROOT / "app" / "manifest.webmanifest").read_text(encoding="utf-8"))
+        css = CSS.read_text(encoding="utf-8")
+        self.assertIn(f"--color-bg-top: {m['theme_color']};", css)
+        self.assertIn(f"--color-bg: {m['background_color']};", css)
 
 
 if __name__ == "__main__":

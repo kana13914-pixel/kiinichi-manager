@@ -16,6 +16,7 @@ Claude Codeが自力で完了できない作業をここに追記する。追記
 | H-010 | 2026-11-06 | GitHubのリポジトリ otamesi1.01 で `otamesi-upload/otamesi-upload/` フォルダを開き、新しいzipを展開した中身（`app`・`docs`・`tests`・`worker` フォルダなど）を「Upload files」でドラッグ＆ドロップして上書きコミットする。数分後、`…/app/index.html` に「Web Push」の欄が出ればOK | フェーズ0 Web Push検証 | 完了（2026-11-07）。ファイルは `otamesi-upload/otamesi-upload/otamesi-update-webpush/` に入ったため、公開URLは https://kana13914-pixel.github.io/kiinichi-manager/app/index.html に変更。ホーム画面のアイコンは新しいURLで追加し直す |
 | H-011 | 2026-11-07 | 予約通知の遅れ対策。`docs/cloudflare_setup.md` の「3b. D1」の手順でD1データベースを作り、変数名 `DB` でWorkerにつなぎ、新しい `worker/worker.js` を貼り付け直してデプロイする。続けて GitHub の `otamesi-update-webpush/app/` に新しい `send.js` と `sw.js` を上書きアップロードし、roadmap.md の再検証手順で遅れた秒数を教えてほしい | フェーズ0 Web Push検証（予約） | 完了（2026-11-07）。予約の保存先D1、遅延約20秒（D-013） |
 | H-012 | 2026-11-07 | 【相談】公開URLとアップロードの整理（フェーズ1の準備）。次のどちらかを選んでほしい：(a) Claudeに新しいリポジトリへのpush権限を付与する（この画面から追加できる）。Claudeが手元の履歴ごとリポジトリ直下に `app/` がある形で直接反映するので、以後アップロード作業は不要になる (b) 今のリポジトリを人間が整理する（`otamesi-update-webpush` の中身を直下に移すか、新しいリポジトリに上げ直す）。どちらの場合も、公開URLが変わるのでホーム画面のアイコン追加と通知の有効化をやり直す必要がある | フェーズ1 準備 | 完了（2026-11-07）。kiinichi-managerでGitHub Pages公開、iPhoneでホーム画面追加・通知有効化、送信ページの「今すぐ」「1分後」でホーム画面のアプリが開くことを確認 |
+| H-013 | 2026-11-15 | 立ち絵を用意してほしい（急がない）。オリジナルの絵に限る（公式の立ち絵・それをなぞった絵は不可）。透過 WebP（または PNG）、縦横比 3:4、長辺 1,200px 以下、足元に余白なし。ファイル名を `portrait.webp`（または `portrait.png`）にしてチャットに添付すれば、Claude が `app/img/` に置いて反映する。コードの書き換えは不要（D-022 ④。手順は `docs/roadmap.md` の「立ち絵の差し替え手順」） | 見た目 v7 | 未対応（受け入れ準備は済み） |
 
 ## 記入例
 
