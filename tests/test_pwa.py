@@ -146,7 +146,7 @@ class PwaTest(unittest.TestCase):
         page.route("https://kiinichi.example.workers.dev/**", fake_worker)
         page.goto(self.base + "send.html")
         # 送信サーバーのURLは最初から入っている（D-014）。合言葉は空
-        self.assertEqual(page.input_value("#wp-worker-url"), "https://kiinichi-push.redacted.workers.dev")
+        self.assertEqual(page.input_value("#wp-worker-url"), "https://kiinichi-push.numwm.workers.dev")
         self.assertEqual(page.input_value("#wp-token"), "")
         page.click("#wp-send")
         self.assertIn("合言葉", page.text_content("#wp-status"))  # 合言葉が未入力なら入力を促す
@@ -208,7 +208,7 @@ class PwaTest(unittest.TestCase):
             else:
                 route.fulfill(status=200, content_type="application/json", headers=cors, body='{"ok":true}')
 
-        page.route("https://kiinichi-push.redacted.workers.dev/**", fake_worker)
+        page.route("https://kiinichi-push.numwm.workers.dev/**", fake_worker)
         page.goto(self.base + "index.html?mode=standalone")
         self.assertEqual(page.get_attribute("body", "data-state"), "setup")
         self.assertFalse(page.is_visible("#main"))
@@ -911,7 +911,7 @@ class PwaTest(unittest.TestCase):
 
 
     # ---------- タイマー画面（D-026 ③, D-028） ----------
-    WORKER = "https://kiinichi-push.redacted.workers.dev"
+    WORKER = "https://kiinichi-push.numwm.workers.dev"
     GOLD_FILLS = """() => [...document.querySelectorAll('#view-timer *')]
       .filter((e) => e.getClientRects().length && getComputedStyle(e).backgroundColor === 'rgb(232, 196, 92)')
       .map((e) => e.id || e.className)"""
@@ -1483,6 +1483,13 @@ class PwaTest(unittest.TestCase):
         page.click(".act[data-record=wake]")
         self.assertIn("保存できませんでした", page.text_content("#toast"))
         self.assertNotIn("done", page.get_attribute(".act[data-record=wake]", "class"))
+
+    def test_old_saved_worker_url_is_dropped(self):
+        # 送信サーバーの URL を変えた（D-035）。端末に残った以前の URL は使わず、消す
+        page = self.new_page(init_script="localStorage.setItem('phase0.workerUrl', 'https://old.example.workers.dev')")
+        page.goto(self.base + "send.html")
+        self.assertEqual(page.input_value("#wp-worker-url"), "https://kiinichi-push.numwm.workers.dev")
+        self.assertIsNone(page.evaluate("localStorage.getItem('phase0.workerUrl')"))
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")

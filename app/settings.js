@@ -2,9 +2,11 @@
 // ユーザーが画面で入力し、この端末のブラウザ内（localStorage）にだけ保存する。コードやリポジトリには書かない。
 // 注意：iPhoneでは Safari とホーム画面のアプリで保存場所が別なので、それぞれで入力が必要。
 const Settings = (() => {
-  const KEYS = { workerUrl: 'phase0.workerUrl', appToken: 'phase0.appToken' };
+  const KEYS = { workerUrl: 'workerUrl.v2', appToken: 'phase0.appToken' };
+  // 送信サーバーの URL を変えた（D-035）。端末に残っている以前の URL は使わず、消す（残っていると古い送信先に送り続けるため）
+  try { localStorage.removeItem('phase0.workerUrl'); } catch (_) {}
   // 送信サーバーのURLは秘密ではないのでコードに書く（D-014）。合言葉は書かない
-  const DEFAULTS = { workerUrl: 'https://kiinichi-push.redacted.workers.dev', appToken: '' };
+  const DEFAULTS = { workerUrl: 'https://kiinichi-push.numwm.workers.dev', appToken: '' };
   function get(name) {
     try { return localStorage.getItem(KEYS[name]) || DEFAULTS[name]; } catch (_) { return DEFAULTS[name]; }
   }
