@@ -139,10 +139,15 @@ function queueStore(env) {
         await init();
         return (await env.DB.prepare('SELECT COUNT(*) AS n FROM queue').first()).n;
       },
+      // 同じ id があれば置き換える（キー付きの予約の上書き。D-015）
       async add(item) {
         await init();
-        await env.DB.prepare('INSERT INTO queue (id, at, title, body, url) VALUES (?, ?, ?, ?, ?)')
+        await env.DB.prepare('INSERT OR REPLACE INTO queue (id, at, title, body, url) VALUES (?, ?, ?, ?, ?)')
           .bind(item.id, item.at, item.title, item.body, item.url ?? null).run();
+      },
+      async remove(id) {
+        await init();
+        return (await env.DB.prepare('DELETE FROM queue WHERE id = ? RETURNING id').bind(id).all()).results.length;
       },
       // 取り出しと削除を1文で行い、二重送信を防ぐ
       async takeDue(until) {
@@ -156,9 +161,15 @@ function queueStore(env) {
     async list() { return ((await env.PUSH_KV.get('queue', 'json')) || []).map((q) => ({ id: q.id, at: q.at })); },
     async count() { return ((await env.PUSH_KV.get('queue', 'json')) || []).length; },
     async add(item) {
-      const queue = (await env.PUSH_KV.get('queue', 'json')) || [];
+      const queue = ((await env.PUSH_KV.get('queue', 'json')) || []).filter((q) => q.id !== item.id);
       queue.push(item);
       await env.PUSH_KV.put('queue', JSON.stringify(queue));
+    },
+    async remove(id) {
+      const queue = (await env.PUSH_KV.get('queue', 'json')) || [];
+      const rest = queue.filter((q) => q.id !== id);
+      if (rest.length !== queue.length) await env.PUSH_KV.put('queue', JSON.stringify(rest));
+      return queue.length - rest.length;
     },
     async takeDue(until) {
       const queue = (await env.PUSH_KV.get('queue', 'json')) || [];
@@ -167,6 +178,11 @@ function queueStore(env) {
       return due;
     },
   };
+}
+
+// キー付きの予約の id。/api/send の予約（ランダムな id）と重ならないように接頭辞を付ける
+function keyId(key) {
+  return typeof key === 'string' && /^[\w:.-]{1,100}$/.test(key) ? 'key:' + key : null;
 }
 
 async function runDue(env, now = Date.now()) {
@@ -252,6 +268,40 @@ async function handle(request, env) {
     }
     const r = await sendPush(env, message);
     return json({ ...r, scheduled: false, at: Date.now() }, r.ok ? 200 : 502, h);
+  }
+
+  // キー付きの予約（D-015）。同じキーは上書きする。PWA が予約・更新・取り消しを行い、サーバーは時刻が来たら送るだけ
+  //   key        … 種類を表す名前（例 timer）。英数字と : . _ - のみ
+  //   at         … 送る時刻（1970年からのミリ秒）
+  //   notBefore  … true なら予定時刻より前には送らない（タイマーの終了など。届くのは予定時刻〜約60秒後）
+  if (pathname === '/api/schedule' && request.method === 'POST') {
+    const p = await request.json().catch(() => ({}));
+    const id = keyId(p.key);
+    if (!id) return json({ error: 'key の形式が正しくありません' }, 400, h);
+    const now = Date.now();
+    const at = Math.floor(Number(p.at));
+    if (!Number.isFinite(at) || at <= now) return json({ error: 'at（送る時刻）が過去か、数値ではありません' }, 400, h);
+    if (at > now + MAX_DELAY_SEC * 1000) return json({ error: '予約は3日先までです' }, 400, h);
+    if (typeof p.body !== 'string' || !p.body) return json({ error: 'body（通知の本文）がありません' }, 400, h);
+    const store = queueStore(env);
+    await store.remove(id); // 数の上限を確かめる前に、置き換えられる分を除く
+    if ((await store.count()) >= MAX_QUEUE) return json({ error: '予約が多すぎます' }, 429, h);
+    const item = {
+      id,
+      at: at + (p.notBefore === true ? EARLY_MS : 0), // Cron は at の30秒前から送るので、その分だけ後ろにずらす
+      title: String(p.title || 'キィニチ').slice(0, 100),
+      body: p.body.slice(0, 500),
+      url: typeof p.url === 'string' ? p.url.slice(0, 500) : undefined,
+    };
+    await store.add(item);
+    return json({ ok: true, key: p.key, at, queueStore: store.kind }, 200, h);
+  }
+
+  if (pathname === '/api/cancel' && request.method === 'POST') {
+    const p = await request.json().catch(() => ({}));
+    const id = keyId(p.key);
+    if (!id) return json({ error: 'key の形式が正しくありません' }, 400, h);
+    return json({ ok: true, key: p.key, removed: await queueStore(env).remove(id) }, 200, h);
   }
 
   return json({ error: 'Not found' }, 404, h);

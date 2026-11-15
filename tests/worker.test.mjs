@@ -197,3 +197,60 @@ test('不正な購読情報・3日超の予約は拒否する', async () => {
   assert.equal((await worker.fetch(req('/api/subscribe', { method: 'POST', token: env.APP_TOKEN, body: { endpoint: 'http://x' } }), env)).status, 400);
   assert.equal((await worker.fetch(req('/api/send', { method: 'POST', token: env.APP_TOKEN, body: { delaySeconds: 4 * 86400 } }), env)).status, 400);
 });
+
+for (const kind of ['d1', 'kv']) {
+  test(`キー付きの予約（${kind}）：同じキーは上書きし、取り消すと届かない（D-015）`, async () => {
+    const { env, pushes } = setup();
+    if (kind === 'd1') env.DB = makeD1();
+    const browser = await makeBrowser();
+    const post = (path, body) => worker.fetch(req(path, { method: 'POST', token: env.APP_TOKEN, body }), env);
+    await post('/api/subscribe', browser.subscription);
+    const at = Date.now() + 5 * 60000;
+    const r1 = await (await post('/api/schedule', { key: 'timer', at, body: '一回目', url: ORIGIN + '/x' })).json();
+    assert.deepEqual([r1.ok, r1.key, r1.at, r1.queueStore], [true, 'timer', at, kind]);
+    await post('/api/schedule', { key: 'timer', at: at + 60000, body: '二回目' }); // 上書き
+    await post('/api/schedule', { key: 'meal_check:2026-11-07', at, body: '別のキー' });
+    let st = await (await worker.fetch(req('/api/status', { token: env.APP_TOKEN }), env)).json();
+    assert.deepEqual(st.queue.map((q) => q.id).sort(), ['key:meal_check:2026-11-07', 'key:timer']);
+    // 取り消し：あれば 1、なければ 0
+    assert.equal((await (await post('/api/cancel', { key: 'meal_check:2026-11-07' })).json()).removed, 1);
+    assert.equal((await (await post('/api/cancel', { key: 'meal_check:2026-11-07' })).json()).removed, 0);
+    assert.deepEqual(await _internal.runDue(env, at + 29000), { sent: 0, left: 1 }); // 上書き前の時刻（at）では送らない。新しい時刻の30秒前から送る
+    assert.deepEqual(await _internal.runDue(env, at + 30000), { sent: 1, left: 0 });
+    assert.equal(pushes.length, 1);
+    const msg = await decrypt(browser, pushes[0].init.body);
+    assert.deepEqual([msg.title, msg.body], ['キィニチ', '二回目']);
+    // 取り消したものは届かない
+    await post('/api/schedule', { key: 'timer', at: Date.now() + 60000, body: '三回目' });
+    await post('/api/cancel', { key: 'timer' });
+    assert.deepEqual(await _internal.runDue(env, Date.now() + 10 * 60000), { sent: 0, left: 0 });
+    assert.equal(pushes.length, 1);
+  });
+}
+
+test('キー付きの予約：notBefore は予定時刻より前に送らない（タイマーの終了）', async () => {
+  const { env, pushes } = setup();
+  env.DB = makeD1();
+  const browser = await makeBrowser();
+  const post = (path, body) => worker.fetch(req(path, { method: 'POST', token: env.APP_TOKEN, body }), env);
+  await post('/api/subscribe', browser.subscription);
+  const at = Date.now() + 3 * 60000;
+  assert.equal((await post('/api/schedule', { key: 'timer', at, notBefore: true, body: '時間だ。' })).status, 200);
+  assert.deepEqual(await _internal.runDue(env, at - 1000), { sent: 0, left: 1 }); // 1秒前でも送らない
+  assert.deepEqual(await _internal.runDue(env, at), { sent: 1, left: 0 });
+  assert.equal(pushes.length, 1);
+});
+
+test('キー付きの予約：合言葉が必要で、不正な入力は拒否する', async () => {
+  const { env } = setup();
+  const post = (body, token = env.APP_TOKEN) => worker.fetch(req('/api/schedule', { method: 'POST', token, body }), env);
+  const at = Date.now() + 60000;
+  assert.equal((await post({ key: 'timer', at, body: 'x' }, 'wrong')).status, 401);
+  assert.equal((await post({ at, body: 'x' })).status, 400); // キーなし
+  assert.equal((await post({ key: 'a b', at, body: 'x' })).status, 400); // 使えない文字
+  assert.equal((await post({ key: 'timer', at: Date.now() - 1, body: 'x' })).status, 400); // 過去
+  assert.equal((await post({ key: 'timer', body: 'x' })).status, 400); // 時刻なし
+  assert.equal((await post({ key: 'timer', at: Date.now() + 4 * 86400000, body: 'x' })).status, 400); // 3日超
+  assert.equal((await post({ key: 'timer', at })).status, 400); // 本文なし
+  assert.equal((await worker.fetch(req('/api/cancel', { method: 'POST', token: env.APP_TOKEN, body: {} }), env)).status, 400);
+});
