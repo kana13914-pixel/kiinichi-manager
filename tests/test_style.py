@@ -41,6 +41,13 @@ class StyleTest(unittest.TestCase):
         r = subprocess.run([sys.executable, str(ROOT / "scripts" / "contrast_check.py")], capture_output=True, text=True)
         self.assertIn("| 夜 |", r.stdout.splitlines()[0])
 
+    def test_no_placeholder_frame(self):
+        """「立ち絵（仮）」の破線枠は出さない。立ち絵の枠（#portrait）は残す（CR-P01）。"""
+        html = (ROOT / "app" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="portrait"', html)
+        self.assertNotIn("立ち絵<br>（仮）", html)
+        self.assertNotIn("dashed", CSS.read_text(encoding="utf-8").split(".portrait {", 1)[1].split("}", 1)[0])
+
 
 if __name__ == "__main__":
     unittest.main()

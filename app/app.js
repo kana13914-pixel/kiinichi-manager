@@ -62,6 +62,25 @@ function showView() {
 window.addEventListener('hashchange', showView);
 showView();
 
+// ---------- 立ち絵（D-022 ④, CR-P04） ----------
+// app/img/portrait.webp（なければ portrait.png）を置くだけで表示する。読み込めなければ紋章のまま
+const PORTRAIT_SOURCES = ['img/portrait.webp', 'img/portrait.png'];
+function loadPortrait(sources = PORTRAIT_SOURCES) {
+  const el = document.getElementById('portrait');
+  if (!sources.length || !el) return;
+  const img = new Image();
+  img.onload = () => {
+    el.style.setProperty('--portrait-art', `url("${sources[0]}")`);
+    el.dataset.art = 'ready';
+    el.setAttribute('role', 'img');
+    el.setAttribute('aria-label', 'キィニチの立ち絵');
+    el.removeAttribute('aria-hidden');
+  };
+  img.onerror = () => loadPortrait(sources.slice(1));
+  img.src = sources[0];
+}
+loadPortrait();
+
 // ---------- 時計 ----------
 function pad(n) { return String(n).padStart(2, '0'); }
 function hm(d) { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
@@ -170,7 +189,9 @@ function pickLine(key, { index } = {}) {
 function showLine(key, { index, ready = false } = {}) {
   const picked = pickLine(key, { index });
   if (!picked) return false;
-  document.getElementById('bubble-text').textContent = picked.text;
+  const bubble = document.getElementById('bubble-text');
+  bubble.textContent = picked.text;
+  bubble.classList.remove('line-enter'); void bubble.offsetWidth; bubble.classList.add('line-enter'); // CR-M01：入りの動きをやり直す
   document.getElementById('play-voice').classList.toggle('ready', ready);
   setVoiceState('idle'); // 新しいセリフが出たら「声を聞く」に戻す（C2-02）
   return true;

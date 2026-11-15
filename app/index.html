@@ -52,8 +52,10 @@
       </header>
 
       <div class="stage">
-        <!-- 公式素材は使わない（CLAUDE.md 禁止事項）。立ち絵はプレースホルダー -->
-        <div id="portrait" class="portrait" role="img" aria-label="キィニチの立ち絵（仮）">立ち絵<br>（仮）</div>
+        <!-- 公式素材は使わない（CLAUDE.md 禁止事項）。立ち絵が入るまでは紋章と吊り線で気配を出す（D-021 CR-P01）。
+             立ち絵は app/img/portrait.webp（または .png）を置くだけで app.js が表示し、role・aria-label を付ける（D-022 ④） -->
+        <div id="portrait" class="portrait" data-art="none" aria-hidden="true"></div>
+        <span class="stage-mark" aria-hidden="true">KINICH</span>
       </div>
 
       <section class="dialogue" aria-label="キィニチのセリフ">
@@ -70,7 +72,7 @@
 
       <section class="next-strip" aria-label="次の予定">
         <div class="next-head">
-          <span class="next-label">次の予定 <small class="tag">仮</small></span>
+          <span class="next-label"><span class="label-en" aria-hidden="true">NEXT</span>次の予定 <small class="tag">仮</small></span>
           <span id="next-rest" class="next-rest"></span>
         </div>
         <div id="next-event" class="next-event">-</div>

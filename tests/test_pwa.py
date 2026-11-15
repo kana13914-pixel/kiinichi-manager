@@ -360,7 +360,7 @@ class PwaTest(unittest.TestCase):
     def test_clock_size_matches_decision(self):
         page = self.clock_page(9, 3)
         size = page.eval_on_selector("#clock-time", "e => parseFloat(getComputedStyle(e).fontSize)")
-        self.assertEqual(size, 28)
+        self.assertEqual(size, 48)  # D-021 で D-019 Q3（28px）を改訂
 
     def test_home_dom_order(self):
         page = self.clock_page(9, 3)
@@ -584,6 +584,57 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(16, 38, 31)")  # D-021
         page = self.clock_page(13, 0)
         self.assertEqual(page.evaluate("getComputedStyle(document.body).backgroundColor"), "rgb(24, 58, 47)")  # D-021
+
+    # ---------- 見た目の決まり v7（D-021, D-022） ----------
+    def test_line_enter_animation_runs_and_stops_with_reduced_motion(self):
+        page = self.clock_page(7, 12)
+        page.wait_for_function("document.getElementById('bubble-text').classList.contains('line-enter')", timeout=3_000)
+        self.assertEqual(page.eval_on_selector("#bubble-text", "e => getComputedStyle(e).animationName"), "hook-in")
+        page.emulate_media(reduced_motion="reduce")
+        self.assertEqual(page.eval_on_selector("#bubble-text", "e => getComputedStyle(e).animationName"), "none")
+
+    def test_notification_pulse_uses_transform(self):
+        # clip-path は外側の光を切るので、脈動は拡大縮小で示す（D-022 ①）
+        page = self.clock_page(12, 41, "&source=webpush&trigger=midday_check.meal_overdue&line=0")
+        page.wait_for_function("document.body.classList.contains('from-notification')", timeout=3_000)
+        self.assertEqual(page.eval_on_selector("#play-voice", "e => getComputedStyle(e).animationName"), "voice-pulse")
+        css = (APP_DIR / "style.css").read_text(encoding="utf-8")
+        frames = css.split("@keyframes voice-pulse", 1)[1].split("}\n}", 1)[0]
+        self.assertIn("transform", frames)
+        self.assertNotIn("box-shadow", frames)
+
+    def test_focus_shows_gold_edge_on_cut_buttons(self):
+        page = self.clock_page(13, 30)  # 主ボタンなしの時間
+        page.keyboard.press("Tab")
+        page.focus(".act[data-record=work_start]")
+        page.keyboard.press("Shift+Tab")
+        page.keyboard.press("Tab")
+        bg = page.eval_on_selector(".act[data-record=work_start]",
+                                   "e => e.matches(':focus-visible') ? getComputedStyle(e).backgroundColor : 'not-focus-visible'")
+        self.assertEqual(bg, "rgb(232, 196, 92)")
+
+    def test_portrait_shows_when_image_is_placed(self):
+        import base64
+        png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=")
+        ctx = self.browser.new_context(permissions=["notifications"])
+        self.addCleanup(ctx.close)
+        ctx.add_init_script(READY)
+        page = ctx.new_page()
+        page.route("**/img/portrait.webp", lambda r: r.fulfill(status=200, content_type="image/png", body=png))
+        page.goto(self.base + "index.html?mode=standalone")
+        page.wait_for_function("document.getElementById('portrait').dataset.art === 'ready'", timeout=3_000)
+        self.assertEqual(page.get_attribute("#portrait", "role"), "img")
+        self.assertIsNone(page.get_attribute("#portrait", "aria-hidden"))
+        bgimg = page.eval_on_selector("#portrait", "e => getComputedStyle(e).backgroundImage")
+        self.assertIn("portrait.webp", bgimg)
+        self.assertNotIn("emblem", bgimg)
+
+    def test_emblem_shows_without_portrait(self):
+        page = self.clock_page(7, 12)
+        page.wait_for_timeout(300)
+        self.assertEqual(page.get_attribute("#portrait", "data-art"), "none")
+        self.assertEqual(page.get_attribute("#portrait", "aria-hidden"), "true")
+        self.assertIn("canopy-emblem", page.eval_on_selector("#portrait", "e => getComputedStyle(e).backgroundImage"))
 
 
 if __name__ == "__main__":
