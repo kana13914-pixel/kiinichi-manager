@@ -16,8 +16,8 @@
 | 公開中の版 | `phase1-v10`（`app/app.js` の `APP_VERSION`） | 公開 URL は `NEEDS_HUMAN.md` の H-010 |
 | ホーム | 完了・実機確認済み | `docs/decisions.md` D-019〜D-025 |
 | タスク画面 | 完了・実機確認済み（phase1-v9） | roadmap「タスク画面」、D-026 ① |
-| 日報画面 | **実装済み・実機確認待ち**（phase1-v10）。利用者に確認を依頼済み | roadmap「日報画面」、D-026 ②、D-027 |
-| 次の作業 | 日報の実機確認が OK なら **タイマー画面** → その後に予定画面 | D-026 ③④、下の「3」 |
+| 日報画面 | 完了・実機確認済み（phase1-v10） | roadmap「日報画面」、D-026 ②、D-027 |
+| 次の作業 | **タイマー画面**（着手前に通知の扱いを利用者に確かめる）→ その後に予定画面 | D-026 ③④、下の「3」 |
 | 人間待ち | H-013（立ち絵。受け入れ準備は済み） | `NEEDS_HUMAN.md` |
 | 利用者の確認待ちのセリフ（仮案） | `idle_greeting`、`screen_empty.*`、`report_saved.*` | `data/dialogue_template.yaml` の description に「仮案」と書いてある項目 |
 
