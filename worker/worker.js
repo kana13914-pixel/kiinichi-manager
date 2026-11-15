@@ -16,6 +16,9 @@ const MAX_DELAY_SEC = 3 * 24 * 3600; // 予約は3日先まで
 const MAX_QUEUE = 50;
 // Cronは毎分。予定時刻の30秒前から送ることで、ずれを概ね±30秒に収める（完了条件は±60秒）
 const EARLY_MS = 30 * 1000;
+// 送れなかった予約は、予定時刻からこの時間までは次の分にやり直す（毎分の確認で2〜3回。D-033）
+const RETRY_MS = 3 * 60 * 1000;
+const LOG_KEEP = 20; // 送信結果を残す件数（届かなかった理由を後から確かめるため）
 
 // ---------- 小道具 ----------
 const enc = new TextEncoder();
@@ -124,11 +127,12 @@ async function sendPush(env, message) {
 // D1（SQLite）があればそちらを使う。KVは結果整合性で、予約が最大1分ほど遅れることがあったため（D-011, D-012）
 const D1_SCHEMA = 'CREATE TABLE IF NOT EXISTS queue (id TEXT PRIMARY KEY, at INTEGER NOT NULL, title TEXT, body TEXT, url TEXT)';
 const D1_INDEX = 'CREATE INDEX IF NOT EXISTS queue_at ON queue(at)';
+const D1_LOG = 'CREATE TABLE IF NOT EXISTS sendlog (n INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, id TEXT, status INTEGER, result TEXT)';
 
 function queueStore(env) {
   if (env.DB) {
     let ready;
-    const init = () => (ready ||= env.DB.batch([env.DB.prepare(D1_SCHEMA), env.DB.prepare(D1_INDEX)]));
+    const init = () => (ready ||= env.DB.batch([env.DB.prepare(D1_SCHEMA), env.DB.prepare(D1_INDEX), env.DB.prepare(D1_LOG)]));
     return {
       kind: 'd1',
       async list() {
@@ -145,9 +149,27 @@ function queueStore(env) {
         await env.DB.prepare('INSERT OR REPLACE INTO queue (id, at, title, body, url) VALUES (?, ?, ?, ?, ?)')
           .bind(item.id, item.at, item.title, item.body, item.url ?? null).run();
       },
+      // 送れなかったものを戻す。その間に同じ id で新しい予約が入っていたら、新しいほうを残す
+      async putBack(item) {
+        await init();
+        await env.DB.prepare('INSERT OR IGNORE INTO queue (id, at, title, body, url) VALUES (?, ?, ?, ?, ?)')
+          .bind(item.id, item.at, item.title, item.body, item.url ?? null).run();
+      },
       async remove(id) {
         await init();
         return (await env.DB.prepare('DELETE FROM queue WHERE id = ? RETURNING id').bind(id).all()).results.length;
+      },
+      // 送信結果の記録（新しい LOG_KEEP 件だけ残す）
+      async log(entry) {
+        await init();
+        await env.DB.batch([
+          env.DB.prepare('INSERT INTO sendlog (at, id, status, result) VALUES (?, ?, ?, ?)').bind(entry.at, entry.id, entry.status, entry.result),
+          env.DB.prepare('DELETE FROM sendlog WHERE n NOT IN (SELECT n FROM sendlog ORDER BY n DESC LIMIT ?)').bind(LOG_KEEP),
+        ]);
+      },
+      async recent() {
+        await init();
+        return (await env.DB.prepare('SELECT at, id, status, result FROM sendlog ORDER BY n DESC LIMIT ?').bind(LOG_KEEP).all()).results;
       },
       // 取り出しと削除を1文で行い、二重送信を防ぐ
       async takeDue(until) {
@@ -165,6 +187,15 @@ function queueStore(env) {
       queue.push(item);
       await env.PUSH_KV.put('queue', JSON.stringify(queue));
     },
+    async putBack(item) {
+      const queue = (await env.PUSH_KV.get('queue', 'json')) || [];
+      if (queue.some((q) => q.id === item.id)) return;
+      queue.push(item);
+      await env.PUSH_KV.put('queue', JSON.stringify(queue));
+    },
+    // KV は書き込み回数の無料枠が小さいので、送信結果は残さない
+    async log() {},
+    async recent() { return []; },
     async remove(id) {
       const queue = (await env.PUSH_KV.get('queue', 'json')) || [];
       const rest = queue.filter((q) => q.id !== id);
@@ -185,13 +216,39 @@ function keyId(key) {
   return typeof key === 'string' && /^[\w:.-]{1,100}$/.test(key) ? 'key:' + key : null;
 }
 
+// 通知をまとめる名前。キー付きの予約は種類（キーの最初の : より前。例 meal_check:2026-11-07 → meal_check）。
+// 同じ種類の通知は新しいもので置き換わり、違う種類は並んで残る（app/sw.js）
+function tagOf(id) {
+  return typeof id === 'string' && id.startsWith('key:') ? id.slice(4).split(':')[0] : undefined;
+}
+
+// 一時的な失敗（通信エラー・混雑・プッシュサービス側の障害）だけやり直す。購読なし・購読切れ・形式の誤りはやり直しても届かない
+function isTemporary(r) {
+  return r.threw === true || r.status === 429 || r.status >= 500;
+}
+
 async function runDue(env, now = Date.now()) {
   const store = queueStore(env);
   const due = await store.takeDue(now + EARLY_MS);
   let sent = 0;
   for (const item of due) {
-    const r = await sendPush(env, { title: item.title, body: item.body, url: item.url || undefined });
-    if (r.ok) sent++;
+    // 1件の失敗でほかの予約を巻き込まないよう、1件ずつ受け止める
+    let r;
+    try {
+      r = await sendPush(env, { title: item.title, body: item.body, url: item.url || undefined, tag: tagOf(item.id) });
+    } catch (e) {
+      r = { ok: false, status: 0, threw: true, error: String((e && e.message) || e).slice(0, 300) };
+    }
+    let result = 'sent';
+    if (r.ok) {
+      sent++;
+    } else if (isTemporary(r) && now < item.at + RETRY_MS) {
+      result = 'retry';
+      await store.putBack(item).catch(() => {});
+    } else {
+      result = 'dropped';
+    }
+    await store.log({ at: now, id: item.id, status: r.status, result: r.ok ? result : `${result}: ${r.error || ''}`.slice(0, 200) }).catch(() => {});
   }
   return { sent, left: await store.count() };
 }
@@ -237,7 +294,7 @@ async function handle(request, env) {
   if (pathname === '/api/status' && request.method === 'GET') {
     const sub = await env.PUSH_KV.get('subscription', 'json');
     const store = queueStore(env);
-    return json({ subscribed: Boolean(sub), queueStore: store.kind, queue: await store.list() }, 200, h);
+    return json({ subscribed: Boolean(sub), queueStore: store.kind, queue: await store.list(), recent: await store.recent() }, 200, h);
   }
 
   if (pathname === '/api/subscribe' && request.method === 'POST') {
@@ -251,7 +308,7 @@ async function handle(request, env) {
   }
 
   if (pathname === '/api/send' && request.method === 'POST') {
-    const p = await request.json().catch(() => ({}));
+    const p = (await request.json().catch(() => null)) || {};
     const message = {
       title: String(p.title || 'キィニチくん（検証）').slice(0, 100),
       body: String(p.body || '通知テストだ。タップして開いてみろ。').slice(0, 500),
@@ -273,9 +330,10 @@ async function handle(request, env) {
   // キー付きの予約（D-015）。同じキーは上書きする。PWA が予約・更新・取り消しを行い、サーバーは時刻が来たら送るだけ
   //   key        … 種類を表す名前（例 timer）。英数字と : . _ - のみ
   //   at         … 送る時刻（1970年からのミリ秒）
-  //   notBefore  … true なら予定時刻より前には送らない（タイマーの終了など。届くのは予定時刻〜約60秒後）
+  //   応答の subscribed … false なら購読がなく、予約しても届かない
+//   notBefore  … true なら予定時刻より前には送らない（タイマーの終了など。届くのは予定時刻〜約60秒後）
   if (pathname === '/api/schedule' && request.method === 'POST') {
-    const p = await request.json().catch(() => ({}));
+    const p = (await request.json().catch(() => null)) || {};
     const id = keyId(p.key);
     if (!id) return json({ error: 'key の形式が正しくありません' }, 400, h);
     const now = Date.now();
@@ -294,11 +352,13 @@ async function handle(request, env) {
       url: typeof p.url === 'string' ? p.url.slice(0, 500) : undefined,
     };
     await store.add(item);
-    return json({ ok: true, key: p.key, at, queueStore: store.kind }, 200, h);
+    // 購読がなければ予約しても届かないので、アプリが気づけるように返す（D-033）
+    const subscribed = Boolean(await env.PUSH_KV.get('subscription', 'json'));
+    return json({ ok: true, key: p.key, at, queueStore: store.kind, subscribed }, 200, h);
   }
 
   if (pathname === '/api/cancel' && request.method === 'POST') {
-    const p = await request.json().catch(() => ({}));
+    const p = (await request.json().catch(() => null)) || {};
     const id = keyId(p.key);
     if (!id) return json({ error: 'key の形式が正しくありません' }, 400, h);
     return json({ ok: true, key: p.key, removed: await queueStore(env).remove(id) }, 200, h);
@@ -308,7 +368,14 @@ async function handle(request, env) {
 }
 
 export default {
-  fetch: (request, env) => handle(request, env),
+  // 途中で失敗しても、理由が分かる応答を返す（そのまま外に出すと、アプリには「Failed to fetch」としか伝わらない）
+  fetch: async (request, env) => {
+    try {
+      return await handle(request, env);
+    } catch (e) {
+      return json({ error: '送信サーバーの内部エラー: ' + String((e && e.message) || e).slice(0, 200) }, 500, cors(env, request));
+    }
+  },
   scheduled: (event, env, ctx) => ctx.waitUntil(runDue(env)),
 };
 

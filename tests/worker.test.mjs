@@ -254,3 +254,99 @@ test('キー付きの予約：合言葉が必要で、不正な入力は拒否�
   assert.equal((await post({ key: 'timer', at })).status, 400); // 本文なし
   assert.equal((await worker.fetch(req('/api/cancel', { method: 'POST', token: env.APP_TOKEN, body: {} }), env)).status, 400);
 });
+
+// ---- 送れなかったときの扱い（D-033） ----
+async function scheduled2(kind) {
+  const { env, pushes } = setup();
+  if (kind === 'd1') env.DB = makeD1();
+  const browser = await makeBrowser();
+  const post = (path, body) => worker.fetch(req(path, { method: 'POST', token: env.APP_TOKEN, body }), env);
+  await post('/api/subscribe', browser.subscription);
+  const at = Date.now() + 5 * 60000;
+  await post('/api/schedule', { key: 'meal_check:2026-11-07', at, body: 'A' });
+  await post('/api/schedule', { key: 'timer', at: at + 1000, body: 'B' });
+  const status = async () => (await worker.fetch(req('/api/status', { token: env.APP_TOKEN }), env)).json();
+  return { env, pushes, post, at, status, browser };
+}
+
+for (const kind of ['d1', 'kv']) {
+  test(`送信の一時的な失敗（${kind}）：予約を残して次の分にやり直し、3分を過ぎたらあきらめる`, async () => {
+    const { env, at, status } = await scheduled2(kind);
+    globalThis.fetch = async () => new Response('busy', { status: 503 });
+    assert.deepEqual(await _internal.runDue(env, at), { sent: 0, left: 2 });
+    assert.deepEqual(await _internal.runDue(env, at + 60000), { sent: 0, left: 2 });
+    let ok = 0;
+    globalThis.fetch = async () => { ok++; return new Response('', { status: 201 }); };
+    assert.deepEqual(await _internal.runDue(env, at + 120000), { sent: 2, left: 0 }); // 回復したら届く
+    assert.equal(ok, 2);
+    // 3分を過ぎても送れなければ捨てる（何時間も後に「時間だ」が届かないように）
+    const s2 = await scheduled2(kind);
+    globalThis.fetch = async () => new Response('busy', { status: 503 });
+    assert.deepEqual(await _internal.runDue(s2.env, s2.at + 4 * 60000), { sent: 0, left: 0 });
+    if (kind === 'd1') {
+      const st = await status();
+      assert.deepEqual(st.recent.map((x) => x.result.split(':')[0]).sort(), ['retry', 'retry', 'retry', 'retry', 'sent', 'sent']);
+    }
+  });
+}
+
+test('送信中の例外：1件目で通信エラーになっても、2件目を送る。1件目はやり直す', async () => {
+  const { env, at } = await scheduled2('d1');
+  let n = 0;
+  globalThis.fetch = async () => { if (n++ === 0) throw new TypeError('network error'); return new Response('', { status: 201 }); };
+  assert.deepEqual(await _internal.runDue(env, at + 1000), { sent: 1, left: 1 });
+  assert.deepEqual(await _internal.runDue(env, at + 61000), { sent: 1, left: 0 });
+});
+
+test('やり直しの間に同じキーで予約し直したら、新しい予約を残す', async () => {
+  const { env, at, post, status } = await scheduled2('d1');
+  await post('/api/cancel', { key: 'meal_check:2026-11-07' });
+  const realStore = env.DB;
+  // 送信に失敗している最中に、アプリが同じキー timer を予約し直した状況を作る
+  globalThis.fetch = async () => {
+    await realStore.prepare('INSERT OR REPLACE INTO queue (id, at, title, body, url) VALUES (?, ?, ?, ?, ?)').bind('key:timer', at + 600000, 't', '新しい', null).run();
+    return new Response('busy', { status: 503 });
+  };
+  await _internal.runDue(env, at + 1000);
+  const st = await status();
+  assert.deepEqual(st.queue.map((q) => [q.id, q.at]), [['key:timer', at + 600000]]);
+});
+
+test('購読切れ（410）や購読なしは、やり直さずに捨てる', async () => {
+  const { env, at, status } = await scheduled2('d1');
+  globalThis.fetch = async () => new Response('gone', { status: 410 });
+  assert.deepEqual(await _internal.runDue(env, at + 1000), { sent: 0, left: 0 });
+  const st = await status();
+  assert.equal(st.subscribed, false);
+  assert.ok(st.recent.every((x) => x.result.startsWith('dropped')));
+});
+
+test('予約の応答に購読の有無が入る（購読がなければアプリが登録し直せる）', async () => {
+  const { env } = setup();
+  const post = (path, body) => worker.fetch(req(path, { method: 'POST', token: env.APP_TOKEN, body }), env);
+  const at = Date.now() + 60000;
+  assert.equal((await (await post('/api/schedule', { key: 'timer', at, body: 'x' })).json()).subscribed, false);
+  await post('/api/subscribe', (await makeBrowser()).subscription);
+  assert.equal((await (await post('/api/schedule', { key: 'timer', at, body: 'x' })).json()).subscribed, true);
+});
+
+test('通知の種類（tag）：キー付きの予約はキーの種類、それ以外は付けない', async () => {
+  const { env, pushes, at, browser } = await scheduled2('d1');
+  await worker.fetch(req('/api/send', { method: 'POST', token: env.APP_TOKEN, body: { delaySeconds: 60 } }), env);
+  await _internal.runDue(env, at + 1000);
+  const tags = [];
+  for (const p of pushes) tags.push((await decrypt(browser, p.init.body)).tag);
+  assert.deepEqual(tags.map(String).sort(), ['meal_check', 'timer', 'undefined']);
+});
+
+test('内部で失敗しても、理由つきの応答（500・CORSつき）を返す', async () => {
+  const { env } = setup();
+  env.DB = { prepare: () => { throw new Error('D1_ERROR: quota'); }, batch: async () => { throw new Error('D1_ERROR: quota'); } };
+  const res = await worker.fetch(req('/api/schedule', { method: 'POST', token: env.APP_TOKEN, body: { key: 'timer', at: Date.now() + 60000, body: 'x' } }), env);
+  assert.equal(res.status, 500);
+  assert.equal(res.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+  assert.match((await res.json()).error, /内部エラー.*D1_ERROR/);
+  // 本文が JSON の null でも 400 で返す
+  const { env: env2 } = setup();
+  assert.equal((await worker.fetch(req('/api/schedule', { method: 'POST', token: env2.APP_TOKEN, body: null }), env2)).status, 400);
+});
