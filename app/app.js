@@ -1,7 +1,7 @@
 // マネージャー本体。初回導線（D-009）、ホーム画面（D-019・見た目は D-021）、設定画面（確認用の起動状態）を扱う。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase1-v10';
+const APP_VERSION = 'phase1-v11';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -365,7 +365,9 @@ window.addEventListener('pageshow', (e) => { if (e.persisted) onResume(Infinity)
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (e) => {
     if (!e.data || e.data.type !== 'open-url') return;
-    dialogueReady.then(() => applyOpenParams(new URL(e.data.url, location.href).searchParams));
+    const target = new URL(e.data.url, location.href);
+    if (target.hash) location.hash = target.hash; // タイマー終了の通知は #timer を開く（D-028）
+    dialogueReady.then(() => applyOpenParams(target.searchParams));
   });
   if (navigator.serviceWorker.startMessages) navigator.serviceWorker.startMessages();
 }

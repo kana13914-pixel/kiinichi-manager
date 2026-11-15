@@ -822,5 +822,257 @@ class PwaTest(unittest.TestCase):
         page.wait_for_function("document.getElementById('report-history-empty').textContent.startsWith('キィニチ')", timeout=3_000)
 
 
+    # ---------- タイマー画面（D-026 ③, D-028） ----------
+    WORKER = "https://kiinichi-push.redacted.workers.dev"
+    GOLD_FILLS = """() => [...document.querySelectorAll('#view-timer *')]
+      .filter((e) => e.getClientRects().length && getComputedStyle(e).backgroundColor === 'rgb(232, 196, 92)')
+      .map((e) => e.id || e.className)"""
+
+    def timer_page(self, hour=10, minute=0, day=9, state=None, size=(393, 852)):
+        """合言葉なし（送信サーバーは呼ばれない）でタイマー画面を開く。"""
+        init = None
+        if state is not None:
+            init = "localStorage.setItem('timer.v1', %s)" % json.dumps(json.dumps(state))
+        page = self.clock_page(hour, minute, "#timer", day=day, init_script=init, size=size)
+        page.wait_for_selector("#view-timer", state="visible", timeout=3_000)
+        return page
+
+    def fake_timer_worker(self, calls, status=200, body='{"ok":true}'):
+        def handler(route):
+            req = route.request
+            cors = {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Authorization, Content-Type",
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS"}
+            if req.method == "OPTIONS":
+                route.fulfill(status=204, headers=cors)
+                return
+            calls.append(req)
+            route.fulfill(status=status, content_type="application/json", headers=cors, body=body)
+        return handler
+
+    def routed_timer_page(self, calls, status=200, body='{"ok":true}', **kw):
+        """送信サーバーを偽物にしてからタイマー画面を開く（読み込み時の呼び出しも受けられるよう、開く前に差し替える）。"""
+        init = "localStorage.setItem('phase0.appToken', 'tok-123');"
+        if kw.get("state") is not None:
+            init += "localStorage.setItem('timer.v1', %s);" % json.dumps(json.dumps(kw["state"]))
+        ctx = self.browser.new_context(permissions=["notifications"], viewport={"width": 393, "height": 852})
+        self.addCleanup(ctx.close)
+        ctx.add_init_script(READY)
+        ctx.add_init_script(VISIBILITY)
+        ctx.add_init_script(init)
+        ctx.route(self.WORKER + "/**", self.fake_timer_worker(calls, status, body))
+        page = ctx.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.addCleanup(lambda: self.assertEqual(errors, [], "JSエラーが出ている"))
+        page.clock.install(time=datetime(2026, 11, 9, kw.get("hour", 10), kw.get("minute", 0), 0))
+        page.goto(self.base + "index.html?mode=standalone#timer")
+        page.wait_for_function("dialogue !== null", timeout=3_000)
+        return page
+
+    def wait_calls(self, page, calls, n):
+        deadline = 50
+        while len(calls) < n and deadline:
+            page.wait_for_timeout(100)
+            deadline -= 1
+        self.assertGreaterEqual(len(calls), n)
+
+    def timer_state(self, page):
+        return json.loads(page.evaluate("localStorage.getItem('timer.v1')"))
+
+    def test_timer_lists_builtin_timers(self):
+        page = self.timer_page()
+        rows = page.eval_on_selector_all("#timer-list .task-main", "els => els.map(e => e.textContent)")
+        self.assertEqual(rows, ["作業25分", "休憩5分", "入浴20分", "歯磨き3分"])
+        self.assertEqual(page.query_selector_all("#timer-list .task-del"), [])  # 用途別のタイマーは消せない
+        self.assertTrue(page.is_hidden("#timer-running"))
+        self.assertTrue(page.is_hidden("#timer-done"))
+
+    def test_timer_start_counts_down_and_survives_reload(self):
+        page = self.timer_page()
+        page.click("#timer-list li[data-id=work] .task-main")
+        self.assertTrue(page.is_visible("#timer-running"))
+        self.assertTrue(page.is_hidden("#timer-idle"))
+        self.assertEqual(page.text_content("#timer-name"), "作業（25分）")
+        self.assertEqual(page.text_content("#timer-rest"), "25:00")
+        self.assertEqual(page.text_content("#timer-end"), "10:25 に終わる")
+        page.clock.run_for(61_000)
+        self.assertEqual(page.text_content("#timer-rest"), "23:59")
+        end_at = self.timer_state(page)["running"]["endAt"]
+        page.reload()  # 終了時刻を保存しているので、開き直しても残り時間は正しい
+        page.wait_for_selector("#timer-running", state="visible")
+        self.assertEqual(self.timer_state(page)["running"]["endAt"], end_at)
+        self.assertRegex(page.text_content("#timer-rest"), r"^23:5\d$")
+
+    def test_timer_finishes_with_character_line_and_close(self):
+        page = self.timer_page()
+        page.click("#timer-list li[data-id=brush] .task-main")
+        page.clock.run_for(3 * 60_000 + 500)
+        self.assertTrue(page.is_visible("#timer-done"))
+        self.assertTrue(page.is_hidden("#timer-running"))
+        self.assertEqual(page.text_content("#timer-done-title"), "歯磨き（3分）が終わった")
+        self.assertEqual(page.text_content("#timer-done-at"), "10:03 に終了")
+        self.assertEqual(page.text_content("#timer-done-line"), "歯磨きの時間が終わった。それで十分だ。")
+        page.click("#timer-close")
+        self.assertTrue(page.is_visible("#timer-idle"))
+        self.assertIsNone(self.timer_state(page)["done"])
+
+    def test_timer_finished_while_closed_shows_done_on_open(self):
+        # 10:00 に開く。9:57 に終わっていたタイマーは「終了」として出る
+        end = int(datetime(2026, 11, 9, 9, 57, 0).timestamp() * 1000)
+        state = {"custom": [], "running": {"name": "入浴", "minutes": 20, "kind": "bath", "endAt": end,
+                                           "line": 0, "text": "入浴の時間が終わった。長湯はほどほどにしておけ。", "notify": "ok"}}
+        page = self.timer_page(state=state)
+        self.assertTrue(page.is_visible("#timer-done"))
+        self.assertEqual(page.text_content("#timer-done-title"), "入浴（20分）が終わった")
+        self.assertEqual(page.text_content("#timer-done-at"), "09:57 に終了")
+
+    def test_timer_quick_start_validates_minutes(self):
+        page = self.timer_page()
+        page.click("#timer-quick-start")
+        self.assertIn("1〜600分", page.text_content("#timer-quick-status"))
+        self.assertTrue(page.is_visible("#timer-idle"))
+        for bad in ("0", "601", "2.5"):
+            page.fill("#timer-quick-min", bad)
+            page.click("#timer-quick-start")
+            self.assertTrue(page.is_visible("#timer-idle"), bad)
+        page.fill("#timer-quick-min", "90")
+        page.click("#timer-quick-start")
+        self.assertEqual(page.text_content("#timer-name"), "タイマー（90分）")
+        self.assertEqual(page.text_content("#timer-rest"), "1:30:00")
+        page.click("#timer-stop")
+        self.assertTrue(page.is_visible("#timer-idle"))
+        self.assertIsNone(self.timer_state(page)["running"])
+
+    def test_timer_custom_create_persist_start_delete_undo(self):
+        page = self.timer_page()
+        page.click("#timer-new-open")
+        self.assertTrue(page.is_hidden("#timer-quick"))
+        page.click("#timer-new-save")
+        self.assertIn("名前", page.text_content("#timer-form-status"))
+        page.fill("#timer-new-name", "ストレッチ")
+        page.click("#timer-new-save")
+        self.assertIn("1〜600分", page.text_content("#timer-form-status"))
+        page.fill("#timer-new-min", "10")
+        page.click("#timer-new-save")
+        self.assertTrue(page.is_hidden("#timer-form"))
+        self.assertTrue(page.is_visible("#timer-quick"))
+        rows = page.eval_on_selector_all("#timer-list .task-main", "els => els.map(e => e.textContent)")
+        self.assertEqual(rows[-1], "ストレッチ10分")
+        page.reload()
+        page.wait_for_selector("#view-timer", state="visible")
+        rows = page.eval_on_selector_all("#timer-list .task-main", "els => els.map(e => e.textContent)")
+        self.assertEqual(len(rows), 5)
+        page.click("#timer-list li:last-child .task-main")
+        self.assertEqual(page.text_content("#timer-name"), "ストレッチ（10分）")
+        page.click("#timer-stop")
+        page.click("#timer-list li:last-child .task-del")
+        self.assertEqual(len(page.query_selector_all("#timer-list li")), 4)
+        self.assertIn("削除しました", page.text_content("#timer-toast"))
+        page.click("#timer-toast .undo")
+        self.assertEqual(len(page.query_selector_all("#timer-list li")), 5)
+        page.click("#timer-list li:last-child .task-del")
+        page.clock.run_for(5_100)
+        self.assertTrue(page.is_hidden("#timer-toast"))
+        self.assertEqual(self.timer_state(page)["custom"], [])
+
+    def test_timer_reserves_notification_and_cancels_on_stop(self):
+        calls = []
+        page = self.routed_timer_page(calls)
+        page.click("#timer-list li[data-id=work] .task-main")
+        self.wait_calls(page, calls, 1)
+        req = calls[0]
+        self.assertEqual(req.url, self.WORKER + "/api/schedule")
+        self.assertEqual(req.headers["authorization"], "Bearer tok-123")
+        body = json.loads(req.post_data)
+        self.assertEqual(body["key"], "timer")
+        self.assertEqual(body["at"], self.timer_state(page)["running"]["endAt"])
+        self.assertIs(body["notBefore"], True)  # 終わる前には届けない
+        self.assertEqual(body["title"], "キィニチ")
+        self.assertEqual(body["body"], "作業の時間が終わった。一度、手を止めろ。")
+        self.assertTrue(body["url"].endswith("/index.html?source=webpush&trigger=timer_done.work&line=0#timer"), body["url"])
+        page.wait_for_selector("#timer-notify.ok", timeout=3_000)
+        self.assertIn("通知で知らせます", page.text_content("#timer-notify"))
+        page.click("#timer-stop")
+        self.wait_calls(page, calls, 2)
+        self.assertEqual(calls[1].url, self.WORKER + "/api/cancel")
+        self.assertEqual(json.loads(calls[1].post_data), {"key": "timer"})
+
+    def test_timer_cancels_reservation_when_finished_on_screen(self):
+        # 画面を見ている間に終わったら、同じ知らせが後から届かないよう予約を取り消す
+        calls = []
+        page = self.routed_timer_page(calls)
+        page.click("#timer-list li[data-id=brush] .task-main")
+        self.wait_calls(page, calls, 1)
+        page.clock.run_for(3 * 60_000 + 500)
+        self.wait_calls(page, calls, 2)
+        self.assertEqual([c.url.rsplit("/", 1)[1] for c in calls], ["schedule", "cancel"])
+        self.assertTrue(page.is_visible("#timer-done"))
+
+    def test_timer_keeps_reservation_when_finished_in_background(self):
+        # 裏に回っている間に終わったら予約は残す（通知で知らせる）。画面に戻ったら取り消す
+        calls = []
+        page = self.routed_timer_page(calls)
+        page.click("#timer-list li[data-id=brush] .task-main")
+        self.wait_calls(page, calls, 1)
+        page.evaluate("window.__vis = 'hidden'; document.dispatchEvent(new Event('visibilitychange'))")
+        page.clock.run_for(3 * 60_000 + 500)
+        page.wait_for_timeout(300)
+        self.assertEqual(len(calls), 1)
+        page.evaluate("window.__vis = 'visible'; document.dispatchEvent(new Event('visibilitychange'))")
+        self.wait_calls(page, calls, 2)
+        self.assertTrue(calls[1].url.endswith("/api/cancel"))
+        self.assertTrue(page.is_visible("#timer-done"))
+
+    def test_timer_notification_tap_fallback_opens_timer_view(self):
+        # 通知のタップで画面の移動に失敗したとき（sw.js の open-url）も、タイマー画面を開く
+        end = int(datetime(2026, 11, 9, 12, 40, 0).timestamp() * 1000)
+        state = {"custom": [], "running": {"name": "休憩", "minutes": 5, "kind": "break", "endAt": end,
+                                           "line": 0, "text": "休憩の時間が終わった。戻るかどうかは任せる。", "notify": "ok"}}
+        init = "localStorage.setItem('timer.v1', %s)" % json.dumps(json.dumps(state))
+        page = self.clock_page(12, 41, init_script=init)
+        self.assertTrue(page.is_visible("#view-home"))
+        page.evaluate("""navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: {
+          type: 'open-url', url: location.origin + '/index.html?source=webpush&trigger=timer_done.break&line=0#timer' } }))""")
+        page.wait_for_selector("#timer-done", state="visible", timeout=3_000)
+        self.assertEqual(page.text_content("#timer-done-line"), "休憩の時間が終わった。戻るかどうかは任せる。")
+        self.assertEqual(page.text_content("#bubble-text"), "休憩の時間が終わった。戻るかどうかは任せる。")  # ホームのセリフも同じ
+
+    def test_timer_shows_reason_when_reservation_fails(self):
+        # 合言葉がない：送信サーバーは呼ばず、画面内の表示だけになることを伝える
+        page = self.timer_page()
+        page.click("#timer-list li[data-id=work] .task-main")
+        page.wait_for_selector("#timer-notify.ng", timeout=3_000)
+        self.assertIn("通知を予約できませんでした（合言葉を入力してください）", page.text_content("#timer-notify"))
+        self.assertEqual(page.text_content("#timer-rest"), "25:00")  # タイマー自体は動く
+        # 送信サーバーが古い版（/api/schedule がない）
+        calls = []
+        page = self.routed_timer_page(calls, status=404, body='{"error":"Not found"}')
+        page.click("#timer-list li[data-id=work] .task-main")
+        page.wait_for_selector("#timer-notify.ng", timeout=3_000)
+        self.assertIn("送信サーバーの更新が必要です", page.text_content("#timer-notify"))
+
+    def test_timer_screen_gold_fill_touch_sizes_and_width(self):
+        state = {"custom": [{"id": "x", "name": "とても長い名前のタイマーをここに入れておく三十字", "minutes": 600}]}
+        page = self.timer_page(state=state, size=(375, 667))
+        self.assertEqual(page.evaluate(self.GOLD_FILLS), ["timer-quick-start"])
+        heights = page.eval_on_selector_all("#timer-list .task-main", "els => els.map(e => e.getBoundingClientRect().height)")
+        self.assertTrue(all(h >= 52 for h in heights), heights)
+        self.assertGreaterEqual(page.eval_on_selector("#timer-list .task-del", "e => e.getBoundingClientRect().width"), 44)
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
+        page.click("#timer-new-open")
+        self.assertEqual(page.evaluate(self.GOLD_FILLS), ["timer-new-save"])
+        sizes = page.eval_on_selector_all("#view-timer input", "els => els.map(e => parseFloat(getComputedStyle(e).fontSize))")
+        self.assertTrue(all(sz >= 16 for sz in sizes), sizes)
+        r = page.evaluate("""() => { const b = document.getElementById('timer-new-save').getBoundingClientRect();
+          const tb = document.querySelector('.tabbar').getBoundingClientRect(); return [b.bottom, tb.top]; }""")
+        self.assertLessEqual(r[0], r[1])  # 保存ボタンが下のタブに隠れない
+        page.click("#timer-new-cancel")
+        page.click("#timer-list li[data-id=work] .task-main")
+        self.assertEqual(page.evaluate(self.GOLD_FILLS), [])  # 動いている間は金の塗りなし
+        self.assertEqual(page.eval_on_selector("#timer-rest", "e => getComputedStyle(e).fontVariantNumeric"), "tabular-nums")
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
+        page.clock.run_for(25 * 60_000 + 500)
+        self.assertEqual(page.evaluate(self.GOLD_FILLS), ["timer-close"])
+
 if __name__ == "__main__":
     unittest.main()

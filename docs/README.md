@@ -50,6 +50,7 @@
 | `app/style.css` | 見た目。`:root` がトークンの正本 |
 | `app/tasks.js` | タスク画面（追加・完了・削除・取り消し・期限の表示。仮に localStorage の `tasks.v1` に保存。D-026） |
 | `app/report.js` | 日報画面（1日1件・4項目。朝4時で日付を区切る。仮に localStorage の `reports.v1`。D-026, D-027） |
+| `app/timer.js` | タイマー画面（用途別・時間を指定・利用者が作るタイマー。同時に1つ。終了の通知を予約・取り消し。仮に localStorage の `timer.v1`。D-026, D-028） |
 | `app/settings.js` | 送信サーバーの URL と合言葉（端末内保存） |
 | `app/sample-data.js` | 次の予定の仮データ（フェーズ 2 で置き換え） |
 | `app/sw.js` | Service Worker（キャッシュ・通知の表示とタップ）。`CACHE_VERSION` は `APP_VERSION` と同じにする |
@@ -64,7 +65,7 @@
 | パス | 内容 |
 | --- | --- |
 | `data/dialogue_template.yaml` | セリフ集の正本。編集したら `python3 scripts/build_dialogue.py` |
-| `worker/worker.js` | 送信サーバー（Cloudflare のダッシュボードに貼り付けて使う） |
+| `worker/worker.js` | 送信サーバー（Cloudflare のダッシュボードに貼り付けて使う）。即時送信・予約（`/api/send`）、キー付きの予約と取り消し（`/api/schedule`・`/api/cancel`。D-015, D-028） |
 | `worker/package.json` | テストで読み込むための設定（デプロイには不要） |
 | `scripts/build_dialogue.py` | セリフ集の YAML → JSON |
 | `scripts/contrast_check.py` | 色の明暗差の計算（トークンを変えたら実行し、`docs/design.md` に貼る） |
@@ -75,5 +76,5 @@
 | `tests/test_dialogue.py` | セリフ集の YAML と JSON の一致 |
 | `tests/test_ntfy_send.py` | ntfy 送信スクリプト |
 | `tests/test_docs_index.py` | この目次にすべてのファイルが載っているか |
-| `tests/worker.test.mjs` | 送信サーバー（暗号化・予約・認証） |
+| `tests/worker.test.mjs` | 送信サーバー（暗号化・予約・認証・キー付きの予約と取り消し） |
 | `tests/sw.test.mjs` | Service Worker（通知の表示とタップ・キャッシュの取り方） |

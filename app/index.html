@@ -119,7 +119,59 @@
 
       <div id="task-toast" class="toast" role="status" hidden></div>
     </section>
-    <section id="view-timer" class="view"><h1><span class="label-en" aria-hidden="true">TIMER</span>タイマー</h1><p class="note">この画面は次のタスクで作ります。</p></section>
+    <!-- タイマー（D-026 ③, D-028）：待機（一覧 → 時間を指定 → タイマーを作る）／動作中／終了 の3つを timer.js が切り替える。
+         金の塗りは、待機＝「開始」（作るフォームを開いている間は「保存」）、動作中＝なし、終了＝「閉じる」 -->
+    <section id="view-timer" class="view timer">
+      <h1><span class="label-en" aria-hidden="true">TIMER</span>タイマー</h1>
+
+      <div id="timer-idle">
+        <ul id="timer-list" class="task-list" aria-label="タイマー"></ul>
+
+        <form id="timer-quick" class="timer-quick">
+          <label for="timer-quick-min">時間を指定（分）</label>
+          <div class="timer-quick-row">
+            <input id="timer-quick-min" type="number" inputmode="numeric" min="1" max="600" step="1" autocomplete="off" enterkeyhint="go">
+            <button id="timer-quick-start" type="submit" class="cut-btn primary">開始</button>
+          </div>
+          <p id="timer-quick-status" class="status ng" role="status"></p>
+        </form>
+
+        <div class="task-add">
+          <button id="timer-new-open" type="button" class="cut-btn quiet">＋ タイマーを作る</button>
+          <form id="timer-form" class="task-form" hidden>
+            <label for="timer-new-name">名前</label>
+            <input id="timer-new-name" type="text" maxlength="30" autocomplete="off" enterkeyhint="next">
+            <label for="timer-new-min">時間（分）</label>
+            <input id="timer-new-min" type="number" inputmode="numeric" min="1" max="600" step="1" autocomplete="off" enterkeyhint="done">
+            <div class="form-actions">
+              <button id="timer-new-cancel" type="button" class="cut-btn quiet">やめる</button>
+              <button id="timer-new-save" type="submit" class="cut-btn primary">保存</button>
+            </div>
+            <p id="timer-form-status" class="status ng" role="status"></p>
+          </form>
+        </div>
+      </div>
+
+      <section id="timer-running" class="timer-run" aria-label="動いているタイマー" hidden>
+        <p id="timer-name" class="timer-name">-</p>
+        <p id="timer-rest" class="timer-rest" role="timer">--:--</p>
+        <p id="timer-end" class="note">-</p>
+        <p id="timer-notify" class="status" role="status"></p>
+        <button id="timer-stop" type="button" class="cut-btn quiet">止める</button>
+      </section>
+
+      <section id="timer-done" class="timer-run" aria-label="終わったタイマー" hidden>
+        <p id="timer-done-title" class="timer-name">-</p>
+        <p id="timer-done-at" class="note">-</p>
+        <section class="dialogue dialogue-mini" aria-label="キィニチのセリフ">
+          <div class="nameplate" aria-hidden="true">キィニチ</div>
+          <p id="timer-done-line" class="line" role="status">…</p>
+        </section>
+        <button id="timer-close" type="button" class="cut-btn primary">閉じる</button>
+      </section>
+
+      <div id="timer-toast" class="toast" role="status" hidden></div>
+    </section>
     <!-- 日報（D-026 ②, D-027）：今日の日報（4項目）→ 保存 → これまでの日報。主ボタンは「保存する」1つ -->
     <section id="view-report" class="view report">
       <h1><span class="label-en" aria-hidden="true">REPORT</span>日報</h1>
@@ -194,5 +246,6 @@
   <script src="app.js"></script>
   <script src="tasks.js"></script>
   <script src="report.js"></script>
+  <script src="timer.js"></script>
 </body>
 </html>

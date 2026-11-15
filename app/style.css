@@ -453,7 +453,7 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
 .due-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .form-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: var(--space-3); }
 .form-actions .cut-btn { margin-top: 0; }
-#task-toast { bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4)); }
+#task-toast, #timer-toast { bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4)); }
 /* トーストの文は 1 行に収め、「取り消す」は折り返さない（狭い画面でも押しやすく） */
 .toast > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toast .undo { flex: none; white-space: nowrap; }
@@ -477,6 +477,18 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
 .report-item dl { display: block; padding: 0 0 var(--space-3); }
 .report-item dt { margin-top: var(--space-2); }
 .report-item dd { white-space: pre-wrap; font-size: var(--fs-body); line-height: var(--lh-body); }
+
+/* ---------- タイマー（D-026 ③, D-028）。一覧の行はタスクと同じ部品（.task-row / .task-main / .task-del）を使う ---------- */
+.timer-min { flex: none; margin-left: auto; padding: 0 var(--space-2) 0 var(--space-3); font-size: var(--fs-subhead); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.timer-quick { margin-top: var(--space-5); }
+.timer-quick-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); align-items: center; margin-top: var(--space-1); }
+.timer-quick-row .cut-btn { margin-top: 0; }
+.timer-run { margin-top: var(--space-5); }
+.timer-run .note { margin: 0; }
+.timer-name { margin: 0; font-size: var(--fs-body); font-weight: 700; }
+/* 残り時間は時刻と同じく大きく細く（CR-T01）。数字の幅をそろえる（V2-05） */
+.timer-rest { margin: var(--space-3) 0 var(--space-2); font-size: var(--fs-display); font-weight: 300; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.timer-run .cut-btn { margin-top: var(--space-4); }
 
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {
