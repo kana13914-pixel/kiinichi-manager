@@ -70,4 +70,4 @@
 - `docs/spec.md` / `docs/decisions.md` — 仕様と決定事項（決定は追記のみ）
 - `docs/visual_rules.md` → `docs/ui_knowledge.md` → `docs/design.md` — 画面の見た目を作る・直す前に
 - `NEEDS_HUMAN.md` — 人間への依頼キュー
-- テスト：`python3 -m unittest discover -s tests` と `node --test tests/worker.test.mjs tests/sw.test.mjs`
+- テスト：`python3 -m unittest discover -s tests` と `node --test tests/worker.test.mjs tests/sw.test.mjs`（道具は `pip install -r requirements-dev.txt`。push すると GitHub Actions でも走る）

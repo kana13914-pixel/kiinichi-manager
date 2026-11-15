@@ -23,6 +23,8 @@
 | `NEEDS_HUMAN.md` | 人間への依頼キュー（H-001〜） |
 | `.env.example` | PC から ntfy に送るときの設定例（`.env` はコミットしない） |
 | `.gitignore` | コミットしないファイル |
+| `requirements-dev.txt` | 自動テストに必要な道具（`pip install -r requirements-dev.txt`） |
+| `.github/workflows/test.yml` | push のたびに自動テストを両方とも走らせる設定（GitHub Actions。D-033） |
 
 ## docs/ — 仕様・決定・手順
 

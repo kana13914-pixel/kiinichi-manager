@@ -1,6 +1,6 @@
 # 引き継ぎ資料（別のチャットで作業を続けるとき）
 
-最終更新：2026-11-15（版 phase1-v14 の公開直後）
+最終更新：2026-11-15（版 phase1-v15。コードレビューの指摘を修正した直後）
 
 この資料には、**ほかのファイルに書かれていないことだけ**を書く。仕様・決定・タスク・手順は該当ファイルを参照する。内容が古くなったら、作業を終えるたびにこのファイルを直す。
 
@@ -13,15 +13,16 @@
 | 項目 | 状態 | 詳しくは |
 | --- | --- | --- |
 | フェーズ | フェーズ1（画面設計）の「各機能画面」 | `docs/roadmap.md` の「フェーズ1」 |
-| 公開中の版 | `phase1-v14`（`app/app.js` の `APP_VERSION`） | 公開 URL は `NEEDS_HUMAN.md` の H-010 |
+| 公開中の版 | `phase1-v14`。**`phase1-v15` は作業ブランチ `claude/admiring-tesla-6fouis` にあり、main への反映待ち**（`app/app.js` の `APP_VERSION`） | 公開 URL は `NEEDS_HUMAN.md` の H-010 |
 | ホーム | 完了・実機確認済み | `docs/decisions.md` D-019〜D-025 |
 | タスク画面 | 完了・実機確認済み（phase1-v9） | roadmap「タスク画面」、D-026 ① |
 | 日報画面 | 完了・実機確認済み（phase1-v10） | roadmap「日報画面」、D-026 ②、D-027 |
 | タイマー画面 | 完了・実機確認済み（phase1-v11。終了の通知つき。セリフは phase1-v12 で確定） | roadmap「タイマー画面」、D-028、D-029 |
 | 予定画面 | phase1-v13 に利用者から修正依頼 → リストと月表示の切り替えに作り直した（phase1-v14） | roadmap「予定画面」、D-030、D-032 |
 | 修正依頼への対応 | **実装済み・実機確認待ち**（phase1-v14）：削除の確認、タスクの一言、完了タスクの自動削除、日報の調子の印と「もっと見る」、予定のリスト／月 | roadmap「利用者の修正依頼への対応」、D-031、D-032 |
+| コードレビューの指摘の修正 | **実装済み・main への反映と実機確認待ち**（phase1-v15）：通知のやり直しと購読の登録し直し、日報の書きかけ、朝4時区切り、共通部品の切り出し、CSS の整理、テストの自動実行 | roadmap「コードレビューの指摘の修正」、D-033、D-034 |
 | 次の作業 | 修正の実機確認が OK なら、フェーズ1の「各機能画面」を完了にして **フェーズ2（データ設計）** へ | roadmap「フェーズ2」、下の「3」 |
-| 人間待ち | H-013（立ち絵。受け入れ準備は済み） | `NEEDS_HUMAN.md` |
+| 人間待ち | H-013（立ち絵。受け入れ準備は済み）、H-015（送信サーバーの貼り付け直し）、H-016（旧リポジトリの公開を止める） | `NEEDS_HUMAN.md` |
 | 利用者の確認待ちのセリフ（仮案） | `idle_greeting`、`screen_empty.*`（`schedule` を含む）、`report_saved.*`、`tasks_status.*`（`timer_done.*` は確定済み。D-029） | `data/dialogue_template.yaml` の description に「仮案」と書いてある項目 |
 
 ## 3. 次の作業の要点（フェーズ2：データ設計）
@@ -45,7 +46,7 @@
 
 ## 5. 1画面を作るときの手順（毎回やること）
 
-1. 画面の中身：`app/index.html` の該当 `view`、画面ごとの JS（`app/tasks.js` や `app/report.js` を手本にした IIFE）、`app/style.css` の「各機能画面の共通部品」の後ろにその画面の節を足す。色・大きさはトークンだけを使う（`tests/test_style.py` が確かめる）
+1. 画面の中身：`app/index.html` の該当 `view`、画面ごとの JS（`app/tasks.js` や `app/report.js` を手本にした IIFE。日付は `util.js` の `todayKey`、保存は `Store`、取り消しの表示は `ui.js` の `makeToast`、描き直しは `onShow` を使う）、`app/style.css` の「各機能画面の共通部品」の後ろにその画面の節を足す。色・大きさはトークンだけを使う（`tests/test_style.py` が確かめる）
 2. セリフを足したら `python3 scripts/build_dialogue.py` で JSON を作り直す
 3. 版を上げる：`app/app.js` の `APP_VERSION` と `app/sw.js` の `CACHE_VERSION` を同じ値にする。新しい JS は `app/sw.js` の `ASSETS` にも足す
 4. 新しいファイルは `docs/README.md` の表に足す（載っていないと `tests/test_docs_index.py` が落ちる）
@@ -59,7 +60,8 @@
 ## 6. 作業環境のくせ・つまずいたこと
 
 - **公開の確認**：`gh api` の Pages API はプロキシで止められる。push の約1分後に、WebFetch で `https://kana13914-pixel.github.io/kiinichi-manager/app/sw.js?check=<版>` を読み、`CACHE_VERSION` が新しい版になっているかで確かめる（`?check=` を変えるとキャッシュを避けられる）
-- **画面テスト**：Playwright と Chrome（`/usr/bin/google-chrome`）は入っている。パッケージの追加（pip・npm）はネットワーク設定で止められていることがある
+- **画面テスト**：Chrome（`/usr/bin/google-chrome`）は入っているが、Python の Playwright は入っていないことがある（`ModuleNotFoundError: No module named 'playwright'` で画面テスト全体が始まらない）。`pip install -r requirements-dev.txt` で入れる（リポジトリを汚したくなければ `pip install --target <一時フォルダ>` して `PYTHONPATH` に足す）。push すれば GitHub Actions でも両方のテストが走る
+- **変更を一時的に戻して見た目を比べるとき**は、整理の前後で画面写真を撮り、ファイルを `cmp` で比べる（角丸の縁で1〜数ピクセルのゆらぎは出る）
 - **変更を一時的に戻して試すとき**は `git stash` を使わない（未コミットの `app/style.css` の変更を一度失いかけた）。ファイルを `/tmp` にコピーして戻す
 - **画面テストで時刻を大きく進めるとき**は `page.clock.run_for` ではなく `page.clock.fast_forward` を使う（run_for は毎秒のタイマーを全部実行するので、数時間ぶん進めると終わらない）
 - **確認ダイアログ**（`confirmDialog`）の結果は非同期で届く。テストでは「削除する」を押したあと、トーストが出るのを待ってから確かめる
