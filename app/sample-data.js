@@ -1,7 +1,9 @@
 // 仮データ（フェーズ1の画面確認用）。フェーズ2でローカル保存・Googleカレンダー連携に置き換える。
-// 本物の予定は使わない。時刻は「今日」の日付で作る。
+// 本物の予定は使わない。予定画面の縦リストも月表示もホームも、ここ（eventsOn）だけを読む（D-032）。
+//   kind … 'routine'＝毎日の生活の時刻（起床・食事など）／'event'＝カレンダーに入れる予定
+//   allDay … 時刻のない終日の予定
 const SampleData = (() => {
-  const items = [
+  const routine = [
     ['07:00', '起床'],
     ['09:00', '仕事開始'],
     ['12:00', '昼食'],
@@ -11,13 +13,37 @@ const SampleData = (() => {
     ['22:30', '入浴'],
     ['23:30', '就寝'],
   ];
-  function todayEvents(now = new Date()) {
-    return items.map(([hm, title]) => {
-      const [h, m] = hm.split(':').map(Number);
-      const at = new Date(now);
-      at.setHours(h, m, 0, 0);
-      return { at, title };
-    });
+  // 仮の予定。毎月この日に置く（days は続く日数）
+  const monthly = [
+    { day: 3, time: '19:00', title: '読書会' },
+    { day: 12, time: '18:00', title: '歯医者' },
+    { day: 14, title: '部屋の片づけ' },
+    { day: 14, time: '10:00', title: '買い出し' },
+    { day: 14, time: '19:00', title: '友人と夕食' },
+    { day: 18, title: '定期点検' },
+    { day: 20, days: 2, title: '旅行' },
+    { day: 26, time: '15:00', title: '美容院' },
+    { day: 28, title: '大掃除' },
+  ];
+  function timeOn(date, hm) {
+    const [h, m] = hm.split(':').map(Number);
+    const at = new Date(date);
+    at.setHours(h, m, 0, 0);
+    return at;
   }
-  return { todayEvents };
+  // その日の予定。終日が先、あとは時刻順
+  function eventsOn(date) {
+    const d = date.getDate();
+    const list = routine.map(([hm, title]) => ({ at: timeOn(date, hm), title, kind: 'routine', allDay: false }));
+    for (const m of monthly) {
+      if (d < m.day || d >= m.day + (m.days || 1)) continue;
+      list.push({ at: timeOn(date, m.time || '00:00'), title: m.title, kind: 'event', allDay: !m.time });
+    }
+    return list.sort((a, b) => (a.allDay !== b.allDay ? (a.allDay ? -1 : 1) : a.at - b.at));
+  }
+  // 時刻のある予定だけ（ホームの「次の予定」用）
+  function todayEvents(now = new Date()) {
+    return eventsOn(now).filter((e) => !e.allDay);
+  }
+  return { eventsOn, todayEvents };
 })();

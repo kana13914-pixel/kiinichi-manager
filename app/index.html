@@ -79,26 +79,40 @@
       <div id="toast" class="toast" role="status" hidden></div>
     </section>
 
-    <!-- 予定（D-026 ④, D-030）：今日と明日の予定を見るだけ。フェーズ2までは仮データ。操作がないので金の塗りはない -->
+    <!-- 予定（D-026 ④, D-030, D-032）：見るだけ。リスト（今日から7日先まで）と月（マス目）を上のボタンで切り替える。
+         フェーズ2までは仮データ。主な操作がないので金の塗りはない -->
     <section id="view-schedule" class="view schedule">
       <h1><span class="label-en" aria-hidden="true">SCHEDULE</span>予定 <small class="tag">仮</small></h1>
 
-      <section id="schedule-empty" class="dialogue dialogue-mini" aria-label="キィニチのセリフ" hidden>
-        <div class="nameplate" aria-hidden="true">キィニチ</div>
-        <p id="schedule-empty-line" class="line">…</p>
-      </section>
+      <div class="schedule-modes" role="group" aria-label="表示の切り替え">
+        <button id="schedule-mode-list" type="button" class="cut-btn quiet chip" aria-pressed="true">リスト</button>
+        <button id="schedule-mode-month" type="button" class="cut-btn quiet chip" aria-pressed="false">月</button>
+      </div>
 
-      <h2 id="schedule-today-title" class="section-title schedule-first">今日</h2>
-      <ul id="schedule-today" class="schedule-list" aria-labelledby="schedule-today-title"></ul>
-      <p id="schedule-today-none" class="note" hidden>予定はありません</p>
+      <div id="schedule-list-view">
+        <section id="schedule-empty" class="dialogue dialogue-mini" aria-label="キィニチのセリフ" hidden>
+          <div class="nameplate" aria-hidden="true">キィニチ</div>
+          <p id="schedule-empty-line" class="line">…</p>
+        </section>
+        <div id="schedule-days"></div>
+      </div>
 
-      <h2 id="schedule-tomorrow-title" class="section-title">明日</h2>
-      <ul id="schedule-tomorrow" class="schedule-list" aria-labelledby="schedule-tomorrow-title"></ul>
-      <p id="schedule-tomorrow-none" class="note" hidden>予定はありません</p>
+      <div id="schedule-month-view" hidden>
+        <div class="cal-head">
+          <button id="cal-prev" type="button" class="cal-nav" aria-label="前の月">‹</button>
+          <h2 id="cal-title" aria-live="polite">-</h2>
+          <button id="cal-next" type="button" class="cal-nav" aria-label="次の月">›</button>
+          <button id="cal-today" type="button" class="cut-btn quiet chip">今日</button>
+        </div>
+        <div class="cal-week" aria-hidden="true"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>
+        <div id="cal-grid" class="cal-grid"></div>
+        <h2 id="cal-day-title" class="schedule-day-title">-</h2>
+        <ul id="cal-day-list" class="schedule-list" aria-labelledby="cal-day-title"></ul>
+      </div>
 
       <p class="note schedule-note">仮の予定を表示しています。Google カレンダーとつなぐと、ここに実際の予定が出ます。</p>
     </section>
-    <!-- タスク（D-026 ①）：未完了（期限の近い順）→ 完了（下にまとめる）→ 追加。主ボタンは「＋ タスクを追加」1つ -->
+
     <section id="view-tasks" class="view tasks">
       <h1><span class="label-en" aria-hidden="true">TASKS</span>タスク</h1>
 

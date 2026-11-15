@@ -1155,69 +1155,167 @@ class PwaTest(unittest.TestCase):
         page.clock.run_for(25 * 60_000 + 500)
         self.assertEqual(page.evaluate(self.GOLD_FILLS), ["timer-close"])
 
-    # ---------- 予定画面（D-026 ④, D-030） ----------
-    def schedule_page(self, hour=10, minute=0, day=9, size=(393, 852)):
-        page = self.clock_page(hour, minute, "#schedule", day=day, size=size)
+    # ---------- 予定画面（D-026 ④, D-030, D-032） ----------
+    def schedule_page(self, hour=10, minute=0, day=9, size=(393, 852), mode=None):
+        init = "localStorage.setItem('schedule.view', '%s')" % mode if mode else None
+        page = self.clock_page(hour, minute, "#schedule", day=day, size=size, init_script=init)
         page.wait_for_selector("#view-schedule", state="visible", timeout=3_000)
         return page
 
-    def schedule_rows(self, page, which):
-        return page.eval_on_selector_all(f"#schedule-{which} .schedule-row", """els => els.map(e => [
-          e.querySelector('.schedule-time').textContent, e.querySelector('.schedule-title').textContent,
-          e.classList.contains('past'), e.classList.contains('next'),
-          e.querySelector('.schedule-rest') ? e.querySelector('.schedule-rest').textContent : null])""")
+    ROWS = """els => els.map(e => [
+      e.querySelector('.schedule-time').textContent, e.querySelector('.schedule-title').textContent,
+      e.classList.contains('past'), e.classList.contains('next'),
+      e.querySelector('.schedule-rest') ? e.querySelector('.schedule-rest').textContent : null])"""
 
-    def test_schedule_lists_today_and_tomorrow_with_next_marked(self):
+    def schedule_rows(self, page, date):
+        return page.eval_on_selector_all(f"#schedule-days .schedule-day[data-date='{date}'] .schedule-row", self.ROWS)
+
+    def test_schedule_list_shows_eight_days_with_day_headers(self):
         page = self.schedule_page()
-        self.assertEqual(page.text_content("#schedule-today-title"), "今日 11月9日(月)")
-        self.assertEqual(page.text_content("#schedule-tomorrow-title"), "明日 11月10日(火)")
-        today = self.schedule_rows(page, "today")
+        self.assertTrue(page.is_visible("#schedule-list-view"))
+        self.assertTrue(page.is_hidden("#schedule-month-view"))
+        titles = page.eval_on_selector_all("#schedule-days .schedule-day-title", "els => els.map(e => e.textContent)")
+        self.assertEqual(titles, ["今日 11月9日(月)", "明日 11月10日(火)", "11月11日(水)", "11月12日(木)",
+                                  "11月13日(金)", "11月14日(土)", "11月15日(日)", "11月16日(月)"])  # 今日から7日先まで
+        today = self.schedule_rows(page, "2026-11-09")
         self.assertEqual(len(today), 8)
         self.assertEqual(today[0], ["07:00", "起床", True, False, None])
-        self.assertEqual(today[1], ["09:00", "仕事開始", True, False, None])
         self.assertEqual(today[2], ["12:00", "昼食", False, True, "次 ・ あと2時間"])
-        self.assertEqual([r[3] for r in today].count(True), 1)
-        tomorrow = self.schedule_rows(page, "tomorrow")
-        self.assertEqual(len(tomorrow), 8)
-        self.assertFalse(any(r[2] or r[3] for r in tomorrow))
-        self.assertTrue(page.is_hidden("#schedule-empty"))
+        self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-row.next")), 1)
+        self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-day:not([data-date='2026-11-09']) .schedule-row.past")), 0)
+        # 予定のある日：終日が先、あとは時刻順に生活の時刻と混ざる
+        sat = [r[:2] for r in self.schedule_rows(page, "2026-11-14")]
+        self.assertEqual(sat[0], ["終日", "部屋の片づけ"])
+        self.assertEqual(sat[2:4], [["09:00", "仕事開始"], ["10:00", "買い出し"]])
+        self.assertIn(["19:00", "友人と夕食"], sat)
         self.assertIn("仮", page.text_content("#view-schedule h1"))
+        # 日付の見出しは帯にして、スクロール中も上に残す
+        style = page.eval_on_selector(".schedule-day-title", "e => [getComputedStyle(e).position, getComputedStyle(e).backgroundColor]")
+        self.assertEqual(style[0], "sticky")
+        self.assertNotIn(style[1], ("rgba(0, 0, 0, 0)", "transparent"))
         # ホームの「次の予定」と同じ予定を指している
         page.evaluate("location.hash = '#home'")
         self.assertIn("昼食", page.text_content("#next-event"))
 
     def test_schedule_next_moves_as_time_passes(self):
         page = self.schedule_page(hour=11, minute=59)
-        self.assertEqual(self.schedule_rows(page, "today")[2][4], "次 ・ あと1分")
+        self.assertEqual(self.schedule_rows(page, "2026-11-09")[2][4], "次 ・ あと1分")
         page.clock.run_for(62_000)  # 12:00 を過ぎる
-        today = self.schedule_rows(page, "today")
+        today = self.schedule_rows(page, "2026-11-09")
         self.assertEqual(today[2][2:], [True, False, None])
         self.assertEqual(today[3], ["15:00", "休憩", False, True, "次 ・ あと3時間"])
 
     def test_schedule_after_last_event_marks_tomorrow_first(self):
         page = self.schedule_page(hour=23, minute=45)
-        self.assertTrue(all(r[2] for r in self.schedule_rows(page, "today")))
-        tomorrow = self.schedule_rows(page, "tomorrow")
-        self.assertEqual(tomorrow[0], ["07:00", "起床", False, True, "次 ・ あと7時間15分"])
+        self.assertTrue(all(r[2] for r in self.schedule_rows(page, "2026-11-09")))
+        self.assertEqual(self.schedule_rows(page, "2026-11-10")[0], ["07:00", "起床", False, True, "次 ・ あと7時間15分"])
 
-    def test_schedule_empty_shows_character_line(self):
+    def test_schedule_day_without_events_and_all_empty(self):
         page = self.schedule_page()
-        page.evaluate("SampleData.todayEvents = () => []; Schedule.render()")
+        # 1日だけ予定がない：見出しは残り「予定なし」と出る
+        page.evaluate("""() => { const orig = SampleData.eventsOn;
+          SampleData.eventsOn = (d) => d.getDate() === 11 ? [] : orig(d); Schedule.refresh(); }""")
+        self.assertEqual(page.text_content("#schedule-days .schedule-day[data-date='2026-11-11'] .schedule-row"), "予定なし")
+        self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-day")), 8)
+        self.assertTrue(page.is_hidden("#schedule-empty"))
+        # 8日とも予定がない：キィニチの一言
+        page.evaluate("SampleData.eventsOn = () => []; Schedule.refresh()")
         page.wait_for_function("document.getElementById('schedule-empty-line').textContent !== '…'", timeout=3_000)
         self.assertTrue(page.is_visible("#schedule-empty"))
         self.assertEqual(page.text_content("#schedule-empty-line"), "予定は入っていない。好きに使えばいい。")
-        self.assertTrue(page.is_visible("#schedule-today-none"))
+        self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-row.none")), 8)
 
-    def test_schedule_screen_no_gold_fill_row_height_and_width(self):
-        page = self.schedule_page(size=(375, 667))
-        fills = page.evaluate("""() => [...document.querySelectorAll('#view-schedule *')]
+    def cal_cell(self, page, date):
+        return page.eval_on_selector(f"#cal-grid .cal-cell[data-date='{date}']", """e => ({
+          date: e.querySelector('.cal-date').textContent, tags: [...e.querySelectorAll('.cal-tag')].map(t => t.textContent),
+          more: e.querySelector('.cal-more') ? e.querySelector('.cal-more').textContent : null,
+          out: e.classList.contains('out'), today: e.classList.contains('today'),
+          pressed: e.getAttribute('aria-pressed'), label: e.getAttribute('aria-label') })""")
+
+    def test_schedule_switch_to_month_and_remember(self):
+        page = self.schedule_page()
+        self.assertEqual(page.get_attribute("#schedule-mode-list", "aria-pressed"), "true")
+        page.click("#schedule-mode-month")
+        self.assertTrue(page.is_visible("#schedule-month-view"))
+        self.assertTrue(page.is_hidden("#schedule-list-view"))
+        self.assertEqual(page.get_attribute("#schedule-mode-month", "aria-pressed"), "true")
+        self.assertEqual(page.get_attribute("#schedule-mode-list", "aria-pressed"), "false")
+        page.reload()  # 選んだ表示を覚えている
+        page.wait_for_selector("#schedule-month-view", state="visible", timeout=3_000)
+        page.click("#schedule-mode-list")
+        self.assertTrue(page.is_visible("#schedule-list-view"))
+        self.assertEqual(page.evaluate("localStorage.getItem('schedule.view')"), "list")
+
+    def test_month_grid_dates_tags_and_today(self):
+        page = self.schedule_page(mode="month")
+        self.assertEqual(page.text_content("#cal-title"), "2026年11月")
+        dates = page.eval_on_selector_all("#cal-grid .cal-cell", "els => els.map(e => e.dataset.date)")
+        self.assertEqual(len(dates), 35)  # 2026年11月は日曜はじまりで5週
+        self.assertEqual([dates[0], dates[-1]], ["2026-11-01", "2026-12-05"])
+        self.assertEqual(page.text_content(".cal-week"), "日月火水木金土")
+        today = self.cal_cell(page, "2026-11-09")
+        self.assertEqual([today["today"], today["pressed"], today["tags"]], [True, "true", []])  # 生活の時刻はタグにしない
+        self.assertTrue(today["label"].startswith("今日 11月9日(月)"))
+        self.assertEqual(len(page.query_selector_all("#cal-grid .cal-cell.today")), 1)
+        sat = self.cal_cell(page, "2026-11-14")
+        self.assertEqual([sat["date"], sat["tags"], sat["more"]], ["14", ["部屋の片づけ", "買い出し"], "+1"])
+        self.assertEqual(sat["label"], "11月14日(土) 予定3件")
+        self.assertEqual(self.cal_cell(page, "2026-11-20")["tags"], ["旅行"])
+        self.assertEqual(self.cal_cell(page, "2026-11-21")["tags"], ["旅行"])  # 続く予定は日ごとにタグを出す
+        dec = self.cal_cell(page, "2026-12-03")
+        self.assertEqual([dec["out"], dec["tags"]], [True, ["読書会"]])
+        # 今日には予定がないので、下は「予定なし」
+        self.assertEqual(page.text_content("#cal-day-title"), "11月9日(月)")
+        self.assertEqual(page.text_content("#cal-day-list"), "予定なし")
+
+    def test_month_tap_day_shows_that_days_events(self):
+        page = self.schedule_page(mode="month")
+        page.click("#cal-grid .cal-cell[data-date='2026-11-14']")
+        self.assertEqual(self.cal_cell(page, "2026-11-14")["pressed"], "true")
+        self.assertEqual(self.cal_cell(page, "2026-11-09")["pressed"], "false")
+        self.assertEqual(page.text_content("#cal-day-title"), "11月14日(土)")
+        rows = [r[:2] for r in page.eval_on_selector_all("#cal-day-list .schedule-row", self.ROWS)]
+        self.assertEqual(rows, [["終日", "部屋の片づけ"], ["10:00", "買い出し"], ["19:00", "友人と夕食"]])
+        # 月の外の日を押すと、その月に移る
+        page.click("#cal-grid .cal-cell[data-date='2026-12-03']")
+        self.assertEqual(page.text_content("#cal-title"), "2026年12月")
+        self.assertEqual(page.text_content("#cal-day-title"), "12月3日(木)")
+
+    def test_month_prev_next_and_today(self):
+        page = self.schedule_page(mode="month")
+        page.click("#cal-next")
+        self.assertEqual(page.text_content("#cal-title"), "2026年12月")
+        self.assertEqual(page.text_content("#cal-day-title"), "12月1日(火)")
+        self.assertEqual(len(page.query_selector_all("#cal-grid .cal-cell.today")), 0)
+        page.click("#cal-next")
+        self.assertEqual(page.text_content("#cal-title"), "2027年1月")  # 年をまたぐ
+        self.assertEqual(len(page.query_selector_all("#cal-grid .cal-cell")), 42)  # 2027年1月は金曜はじまりで6週
+        page.click("#cal-today")
+        self.assertEqual(page.text_content("#cal-title"), "2026年11月")
+        self.assertEqual(self.cal_cell(page, "2026-11-09")["pressed"], "true")
+        page.click("#cal-prev")
+        self.assertEqual(page.text_content("#cal-title"), "2026年10月")
+
+    def test_schedule_screen_no_gold_fill_sizes_and_width(self):
+        gold = """() => [...document.querySelectorAll('#view-schedule *')]
           .filter((e) => e.getClientRects().length && getComputedStyle(e).backgroundColor === 'rgb(232, 196, 92)')
-          .map((e) => e.id || e.className)""")
-        self.assertEqual(fills, [])  # 見るだけの画面なので金の塗りはない
-        heights = page.eval_on_selector_all("#view-schedule .schedule-row", "els => els.map(e => e.getBoundingClientRect().height)")
+          .map((e) => e.id || e.className)"""
+        page = self.schedule_page(size=(375, 667))
+        self.assertEqual(page.evaluate(gold), [])  # 見るだけの画面なので金の塗りはない
+        heights = page.eval_on_selector_all("#schedule-days .schedule-row", "els => els.map(e => e.getBoundingClientRect().height)")
         self.assertTrue(all(h >= 52 for h in heights), heights)
         self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
         self.assertEqual(page.eval_on_selector(".schedule-time", "e => getComputedStyle(e).fontVariantNumeric"), "tabular-nums")
+        self.assertGreaterEqual(page.eval_on_selector("#schedule-mode-month", "e => e.getBoundingClientRect().height"), 44)
+        page.click("#schedule-mode-month")
+        self.assertEqual(page.evaluate(gold), [])
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
+        boxes = page.eval_on_selector_all("#cal-grid .cal-cell", "els => els.map(e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; })")
+        self.assertTrue(all(w >= 44 and h >= 44 for w, h in boxes), boxes[:3])  # マスは押せる大きさ
+        self.assertEqual(len({round(w) for w, _ in boxes}), 1)  # 7列が同じ幅（長いタグで広がらない）
+        for sel in ("#cal-prev", "#cal-next", "#cal-today"):
+            r = page.eval_on_selector(sel, "e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }")
+            self.assertTrue(r[0] >= 44 and r[1] >= 44, (sel, r))
 
 if __name__ == "__main__":
     unittest.main()

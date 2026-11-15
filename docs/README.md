@@ -48,12 +48,12 @@
 | `app/index.html` | 本体の画面（初回導線・ホーム・各タブ・設定） |
 | `app/app.js` | 本体の動き（画面切替・時計・セリフ・主ボタン・記録・復帰時の判定・通知の購読・立ち絵の自動表示。声の再生はなし：D-023）。`APP_VERSION` |
 | `app/style.css` | 見た目。`:root` がトークンの正本 |
-| `app/tasks.js` | タスク画面（追加・完了・削除・取り消し・期限の表示。仮に localStorage の `tasks.v1` に保存。D-026） |
-| `app/report.js` | 日報画面（1日1件・4項目。朝4時で日付を区切る。仮に localStorage の `reports.v1`。D-026, D-027） |
+| `app/tasks.js` | タスク画面（追加・完了・削除（確認つき）・取り消し・期限の表示・状況に合わせた一言。完了したタスクは完了日から7日で自動で消す。仮に localStorage の `tasks.v1`。D-026, D-031） |
+| `app/report.js` | 日報画面（1日1件・4項目。朝4時で日付を区切る。これまでの日報は7日分ずつ表示。仮に localStorage の `reports.v1`。D-026, D-027, D-031） |
 | `app/timer.js` | タイマー画面（用途別・時間を指定・利用者が作るタイマー。同時に1つ。終了の通知を予約・取り消し。仮に localStorage の `timer.v1`。D-026, D-028） |
-| `app/schedule.js` | 予定画面（今日と明日の予定を見るだけ。過ぎた予定は薄く、次の予定に印。フェーズ2までは `app/sample-data.js` の仮データ。D-026, D-030） |
+| `app/schedule.js` | 予定画面（見るだけ。リスト＝今日から7日先まで／月＝マス目にタグ、を切り替える。フェーズ2までは `app/sample-data.js` の仮データ。D-026, D-030, D-032） |
 | `app/settings.js` | 送信サーバーの URL と合言葉（端末内保存） |
-| `app/sample-data.js` | 次の予定の仮データ（フェーズ 2 で置き換え） |
+| `app/sample-data.js` | 予定の仮データ（毎日の生活の時刻＋仮の予定）。ホーム・予定のリスト・月表示が共通で読む `eventsOn(日付)`（フェーズ 2 で置き換え。D-032） |
 | `app/sw.js` | Service Worker（キャッシュ・通知の表示とタップ）。`CACHE_VERSION` は `APP_VERSION` と同じにする |
 | `app/manifest.webmanifest` | ホーム画面に追加したときの名前・色・アイコン |
 | `app/send.html`, `app/send.js` | 検証用の送信ページ（ntfy と Web Push） |
