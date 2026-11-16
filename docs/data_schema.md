@@ -19,6 +19,7 @@
 | `db.reports` | `{ 日付: { mood, done, left, tomorrow, savedAt } }` | 日報。1日1件。`mood` は `good`／`normal`／`tired`／`null` |
 | `db.records` | `{ 日付: { 種類: { time, at } } }` | 毎日の記録。`time` は押した時刻、`at` はその時点。種類は下の表 |
 | `db.timer` の `custom` | `[ { id, name, minutes } ]` | 利用者が作ったタイマー |
+| `db.timer` の `builtin` | `{ 用途別の id: 分数 }` | 用途別のタイマー（`work`・`break`・`bath`・`brush`）のうち、利用者が時間を変えたものだけ（D-044）。ないものは初めの時間 |
 
 ### 記録の種類（`db.records` の「種類」）
 
