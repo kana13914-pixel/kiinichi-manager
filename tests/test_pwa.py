@@ -1015,7 +1015,7 @@ class PwaTest(unittest.TestCase):
 
     def test_timer_lists_builtin_timers(self):
         page = self.timer_page()
-        rows = page.eval_on_selector_all("#timer-list .task-main", "els => els.map(e => e.textContent)")
+        rows = page.eval_on_selector_all("#timer-list li", "els => els.map(e => e.textContent)")
         self.assertEqual(rows, ["作業25分▶", "休憩5分▶", "入浴20分▶", "歯磨き3分▶"])
         self.assertEqual(page.query_selector_all("#timer-list .task-del"), [])  # 用途別のタイマーは消せない
         self.assertTrue(page.is_hidden("#timer-running"))
@@ -1090,11 +1090,11 @@ class PwaTest(unittest.TestCase):
         page.click("#timer-new-save")
         self.assertTrue(page.is_hidden("#timer-form"))
         self.assertTrue(page.is_visible("#timer-quick"))
-        rows = page.eval_on_selector_all("#timer-list .task-main", "els => els.map(e => e.textContent)")
+        rows = page.eval_on_selector_all("#timer-list li", "els => els.map(e => e.textContent)")
         self.assertEqual(rows[-1], "ストレッチ10分▶")
         page.reload()
         page.wait_for_selector("#view-timer", state="visible")
-        rows = page.eval_on_selector_all("#timer-list .task-main", "els => els.map(e => e.textContent)")
+        rows = page.eval_on_selector_all("#timer-list li", "els => els.map(e => e.textContent)")
         self.assertEqual(len(rows), 5)
         page.click("#timer-list li:last-child .task-main")
         self.assertEqual(page.text_content("#timer-name"), "ストレッチ（10分）")
@@ -1665,6 +1665,68 @@ class PwaTest(unittest.TestCase):
         page.click("#task-list .task-main")
         t2 = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
         self.assertGreater(t2["updatedAt"], t["updatedAt"])
+
+    # ---------- タイマーの時間を変える（D-044） ----------
+    def test_timer_minutes_editable_and_one_touch_start_kept(self):
+        page = self.timer_page()
+        # 時間の表示を押すと変えるフォーム。用途別は名前を変えられない
+        page.click("#timer-list li[data-id=work] .timer-min")
+        self.assertTrue(page.is_visible("#timer-form"))
+        self.assertEqual(page.text_content("#timer-form-title"), "「作業」の時間を変える")
+        self.assertTrue(page.is_hidden("#timer-new-name"))
+        self.assertEqual(page.input_value("#timer-new-min"), "25")
+        self.assertTrue(page.is_hidden("#timer-new-reset"))
+        self.assertTrue(page.is_hidden("#timer-running"))  # 時間を押しただけでは始まらない
+        self.assertEqual(page.evaluate(self.GOLD_FILLS), ["timer-new-save"])  # 金の塗りは「保存」だけ
+        page.fill("#timer-new-min", "0")
+        page.click("#timer-new-save")
+        self.assertTrue(page.is_visible("#timer-form"))  # 範囲外は保存しない（入力欄の決まりで止まる）
+        self.assertNotIn("builtin", {k: v for k, v in (self.timer_state(page) if page.evaluate("localStorage.getItem('db.timer')") else {}).items() if v})
+        page.fill("#timer-new-min", "50")
+        page.click("#timer-new-save")
+        self.assertTrue(page.is_hidden("#timer-form"))
+        self.assertEqual(page.text_content("#timer-list li[data-id=work]"), "作業50分▶")
+        self.assertEqual(self.timer_state(page)["builtin"], {"work": 50})
+        page.reload()  # 変えた時間は残る
+        page.wait_for_function("dialogue !== null")
+        self.assertEqual(page.text_content("#timer-list li[data-id=work] .timer-min"), "50分")
+        self.assertEqual(page.get_attribute("#timer-list li[data-id=work] .task-main", "aria-label"), "「作業」50分を開始")
+        # ワンタッチで開始（▶でも名前でも）。変えた時間で始まる
+        page.click("#timer-list li[data-id=work] .timer-go")
+        self.assertEqual(page.text_content("#timer-name"), "作業（50分）")
+        self.assertEqual(page.text_content("#timer-rest"), "50:00")
+        page.click("#timer-stop")
+        page.click("#timer-list li[data-id=break] .task-main")
+        self.assertEqual(page.text_content("#timer-name"), "休憩（5分）")
+        page.click("#timer-stop")
+        # 初めの時間に戻す
+        page.click("#timer-list li[data-id=work] .timer-min")
+        self.assertEqual(page.text_content("#timer-new-reset"), "初めの時間（25分）に戻す")
+        page.click("#timer-new-reset")
+        self.assertEqual(page.text_content("#timer-list li[data-id=work] .timer-min"), "25分")
+        self.assertEqual(self.timer_state(page)["builtin"], {})
+
+    def test_timer_custom_can_be_edited_and_touch_sizes(self):
+        state = {"custom": [{"id": "x", "name": "読書", "minutes": 15}], "running": None, "done": None}
+        page = self.timer_page(state=state, size=(375, 667))
+        page.click("#timer-list li[data-id=x] .timer-min")
+        self.assertEqual(page.text_content("#timer-form-title"), "「読書」を変える")
+        self.assertEqual([page.input_value("#timer-new-name"), page.input_value("#timer-new-min")], ["読書", "15"])
+        page.fill("#timer-new-name", "長い読書")
+        page.fill("#timer-new-min", "40")
+        page.click("#timer-new-save")
+        self.assertEqual(self.timer_state(page)["custom"], [{"id": "x", "name": "長い読書", "minutes": 40}])
+        self.assertEqual(page.text_content("#timer-list li[data-id=x] .timer-min"), "40分")
+        # 「＋ タイマーを作る」は空のフォームで開く（変える途中の内容が残らない）
+        page.click("#timer-new-open")
+        self.assertEqual([page.text_content("#timer-form-title"), page.input_value("#timer-new-name"), page.input_value("#timer-new-min")], ["タイマーを作る", "", ""])
+        self.assertTrue(page.is_visible("#timer-new-name"))
+        page.click("#timer-new-cancel")
+        # 押す場所は 44px 以上、行は横にはみ出さない
+        for sel in ("#timer-list li[data-id=x] .timer-min", "#timer-list li[data-id=x] .timer-go", "#timer-list li[data-id=x] .task-del"):
+            r = page.eval_on_selector(sel, "e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }")
+            self.assertTrue(r[0] >= 44 and r[1] >= 44, (sel, r))
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")

@@ -1,4 +1,4 @@
-// タイマー画面（D-026 ③, D-028）。用途別のタイマー（作業・休憩・入浴・歯磨き）、時間を指定、利用者が作るタイマー。
+// タイマー画面（D-026 ③, D-028）。用途別のタイマー（作業・休憩・入浴・歯磨き。時間は変えられる：D-044）、時間を指定、利用者が作るタイマー。
 // 動かせるのは同時に1つ。終了時刻を保存するので、アプリを閉じても残り時間は正しく進む。
 // アプリを閉じている間の終了は、開始時に通知を予約して知らせる（D-015。送信サーバーの /api/schedule・/api/cancel）。
 // 保存は localStorage の db.timer（D-043。形は docs/data_schema.md）。util.js（保存）、dialogue.js（セリフ）、ui.js（確認・取り消しの表示・ごみ箱）、
@@ -20,7 +20,7 @@ const Timer = (() => {
   const $ = (id) => document.getElementById(id);
 
   // ---------- 保存 ----------
-  // { custom: [{ id, name, minutes }], running: { name, minutes, kind, endAt, line, text, notify, notifyError } | null, done: { … } | null,
+  // { custom: [{ id, name, minutes }], builtin: { 用途別の id: 変えた分数 }, running: { name, minutes, kind, endAt, line, text, notify, notifyError } | null, done: { … } | null,
   //   cancelPending: 取り消しがまだ送信サーバーに届いていない }
   function load() {
     let s = Store.read(KEY);
@@ -30,7 +30,20 @@ const Timer = (() => {
       running: s.running && Number.isFinite(s.running.endAt) ? s.running : null,
       done: s.done && Number.isFinite(s.done.endAt) ? s.done : null,
       cancelPending: s.cancelPending === true,
+      builtin: validBuiltin(s.builtin),
     };
+  }
+  // 用途別のタイマーの、利用者が変えた時間（D-044）。{ work: 50 } のように、変えたものだけ持つ
+  function validBuiltin(b) {
+    const out = {};
+    if (b && typeof b === 'object') {
+      for (const t of BUILTIN) if (validMinutes(b[t.id]) && b[t.id] !== t.minutes) out[t.id] = b[t.id];
+    }
+    return out;
+  }
+  // 用途別のタイマーの一覧（変えた時間を反映。base は初めの時間）
+  function builtins(state) {
+    return BUILTIN.map((t) => ({ ...t, base: t.minutes, minutes: state.builtin[t.id] || t.minutes }));
   }
   // 保存できたら true。失敗したら画面に知らせて false（D-033）
   function save(state) {
@@ -151,10 +164,12 @@ const Timer = (() => {
   }
   const setIf = setIfChanged;
 
+  // 1行：名前（押すと開始）｜時間（押すと変える。D-044）｜▶（押すと開始）｜（自分で作ったものは）ごみ箱
   function row(t, custom) {
     const li = document.createElement('li');
     li.className = 'task-row';
     li.dataset.id = t.id;
+    const begin = () => start(t.name, t.minutes, t.kind || 'default');
     const main = document.createElement('button');
     main.type = 'button';
     main.className = 'task-main timer-start';
@@ -162,16 +177,24 @@ const Timer = (() => {
     const name = document.createElement('span');
     name.className = 'task-title';
     name.textContent = t.name;
-    const min = document.createElement('span');
+    main.append(name);
+    main.addEventListener('click', begin);
+    const min = document.createElement('button');
+    min.type = 'button';
     min.className = 'timer-min';
-    min.textContent = `${t.minutes}分`;
-    const go = document.createElement('span'); // 押すと始まることを見た目で示す（Q-D）。装飾なので読み上げない（aria-label に「開始」がある）
+    min.setAttribute('aria-label', `「${t.name}」の時間を変える（今は${t.minutes}分）`);
+    const minText = document.createElement('span');
+    minText.textContent = `${t.minutes}分`;
+    min.append(minText);
+    min.addEventListener('click', () => openForm({ id: t.id, custom }));
+    const go = document.createElement('button'); // 押すと始まることを見た目で示す（Q-D）。名前のボタンと同じ働きなので、読み上げとキー操作からは外す
+    go.type = 'button';
     go.className = 'timer-go';
     go.setAttribute('aria-hidden', 'true');
+    go.tabIndex = -1;
     go.textContent = '▶';
-    main.append(name, min, go);
-    main.addEventListener('click', () => start(t.name, t.minutes, t.kind || 'default'));
-    li.append(main);
+    go.addEventListener('click', begin);
+    li.append(main, min, go);
     if (custom) li.append(trashButton(`「${t.name}」を削除`, () => removeCustom(t.id)));
     return li;
   }
@@ -194,10 +217,10 @@ const Timer = (() => {
     if (mode !== 'done') say('timer_status.' + mode);
 
     if (mode === 'idle') {
-      const key = JSON.stringify(state.custom);
+      const key = JSON.stringify([state.custom, state.builtin]);
       if (key !== listKey) { // 一覧が変わったときだけ作り直す
         listKey = key;
-        $('timer-list').replaceChildren(...BUILTIN.map((t) => row(t, false)), ...state.custom.map((t) => row(t, true)));
+        $('timer-list').replaceChildren(...builtins(state).map((t) => row(t, false)), ...state.custom.map((t) => row(t, true)));
       }
     } else if (mode === 'running') {
       const r = state.running;
@@ -244,31 +267,67 @@ const Timer = (() => {
       render();
     });
   }
-  function openForm() {
+  // 作るフォームは、時間を変えるときにも使う（D-044）。editing = null（新しく作る）／{ id, custom }（変える）
+  let editing = null;
+  function openForm(target = null) {
+    const state = load();
+    const t = target && (target.custom ? state.custom.find((x) => x.id === target.id) : builtins(state).find((x) => x.id === target.id));
+    editing = t ? target : null;
     $('timer-new-open').hidden = true;
     $('timer-quick').hidden = true; // 金の塗りを「保存」1つにする
     $('timer-form').hidden = false;
-    $('timer-new-name').value = '';
-    $('timer-new-min').value = '';
+    $('timer-form-title').textContent = !t ? 'タイマーを作る' : target.custom ? `「${t.name}」を変える` : `「${t.name}」の時間を変える`;
+    const fixedName = Boolean(t) && !target.custom; // 用途別のタイマーは名前を変えられない
+    $('timer-new-name').hidden = fixedName;
+    $('timer-new-name-label').hidden = fixedName;
+    $('timer-new-name').value = t ? t.name : '';
+    $('timer-new-min').value = t ? String(t.minutes) : '';
+    // 用途別のタイマーの時間を変えてあるときだけ、初めの時間に戻すボタンを出す
+    const changed = fixedName && t.minutes !== t.base;
+    $('timer-new-reset').hidden = !changed;
+    if (changed) $('timer-new-reset').textContent = `初めの時間（${t.base}分）に戻す`;
     $('timer-form-status').textContent = '';
-    $('timer-new-name').focus();
+    (t ? $('timer-new-min') : $('timer-new-name')).focus();
+    if (t) $('timer-new-min').select();
     $('timer-form').scrollIntoView({ block: 'end' }); // フォームの下端（保存ボタン）まで見えるように
   }
   function closeForm() {
+    editing = null;
     $('timer-form').hidden = true;
     $('timer-quick').hidden = false;
     $('timer-new-open').hidden = false;
   }
-  $('timer-new-open').addEventListener('click', openForm);
+  // 用途別のタイマーの時間を保存する。初めの時間と同じなら、変えた印を消す
+  function setBuiltinMinutes(state, id, minutes) {
+    const base = BUILTIN.find((b) => b.id === id).minutes;
+    if (minutes === base) delete state.builtin[id]; else state.builtin[id] = minutes;
+  }
+  $('timer-new-open').addEventListener('click', () => openForm());
   $('timer-new-cancel').addEventListener('click', closeForm);
+  $('timer-new-reset').addEventListener('click', () => {
+    if (!editing || editing.custom) return;
+    const state = load();
+    delete state.builtin[editing.id];
+    if (!Store.write(KEY, state)) { $('timer-form-status').textContent = SAVE_FAILED; return; }
+    closeForm();
+    render();
+  });
   $('timer-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const name = $('timer-new-name').value.trim().slice(0, NAME_MAX);
     const minutes = parseMinutes($('timer-new-min').value);
-    if (!name) { $('timer-form-status').textContent = '名前を入力してください'; return; }
+    const fixedName = editing && !editing.custom;
+    if (!fixedName && !name) { $('timer-form-status').textContent = '名前を入力してください'; return; }
     if (minutes === null) { $('timer-form-status').textContent = `時間は1〜${MAX_MINUTES}分で入力してください`; return; }
     const state = load();
-    state.custom.push({ id: newId(), name, minutes });
+    if (fixedName) {
+      setBuiltinMinutes(state, editing.id, minutes);
+    } else if (editing) {
+      const t = state.custom.find((x) => x.id === editing.id);
+      if (t) { t.name = name; t.minutes = minutes; }
+    } else {
+      state.custom.push({ id: newId(), name, minutes });
+    }
     if (!Store.write(KEY, state)) { $('timer-form-status').textContent = SAVE_FAILED; return; } // 入力を残したまま知らせる
     closeForm();
     render();

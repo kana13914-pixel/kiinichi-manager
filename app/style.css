@@ -437,7 +437,13 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
 #report-more { margin-top: var(--space-3); }
 
 /* ---------- タイマー（D-026 ③, D-028）。一覧の行はタスクと同じ部品（.task-row / .task-main / .task-del）を使う ---------- */
-.timer-min { flex: none; margin-left: auto; padding: 0 var(--space-2) 0 var(--space-3); font-size: var(--fs-subhead); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+/* 時間は押すと変えられる（D-044）。押せることを下線で示す。押す範囲は行の高さいっぱい・幅 44px 以上 */
+.timer-min {
+  flex: none; width: auto; min-width: var(--tap); min-height: var(--size-record); margin: 0; padding: 0 var(--space-3);
+  background: transparent; border-radius: 0; font-size: var(--fs-subhead); font-weight: 400; color: var(--color-text-secondary); font-variant-numeric: tabular-nums;
+}
+.timer-min span { padding-bottom: 2px; box-shadow: inset 0 -1px 0 var(--color-line); }
+.form-title { margin: 0 0 var(--space-1); font-size: var(--fs-body); font-weight: 700; }
 .timer-quick { margin-top: var(--space-5); }
 .timer-quick-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); align-items: center; margin-top: var(--space-1); }
 .timer-quick-row .cut-btn { margin-top: 0; }
@@ -571,7 +577,10 @@ input:focus, textarea:focus { border-color: var(--color-accent); }
 .task-check.check-enter { animation: check-in var(--dur-quick) var(--ease-hook) both; }
 @keyframes check-in { from { opacity: 0; transform: translateX(calc(var(--space-1) * -1)) scale(0.6); } to { opacity: 1; transform: none; } }
 /* タイマー一覧の行の右端に「開始」の印（Q-D）。金は使わない（V3-08） */
-.timer-go { flex: none; padding-right: var(--space-2); font-size: var(--fs-caption); color: var(--color-text-secondary); }
+.timer-go {
+  flex: none; width: var(--tap); min-height: var(--size-record); margin: 0; padding: 0;
+  background: transparent; border-radius: 0; font-size: var(--fs-caption); font-weight: 400; color: var(--color-text-secondary);
+}
 
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {

@@ -181,10 +181,12 @@
         <div class="task-add">
           <button id="timer-new-open" type="button" class="cut-btn quiet">＋ タイマーを作る</button>
           <form id="timer-form" class="task-form" hidden>
-            <label for="timer-new-name">名前</label>
+            <p id="timer-form-title" class="form-title">タイマーを作る</p>
+            <label id="timer-new-name-label" for="timer-new-name">名前</label>
             <input id="timer-new-name" type="text" maxlength="30" autocomplete="off" enterkeyhint="next">
             <label for="timer-new-min">時間（分）</label>
             <input id="timer-new-min" type="number" inputmode="numeric" min="1" max="600" step="1" autocomplete="off" enterkeyhint="done">
+            <button id="timer-new-reset" type="button" class="cut-btn quiet" hidden>初めの時間に戻す</button>
             <div class="form-actions">
               <button id="timer-new-cancel" type="button" class="cut-btn quiet">やめる</button>
               <button id="timer-new-save" type="submit" class="cut-btn primary">保存</button>
