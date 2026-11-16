@@ -46,3 +46,51 @@ const Store = {
   },
 };
 const SAVE_FAILED = '保存できませんでした。もう一度試してください';
+
+// ---------- 保存の形（D-043。項目の一覧は docs/data_schema.md） ----------
+// データのキーは db.* にそろえ、db.meta.schema に形の版を持つ。形を変えるときは MIGRATIONS に 1 つ足す。
+const DB = {
+  meta: 'db.meta',               // { schema: 2 }
+  tasks: 'db.tasks',             // [ { id, title, due, done, doneAt, createdAt, updatedAt } ]
+  reports: 'db.reports',         // { 'YYYY-MM-DD': { mood, done, left, tomorrow, savedAt } }
+  reportDraft: 'db.reportDraft', // { date, mood, done, left, tomorrow } … 保存前の書きかけ（この端末だけ）
+  records: 'db.records',         // { 'YYYY-MM-DD': { wake: { time: '07:12', at: 1794190000000 }, … } } … 日付は朝4時区切り
+  timer: 'db.timer',             // { custom: [ { id, name, minutes } ], running, done, cancelPending }
+};
+const SCHEMA = 2;
+const MIGRATIONS = {
+  // 1（フェーズ1の仮の保存先）→ 2：キーを db.* に移す。記録は当日分だけだったものを、日付ごとの履歴にする
+  2() {
+    const moves = [['tasks.v1', DB.tasks], ['reports.v1', DB.reports], ['reports.draft', DB.reportDraft], ['timer.v1', DB.timer]];
+    for (const [from, to] of moves) {
+      const old = Store.read(from);
+      if (old === null || Store.read(to) !== null) continue; // 新しいほうにもうあれば、そちらを残す
+      if (from === 'tasks.v1' && Array.isArray(old)) {
+        for (const t of old) if (t && !t.updatedAt) t.updatedAt = t.doneAt || t.createdAt || Date.now();
+      }
+      if (!Store.write(to, old)) return false;
+    }
+    const today = Store.read('records.today');
+    if (today && typeof today.date === 'string' && today.items && Store.read(DB.records) === null) {
+      const day = {};
+      for (const [kind, time] of Object.entries(today.items)) {
+        if (typeof time === 'string') day[kind] = { time, at: parseDay(today.date).getTime() };
+      }
+      if (!Store.write(DB.records, { [today.date]: day })) return false;
+    }
+    for (const key of ['tasks.v1', 'reports.v1', 'reports.draft', 'timer.v1', 'records.today']) Store.remove(key);
+    return true;
+  },
+};
+// 起動のたびに呼ぶ。済んでいれば何もしない。途中で保存に失敗したら版を上げず、次に開いたときにやり直す（元のデータは消さない）
+function migrateData() {
+  const meta = Store.read(DB.meta);
+  let schema = meta && Number.isInteger(meta.schema) ? meta.schema : 1;
+  while (schema < SCHEMA) {
+    if (!MIGRATIONS[schema + 1]()) return false;
+    schema += 1;
+    if (!Store.write(DB.meta, { schema, migratedAt: Date.now() })) return false;
+  }
+  return true;
+}
+migrateData();

@@ -1,11 +1,11 @@
 // タイマー画面（D-026 ③, D-028）。用途別のタイマー（作業・休憩・入浴・歯磨き）、時間を指定、利用者が作るタイマー。
 // 動かせるのは同時に1つ。終了時刻を保存するので、アプリを閉じても残り時間は正しく進む。
 // アプリを閉じている間の終了は、開始時に通知を予約して知らせる（D-015。送信サーバーの /api/schedule・/api/cancel）。
-// 保存は仮に localStorage（D-026 ⑤）。util.js（保存）、dialogue.js（セリフ）、ui.js（確認・取り消しの表示・ごみ箱）、
+// 保存は localStorage の db.timer（D-043。形は docs/data_schema.md）。util.js（保存）、dialogue.js（セリフ）、ui.js（確認・取り消しの表示・ごみ箱）、
 // settings.js の Settings、app.js の repairPush（購読の登録し直し）を使う。
 
 const Timer = (() => {
-  const KEY = 'timer.v1';
+  const KEY = DB.timer;
   const NOTIFY_KEY = 'timer'; // 通知予約のキー。動かせるのは1つなので固定（同じキーは上書きされる）
   const MAX_MINUTES = 600;
   const NAME_MAX = 30;

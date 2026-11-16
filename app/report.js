@@ -1,11 +1,11 @@
 // 日報画面（D-026 ②, D-027）。1日1件、「今日の調子（3段階）・できたこと・やり残したこと・明日いちばんにやること」。
 // 日付の区切りは朝4時（4時より前に書いた日報は前日の分。D-027, D-034）。
 // 書きかけは入力のたびに端末に保存し、開き直したら戻す（D-033）。
-// 保存は仮に localStorage（D-026 ⑤）。util.js（日付・保存）、dialogue.js（セリフ）、ui.js を使う。
+// 保存は localStorage の db.reports（D-043。形は docs/data_schema.md）。util.js（日付・保存）、dialogue.js（セリフ）、ui.js を使う。
 
 const Report = (() => {
-  const KEY = 'reports.v1';
-  const DRAFT_KEY = 'reports.draft'; // { date, mood, done, left, tomorrow } … 保存前の書きかけ（1件だけ）
+  const KEY = DB.reports;
+  const DRAFT_KEY = DB.reportDraft; // { date, mood, done, left, tomorrow } … 保存前の書きかけ（1件だけ）
   const HISTORY_STEP = 7; // 「これまでの日報」は7日分ずつ出す（D-031）。データは消さない
   const MOODS = { good: '元気', normal: 'ふつう', tired: '疲れた' };
   const $ = (id) => document.getElementById(id);

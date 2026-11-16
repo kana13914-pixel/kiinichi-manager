@@ -1,11 +1,11 @@
 // タスク画面（D-026 ①, D-031）。1件は「名前・期限（日付。なくてもよい）・完了」。
 // 完了したタスクは完了日を持ち、完了日から7日たつと自動で消す。削除は確認してから行う。
 // 「今日」「完了日」は朝4時で区切る（D-034）。
-// 保存は仮に localStorage（D-026 ⑤）。フェーズ2のデータ設計で移すか捨てるかを決める。
+// 保存は localStorage の db.tasks（D-043。形は docs/data_schema.md）。
 // util.js（日付・保存）、dialogue.js（セリフ）、ui.js（確認・取り消しの表示・ごみ箱）を使う。
 
 const Tasks = (() => {
-  const KEY = 'tasks.v1';
+  const KEY = DB.tasks;
   const DONE_SHOWN = 30; // 完了したものは新しい順にここまで表示する
   const KEEP_DONE_DAYS = 7; // 完了したタスクを残す日数（完了日を1日目として7日間。D-031）
 
@@ -153,6 +153,7 @@ const Tasks = (() => {
     if (!t) return null;
     const before = { ...t };
     fn(t);
+    t.updatedAt = Date.now(); // 同期のときに「どちらが新しいか」を決めるため（D-043）
     if (!save(list)) return null;
     if (!later) render();
     return before;
@@ -201,7 +202,8 @@ const Tasks = (() => {
   }
   function add(title, due) {
     const list = load();
-    list.push({ id: newId(), title, due: due || null, done: false, doneAt: null, createdAt: Date.now() });
+    const at = Date.now();
+    list.push({ id: newId(), title, due: due || null, done: false, doneAt: null, createdAt: at, updatedAt: at });
     if (!Store.write(KEY, list)) return false;
     render();
     return true;

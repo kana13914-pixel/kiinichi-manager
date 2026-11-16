@@ -466,7 +466,7 @@ class PwaTest(unittest.TestCase):
         self.assertFalse(page.is_visible("#toast"))
         self.assertEqual(page.text_content("#bubble-text"), before)
         self.assertEqual(self.primaries(page), ["wake"])
-        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('records.today')"))["items"], {})
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.records')")), {})
 
     def test_toast_disappears_after_5_seconds(self):
         page = self.clock_page(7, 12)
@@ -495,11 +495,15 @@ class PwaTest(unittest.TestCase):
         page.wait_for_function("dialogue !== null", timeout=3_000)
         self.assertEqual(page.text_content(".act[data-record=wake]"), "✓ 起きた 07:12")
         self.assertEqual(self.primaries(page), ["work_start"])  # 起きたは記録済みなので次が主
-        saved = page.evaluate("localStorage.getItem('records.today')")
-        # 翌日の日付で開くと未記録
-        page2 = self.clock_page(7, 12, day=10, init_script="localStorage.setItem('records.today', %s)" % json.dumps(saved))
+        saved = page.evaluate("localStorage.getItem('db.records')")
+        self.assertEqual(json.loads(saved)["2026-11-09"]["wake"]["time"], "07:12")
+        # 翌日の日付で開くと未記録。前の日の記録は消さずに残し、新しい日の分を足す（D-043）
+        page2 = self.clock_page(7, 30, day=10, init_script="if (!localStorage.getItem('db.records')) localStorage.setItem('db.records', %s)" % json.dumps(saved))
         self.assertEqual(page2.text_content(".act[data-record=wake]"), "起きた")
         self.assertEqual(self.primaries(page2), ["wake"])
+        page2.click(".act[data-record=wake]")
+        both = json.loads(page2.evaluate("localStorage.getItem('db.records')"))
+        self.assertEqual({d: v["wake"]["time"] for d, v in both.items()}, {"2026-11-09": "07:12", "2026-11-10": "07:30"})
 
     def test_done_label_fits_on_small_screen(self):
         page = self.clock_page(9, 3, size=(375, 667), safe=(20, 0))
@@ -556,6 +560,7 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.text_content(".act[data-record=wake]"), "起きた")
 
     def test_records_before_4am_belong_to_previous_day(self):
+        # フェーズ1の保存の形（records.today）から開く＝引き継ぎも兼ねて確かめる
         saved = json.dumps({"date": "2026-11-09", "items": {"wake": "07:12"}})
         page = self.clock_page(1, 30, day=10, init_script="localStorage.setItem('records.today', %s)" % json.dumps(saved))
         self.assertEqual(page.text_content(".act[data-record=wake]"), "✓ 起きた 07:12")
@@ -669,7 +674,7 @@ class PwaTest(unittest.TestCase):
         """日報の「これまで」の上に、直近7日の調子の印が出る（CR-G03）。"""
         reports = {"2026-11-08": {"mood": "good", "done": "a", "left": "", "tomorrow": "", "savedAt": 1},
                    "2026-11-06": {"mood": "tired", "done": "b", "left": "", "tomorrow": "", "savedAt": 1}}
-        init = "localStorage.setItem('reports.v1', %s)" % json.dumps(json.dumps(reports))
+        init = "localStorage.setItem('db.reports', %s)" % json.dumps(json.dumps(reports))
         page = self.clock_page(20, 0, "#report", init_script=init)
         page.wait_for_selector("#mood-week .mood-day", timeout=3_000)
         moods = page.eval_on_selector_all("#mood-week .mood-day", "els => els.map(e => e.dataset.mood || '')")
@@ -680,7 +685,7 @@ class PwaTest(unittest.TestCase):
     def tasks_page(self, hour=10, minute=0, day=9, tasks=None, size=(393, 852)):
         init = None
         if tasks is not None:
-            init = "localStorage.setItem('tasks.v1', %s)" % json.dumps(json.dumps(tasks))
+            init = "localStorage.setItem('db.tasks', %s)" % json.dumps(json.dumps(tasks))
         page = self.clock_page(hour, minute, "#tasks", day=day, init_script=init, size=size)
         page.wait_for_selector("#view-tasks", state="visible", timeout=3_000)
         return page
@@ -775,7 +780,7 @@ class PwaTest(unittest.TestCase):
         page.wait_for_selector("#task-toast", state="visible", timeout=3_000)  # 確認の結果は非同期で届く
         page.clock.run_for(5_100)
         self.assertTrue(page.is_hidden("#task-toast"))
-        stored = json.loads(page.evaluate("localStorage.getItem('tasks.v1')"))
+        stored = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))
         self.assertEqual([t["title"] for t in stored], ["一", "二"])
 
     def test_tasks_line_follows_situation(self):
@@ -804,7 +809,7 @@ class PwaTest(unittest.TestCase):
             {"id": "open", "title": "未完了", "due": "2026-10-01", "done": False, "createdAt": 4},              # 未完了は古くても消さない
         ]
         page = self.tasks_page(tasks=tasks)
-        stored = {t["id"]: t for t in json.loads(page.evaluate("localStorage.getItem('tasks.v1')"))}
+        stored = {t["id"]: t for t in json.loads(page.evaluate("localStorage.getItem('db.tasks')"))}
         self.assertEqual(sorted(stored), ["keep", "nodate", "open"])
         self.assertAlmostEqual(stored["nodate"]["doneAt"], ms(9, 10), delta=5_000)
         self.assertEqual(page.text_content("#done-count"), "2")
@@ -813,10 +818,10 @@ class PwaTest(unittest.TestCase):
         self.assertIn("1週間", page.text_content("#done-section .note"))
         page.clock.fast_forward(14 * 3600_000 + 60_000)  # 0:01。朝4時まではまだ 11/9 の続き
         page.evaluate("Tasks.render()")
-        self.assertIn("keep", [t["id"] for t in json.loads(page.evaluate("localStorage.getItem('tasks.v1')"))])
+        self.assertIn("keep", [t["id"] for t in json.loads(page.evaluate("localStorage.getItem('db.tasks')"))])
         page.clock.fast_forward(4 * 3600_000)  # 4:01。11/10 になり、11/3 完了のものも消える
         page.evaluate("Tasks.render()")
-        self.assertEqual(sorted(t["id"] for t in json.loads(page.evaluate("localStorage.getItem('tasks.v1')"))), ["nodate", "open"])
+        self.assertEqual(sorted(t["id"] for t in json.loads(page.evaluate("localStorage.getItem('db.tasks')"))), ["nodate", "open"])
 
     def test_tasks_screen_one_gold_fill_and_touch_sizes(self):
         tasks = [{"id": "a", "title": "とても長いタスクの名前" * 4, "due": "2026-11-09", "done": False, "createdAt": 1}]
@@ -856,7 +861,7 @@ class PwaTest(unittest.TestCase):
     def report_page(self, hour=21, minute=0, day=9, reports=None, size=(393, 852)):
         init = None
         if reports is not None:
-            init = "localStorage.setItem('reports.v1', %s)" % json.dumps(json.dumps(reports))
+            init = "localStorage.setItem('db.reports', %s)" % json.dumps(json.dumps(reports))
         page = self.clock_page(hour, minute, "#report", day=day, init_script=init, size=size)
         page.wait_for_selector("#view-report", state="visible", timeout=3_000)
         return page
@@ -873,7 +878,7 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.text_content("#report-save"), "更新する")
         page.wait_for_selector("#report-reply", state="visible", timeout=3_000)
         self.assertEqual(page.text_content("#report-reply-line"), "記録した。疲れているなら、今日は早めに休め。")
-        stored = json.loads(page.evaluate("localStorage.getItem('reports.v1')"))["2026-11-09"]
+        stored = json.loads(page.evaluate("localStorage.getItem('db.reports')"))["2026-11-09"]
         self.assertEqual((stored["mood"], stored["done"], stored["left"], stored["tomorrow"]),
                          ("tired", "資料を送った\n洗濯した", "請求書", "請求書を確認する"))
         page.reload()
@@ -885,14 +890,14 @@ class PwaTest(unittest.TestCase):
         page = self.report_page()
         page.click("#report-save")
         self.assertIn("1つの項目", page.text_content("#report-status"))
-        self.assertIsNone(page.evaluate("localStorage.getItem('reports.v1')"))
+        self.assertIsNone(page.evaluate("localStorage.getItem('db.reports')"))
 
     def test_report_before_4am_counts_as_previous_day(self):
         page = self.report_page(hour=1, minute=30, day=10)
         self.assertEqual(page.text_content("#report-date"), "11月9日(月)の日報")
         page.fill("#report-done", "夜ふかし")
         page.click("#report-save")
-        self.assertIn("2026-11-09", json.loads(page.evaluate("localStorage.getItem('reports.v1')")))
+        self.assertIn("2026-11-09", json.loads(page.evaluate("localStorage.getItem('db.reports')")))
 
     def test_report_history_newest_first_and_excludes_today(self):
         reports = {
@@ -918,7 +923,7 @@ class PwaTest(unittest.TestCase):
         page.click("#report-more")
         self.assertEqual(len(page.query_selector_all("#report-list li")), 16)
         self.assertTrue(page.is_hidden("#report-more"))
-        self.assertEqual(len(json.loads(page.evaluate("localStorage.getItem('reports.v1')"))), 16)  # データは消さない
+        self.assertEqual(len(json.loads(page.evaluate("localStorage.getItem('db.reports')"))), 16)  # データは消さない
 
     def test_report_selected_mood_is_gold_outline_with_check(self):
         page = self.report_page()
@@ -956,7 +961,7 @@ class PwaTest(unittest.TestCase):
         """合言葉なし（送信サーバーは呼ばれない）でタイマー画面を開く。"""
         init = None
         if state is not None:
-            init = "localStorage.setItem('timer.v1', %s)" % json.dumps(json.dumps(state))
+            init = "localStorage.setItem('db.timer', %s)" % json.dumps(json.dumps(state))
         page = self.clock_page(hour, minute, "#timer", day=day, init_script=init, size=size)
         page.wait_for_selector("#view-timer", state="visible", timeout=3_000)
         return page
@@ -980,7 +985,7 @@ class PwaTest(unittest.TestCase):
         """送信サーバーを偽物にしてからタイマー画面を開く（読み込み時の呼び出しも受けられるよう、開く前に差し替える）。"""
         init = "localStorage.setItem('phase0.appToken', 'tok-123');"
         if kw.get("state") is not None:
-            init += "localStorage.setItem('timer.v1', %s);" % json.dumps(json.dumps(kw["state"]))
+            init += "localStorage.setItem('db.timer', %s);" % json.dumps(json.dumps(kw["state"]))
         ctx = self.browser.new_context(permissions=["notifications"], viewport={"width": 393, "height": 852})
         self.addCleanup(ctx.close)
         ctx.add_init_script(READY)
@@ -1006,7 +1011,7 @@ class PwaTest(unittest.TestCase):
         self.assertGreaterEqual(len(calls), n)
 
     def timer_state(self, page):
-        return json.loads(page.evaluate("localStorage.getItem('timer.v1')"))
+        return json.loads(page.evaluate("localStorage.getItem('db.timer')"))
 
     def test_timer_lists_builtin_timers(self):
         page = self.timer_page()
@@ -1165,7 +1170,7 @@ class PwaTest(unittest.TestCase):
         end = int(datetime(2026, 11, 9, 12, 40, 0).timestamp() * 1000)
         state = {"custom": [], "running": {"name": "休憩", "minutes": 5, "kind": "break", "endAt": end,
                                            "line": 0, "text": "休憩は終わりだ。戻るかどうかは任せる。", "notify": "ok"}}
-        init = "localStorage.setItem('timer.v1', %s)" % json.dumps(json.dumps(state))
+        init = "localStorage.setItem('db.timer', %s)" % json.dumps(json.dumps(state))
         page = self.clock_page(12, 41, init_script=init)
         self.assertTrue(page.is_visible("#view-home"))
         page.evaluate("""navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: {
@@ -1411,10 +1416,10 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.input_value("#report-done"), "書いている途中")
         self.assertEqual(page.get_attribute("#report-form .mood[data-mood=tired]", "aria-pressed"), "true")
         self.assertIn("書きかけ", page.text_content("#report-status"))
-        self.assertIsNone(page.evaluate("localStorage.getItem('reports.v1')"))  # まだ日報としては保存していない
+        self.assertIsNone(page.evaluate("localStorage.getItem('db.reports')"))  # まだ日報としては保存していない
         page.click("#report-save")
-        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('reports.v1')"))["2026-11-09"]["done"], "書いている途中")
-        self.assertIsNone(page.evaluate("localStorage.getItem('reports.draft')"))
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.reports')"))["2026-11-09"]["done"], "書いている途中")
+        self.assertIsNone(page.evaluate("localStorage.getItem('db.reportDraft')"))
         page.reload()
         page.wait_for_function("dialogue !== null")
         self.assertIn("保存済み", page.text_content("#report-status"))
@@ -1425,7 +1430,7 @@ class PwaTest(unittest.TestCase):
         page.fill("#report-done", "深夜に書いた")
         page.clock.fast_forward(15 * 60_000)  # 4:05。画面は開いたまま
         page.click("#report-save")
-        self.assertEqual(list(json.loads(page.evaluate("localStorage.getItem('reports.v1')"))), ["2026-11-09"])
+        self.assertEqual(list(json.loads(page.evaluate("localStorage.getItem('db.reports')"))), ["2026-11-09"])
 
     def test_report_old_draft_is_kept_as_that_days_report(self):
         page = self.report_page(hour=3, minute=50, day=10)
@@ -1433,7 +1438,7 @@ class PwaTest(unittest.TestCase):
         self.hide_and_return(page, 15 * 60_000)  # 4:05 に戻る
         self.assertEqual(page.text_content("#report-date"), "11月10日(火)の日報")
         self.assertEqual(page.input_value("#report-done"), "")
-        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('reports.v1')"))["2026-11-09"]["done"], "保存し忘れ")
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.reports')"))["2026-11-09"]["done"], "保存し忘れ")
         self.assertIn("保存し忘れ", page.text_content("#report-list"))
 
     def test_notification_params_are_removed_from_url(self):
@@ -1453,10 +1458,10 @@ class PwaTest(unittest.TestCase):
         page.click("#timer-list li[data-id=work] .task-main")
         page.wait_for_selector("#timer-notify.ok", timeout=3_000)
         page.click("#timer-stop")
-        page.wait_for_function("JSON.parse(localStorage.getItem('timer.v1')).cancelPending === true", timeout=3_000)
+        page.wait_for_function("JSON.parse(localStorage.getItem('db.timer')).cancelPending === true", timeout=3_000)
         offline["cancel"] = False
         page.reload()  # 開き直したときにやり直す
-        page.wait_for_function("JSON.parse(localStorage.getItem('timer.v1')).cancelPending === false", timeout=3_000)
+        page.wait_for_function("JSON.parse(localStorage.getItem('db.timer')).cancelPending === false", timeout=3_000)
         self.assertEqual([c for c in calls if c != "status"], ["schedule", "cancel", "cancel"])
 
     def test_timer_pending_cancel_does_not_cancel_new_timer(self):
@@ -1466,7 +1471,7 @@ class PwaTest(unittest.TestCase):
         page.click("#timer-list li[data-id=work] .task-main")
         page.wait_for_selector("#timer-notify.ok", timeout=3_000)
         page.click("#timer-stop")
-        page.wait_for_function("JSON.parse(localStorage.getItem('timer.v1')).cancelPending === true", timeout=3_000)
+        page.wait_for_function("JSON.parse(localStorage.getItem('db.timer')).cancelPending === true", timeout=3_000)
         offline["cancel"] = False
         page.click("#timer-list li[data-id=break] .task-main")
         page.wait_for_selector("#timer-notify.ok", timeout=3_000)
@@ -1598,7 +1603,7 @@ class PwaTest(unittest.TestCase):
         # 押した行のチェックの印が入り（180ms）、そのあと完了の一覧へ移る
         self.assertEqual(page.evaluate("""() => { const b = document.querySelector('#task-list li[data-id=a] .task-check');
           return [b.textContent, b.classList.contains('check-enter'), getComputedStyle(b).animationDuration]; }"""), ["✓", True, "0.18s"])
-        self.assertTrue(json.loads(page.evaluate("localStorage.getItem('tasks.v1')"))[0]["done"])  # 保存はすぐ
+        self.assertTrue(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["done"])  # 保存はすぐ
         page.wait_for_selector("#done-list li[data-id=a]", state="attached", timeout=3_000)
         self.assertEqual(page.query_selector_all("#task-list li[data-id=a]"), [])
         self.assertEqual(page.query_selector_all(".check-enter"), [])  # 移ったあとは動きの印が残らない
@@ -1614,6 +1619,52 @@ class PwaTest(unittest.TestCase):
         page.click("#task-list li[data-id=a] .task-main")
         self.assertEqual(page.query_selector_all("#task-list li[data-id=a]"), [])  # 待たずに移る
         self.assertEqual(page.query_selector_all(".check-enter"), [])
+
+    # ---------- 保存の形の引き継ぎ（D-043） ----------
+    def test_phase1_data_is_carried_over_to_new_layout(self):
+        old = {
+            "tasks.v1": [{"id": "a", "title": "前からのタスク", "due": "2026-11-09", "done": False, "doneAt": None, "createdAt": 5}],
+            "reports.v1": {"2026-11-08": {"mood": "good", "done": "前の日報", "savedAt": 1}},
+            "reports.draft": {"date": "2026-11-09", "mood": None, "done": "書きかけ", "left": "", "tomorrow": ""},
+            "timer.v1": {"custom": [{"id": "x", "name": "読書", "minutes": 15}], "running": None, "done": None},
+            "records.today": {"date": "2026-11-09", "items": {"wake": "07:12"}},
+        }
+        init = "if (!localStorage.getItem('db.meta')) { %s }" % " ".join(
+            "localStorage.setItem(%s, %s);" % (json.dumps(k), json.dumps(json.dumps(v))) for k, v in old.items())
+        page = self.clock_page(10, 0, init_script=init)
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.meta')"))["schema"], 2)
+        for key in old:
+            self.assertIsNone(page.evaluate("localStorage.getItem(%s)" % json.dumps(key)), key)  # 古い場所は片づける
+        self.assertEqual(page.text_content(".act[data-record=wake]"), "✓ 起きた 07:12")
+        tasks = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))
+        self.assertEqual([tasks[0]["title"], tasks[0]["updatedAt"]], ["前からのタスク", 5])
+        page.goto(self.base + "index.html?mode=standalone#tasks")
+        page.wait_for_function("dialogue !== null")
+        self.assertEqual(self.open_titles(page), ["前からのタスク"])
+        page.evaluate("location.hash = '#report'")
+        self.assertEqual(page.input_value("#report-done"), "書きかけ")
+        self.assertIn("前の日報", page.text_content("#report-list"))
+        page.evaluate("location.hash = '#timer'")
+        self.assertIn("読書", page.text_content("#timer-list"))
+
+    def test_migration_does_not_overwrite_new_data_or_run_twice(self):
+        init = """localStorage.setItem('db.meta', JSON.stringify({ schema: 2 }));
+          localStorage.setItem('db.tasks', JSON.stringify([{ id: 'n', title: '新しいほう', done: false, createdAt: 1 }]));
+          localStorage.setItem('tasks.v1', JSON.stringify([{ id: 'o', title: '古いほう', done: false, createdAt: 1 }]));"""
+        page = self.clock_page(10, 0, "#tasks", init_script=init)
+        self.assertEqual(self.open_titles(page), ["新しいほう"])
+
+    def test_tasks_get_updated_at_for_sync(self):
+        page = self.tasks_page()
+        page.click("#task-add-open")
+        page.fill("#task-title", "同期の印")
+        page.click("#task-submit")
+        t = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
+        self.assertEqual(t["updatedAt"], t["createdAt"])
+        page.clock.fast_forward(60_000)
+        page.click("#task-list .task-main")
+        t2 = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
+        self.assertGreater(t2["updatedAt"], t["updatedAt"])
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")

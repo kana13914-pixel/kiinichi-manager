@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase1-v18';
+const APP_VERSION = 'phase2-v1';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -261,15 +261,32 @@ dialogueReady.then(() => {
 });
 
 // ---------- 記録（I3-02, C6-01） ----------
-// 仮の保存（D-019 Q7）。フェーズ2のデータ構造を決めるときに置き換える。記録による通知予約の取り消し（D-015）もフェーズ2
-// 「今日」は朝4時で区切る（D-034）
-const RECORDS_KEY = 'records.today';
-function loadRecords(now = new Date()) {
-  const r = Store.read(RECORDS_KEY);
-  if (r && r.date === todayKey(now) && r.items) return r; // 今日の分だけ使う
-  return { date: todayKey(now), items: {} };
-}
-function saveRecords(r) { return Store.write(RECORDS_KEY, r); }
+// 記録は日付（朝4時区切り。D-034）ごとに残し、消さない（D-043）。形：{ 'YYYY-MM-DD': { wake: { time: '07:12', at: ミリ秒 } } }
+// 記録による通知予約の取り消し（D-015）は、声掛けを作るときにつなぐ
+const Records = {
+  all() {
+    const r = Store.read(DB.records, {});
+    return r && typeof r === 'object' && !Array.isArray(r) ? r : {};
+  },
+  // その日の記録（種類 → { time, at }）
+  day(now = new Date()) { return this.all()[todayKey(now)] || {}; },
+  // 記録する。保存できたら true
+  set(kind, now = new Date()) {
+    const all = this.all();
+    const key = todayKey(now);
+    all[key] = { ...(all[key] || {}), [kind]: { time: hm(now), at: now.getTime() } };
+    return Store.write(DB.records, all);
+  },
+  // 取り消す
+  unset(kind, now = new Date()) {
+    const all = this.all();
+    const key = todayKey(now);
+    if (!all[key] || !all[key][kind]) return true;
+    delete all[key][kind];
+    if (Object.keys(all[key]).length === 0) delete all[key];
+    return Store.write(DB.records, all);
+  },
+};
 function setDone(btn, time) {
   btn.classList.add('done');
   btn.textContent = `✓ ${btn.dataset.label} ${time}`;
@@ -280,10 +297,10 @@ function setUndone(btn) {
 }
 // 保存してある今日の記録を、ボタンの表示に反映する
 function applyRecords(now = new Date()) {
-  const r = loadRecords(now);
+  const day = Records.day(now);
   for (const btn of document.querySelectorAll('.act')) {
-    const t = r.items[btn.dataset.record];
-    if (t) setDone(btn, t); else setUndone(btn);
+    const rec = day[btn.dataset.record];
+    if (rec) setDone(btn, rec.time); else setUndone(btn);
   }
 }
 
@@ -295,9 +312,7 @@ function showRecordToast(info) {
 }
 function undoRecord({ btn, prevLine, reactionLine }) {
   setUndone(btn);
-  const r = loadRecords();
-  delete r.items[btn.dataset.record];
-  saveRecords(r);
+  Records.unset(btn.dataset.record);
   // 押した直後の取り消しで、セリフがまだ反応のままなら、押す前のセリフに戻す
   const bubble = document.getElementById('bubble-text');
   if (prevLine !== undefined && bubble.textContent === reactionLine) {
@@ -313,9 +328,7 @@ for (const btn of document.querySelectorAll('.act')) {
       return;
     }
     const now = new Date();
-    const r = loadRecords(now);
-    r.items[btn.dataset.record] = hm(now);
-    if (!saveRecords(r)) { homeToast.show(SAVE_FAILED); return; } // 保存できなければ記録済みにしない
+    if (!Records.set(btn.dataset.record, now)) { homeToast.show(SAVE_FAILED); return; } // 保存できなければ記録済みにしない
     const prevLine = document.getElementById('bubble-text').textContent;
     if (document.body.classList.contains('from-notification')) endNotificationState(); // 記録に移ったら通知の強調は終える（D-020）
     showLine(btn.dataset.trigger); // 反応のセリフ
