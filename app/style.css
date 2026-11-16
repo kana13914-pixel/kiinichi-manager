@@ -101,6 +101,8 @@
   /* セーフエリア（CSS では env() を直接書かずこれを使う。テストで上書きする。M1-04） */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* 起動直後に画面の高さが短く伝わる分（iPhone のホーム画面アプリ。app.js が実測して入れる。ふだんは 0。D-041） */
+  --vh-fix: 0px;
 }
 
 /* 夜（22〜4時。D-019 Q5）は面を一段暗くする。タブバーの地も下げ、背景より暗い関係を保つ（C9-02） */
@@ -119,7 +121,7 @@ html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
 * { box-sizing: border-box; }
 [hidden] { display: none !important; } /* P1-10 */
 body {
-  margin: 0; min-height: 100dvh; overscroll-behavior: none; /* V4-03, P1-09 */
+  margin: 0; min-height: calc(100dvh + var(--vh-fix)); overscroll-behavior: none; /* V4-03, P1-09 */
   padding: max(var(--safe-top), var(--space-3)) var(--space-4) var(--space-6); /* P1-01 */
   font-family: var(--font-sans); font-size: var(--fs-callout); color: var(--color-text);
   /* 地：樹冠の光（夜は足元の火）＋ 粒の質感 ＋ 上から下へ暗くなる（CR-B01〜03） */
@@ -195,7 +197,7 @@ body[data-state="ready"] #main { display: block; }
 /* ホームは画面の高さに収める（V4-02） */
 #view-home:not([hidden]) {
   display: flex; flex-direction: column; gap: var(--space-3);
-  height: calc(100dvh - max(var(--safe-top), var(--space-3)) - var(--tabbar-h) - var(--safe-bottom) - var(--space-4));
+  height: calc(100dvh + var(--vh-fix) - max(var(--safe-top), var(--space-3)) - var(--tabbar-h) - var(--safe-bottom) - var(--space-4));
   min-height: var(--home-min-h);
 }
 
@@ -291,7 +293,7 @@ body.from-notification .dialogue { --dlg-top: var(--color-accent); }
 .toast {
   --btn-line: var(--color-line); --btn-fill: var(--color-ink); --btn-cut: var(--cut-s);
   position: fixed; left: var(--space-4); right: var(--space-4);
-  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4) + var(--size-record) + var(--space-2));
+  bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4) + var(--size-record) + var(--space-2) - var(--vh-fix));
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
   min-height: var(--tap); padding: 0 var(--space-2) 0 var(--space-4); font-size: var(--fs-subhead); color: var(--color-text);
 }
@@ -304,7 +306,7 @@ body.from-notification .dialogue { --dlg-top: var(--color-accent); }
 
 /* ---------- 下のタブ（D-019 Q1：5個。I2-01〜03）。いちばん奥の黒 ＋ 上辺に段々の帯 ＋ 選択中は金の短い線（CR-L02） ---------- */
 .tabbar {
-  position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr);
+  position: fixed; left: 0; right: 0; bottom: calc(var(--vh-fix) * -1); display: grid; grid-template-columns: repeat(5, 1fr);
   height: calc(var(--tabbar-h) + var(--safe-bottom)); padding-bottom: var(--safe-bottom);
   background: var(--color-ink);
 }
@@ -397,7 +399,7 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
 .due-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .form-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); margin-top: var(--space-3); }
 .form-actions .cut-btn { margin-top: 0; }
-#task-toast, #timer-toast { bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4)); }
+#task-toast, #timer-toast { bottom: calc(var(--tabbar-h) + var(--safe-bottom) + var(--space-4) - var(--vh-fix)); }
 
 /* ---------- 日報（D-026 ②, D-027） ---------- */
 .report-form { display: flex; flex-direction: column; gap: var(--space-1); }

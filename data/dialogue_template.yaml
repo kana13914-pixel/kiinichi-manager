@@ -160,8 +160,12 @@ timer_status:
         - "計っている。そのまま続けろ。"
 
 schedule_status:
-  description: "予定画面を開いたときの一言（8日とも空のときは screen_empty.schedule）。今日の予定が残っているかで分ける（仮案。ユーザー確認待ち。D-039）"
+  description: "予定画面を開いたときの一言（8日とも空のときは screen_empty.schedule）。数えるのはカレンダーに入れる予定だけで、毎日の生活の時刻（起床・就寝など）は数えない。今日の予定の有無と残りで分ける（仮案。ユーザー確認待ち。D-039）"
   conditions:
+    - id: today_none
+      when: "今日は予定がない（先の日にはある）"
+      lines:
+        - "今日は何も入っていない。先の分だけ見ておけ。"
     - id: today_left
       when: "今日の予定がまだ残っている"
       lines:

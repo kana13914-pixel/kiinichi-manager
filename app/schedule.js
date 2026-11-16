@@ -55,14 +55,17 @@ const Schedule = (() => {
     return li;
   }
 
-  // ---------- 一言（Q-A）：8日とも空 → 今日の残りがある → 今日の分は過ぎた ----------
+  // ---------- 一言（Q-A, D-041）：8日とも予定なし → 今日は予定なし → 今日の予定が残っている → 今日の予定は過ぎた ----------
+  // 数えるのはカレンダーに入れる予定（kind が event）だけ。毎日の生活の時刻（起床・就寝など）は予定に数えない（月表示と同じ）
   const say = makeSay($('schedule-say-line'));
+  function plans(date) { return SampleData.eventsOn(date).filter((e) => e.kind === 'event'); }
   function sayKey(now) {
     let total = 0;
-    for (let i = 0; i < LIST_DAYS; i++) total += SampleData.eventsOn(dayAt(now, i)).length;
+    for (let i = 0; i < LIST_DAYS; i++) total += plans(dayAt(now, i)).length;
     if (total === 0) return 'screen_empty.schedule';
-    const left = SampleData.eventsOn(now).some((e) => e.allDay || e.at > now);
-    return left ? 'schedule_status.today_left' : 'schedule_status.today_done';
+    const today = plans(now);
+    if (today.length === 0) return 'schedule_status.today_none';
+    return today.some((e) => e.allDay || e.at > now) ? 'schedule_status.today_left' : 'schedule_status.today_done';
   }
 
   // ---------- リスト ----------

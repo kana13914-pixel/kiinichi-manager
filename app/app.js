@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase1-v17';
+const APP_VERSION = 'phase1-v18';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -50,6 +50,37 @@ setText('display-mode', isStandalone() ? 'ホーム画面アプリ（standalone�
 setText('source', describeSource());
 setText('opened-at', new Date().toLocaleString('ja-JP'));
 setText('app-version', APP_VERSION);
+
+// ---------- 画面の高さの補い（D-041） ----------
+// iPhone のホーム画面アプリは、完全に閉じた状態から開いた直後、画面の高さが実際より短く伝わることがある
+// （下に固定したタブバーが上にずれ、その下に空きができる。触ると直る）。
+// 伝わっている高さ（innerHeight）と端末の画面の高さ（screen）を比べ、足りない分だけ下に固定した部品を下げる。
+// 高さが正しくなれば差は 0 になり、何もしない。iPhone のホーム画面アプリ（navigator.standalone）以外では動かさない
+const VH_FIX_MAX = 120; // これより大きい差は別の理由（キーボードなど）とみなして補わない
+let vhFirst = null; // 開いた直後の実測（設定画面の確認用）
+function fixViewportHeight() {
+  if (window.navigator.standalone !== true) return;
+  const portrait = window.matchMedia('(orientation: portrait)').matches;
+  const full = portrait ? Math.max(screen.height, screen.width) : Math.min(screen.height, screen.width);
+  const diff = Math.round(full - window.innerHeight);
+  if (vhFirst === null) {
+    vhFirst = diff;
+    setText('viewport-height', `${window.innerHeight} / ${full}（差 ${diff}）`);
+  }
+  const fix = diff > 0 && diff <= VH_FIX_MAX ? diff : 0;
+  const value = fix + 'px';
+  if (document.documentElement.style.getPropertyValue('--vh-fix') !== value) document.documentElement.style.setProperty('--vh-fix', value);
+}
+fixViewportHeight();
+for (const type of ['resize', 'orientationchange', 'pageshow', 'scroll', 'touchend']) window.addEventListener(type, fixViewportHeight, { passive: true });
+document.addEventListener('visibilitychange', fixViewportHeight);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fixViewportHeight);
+// 高さが直ったことを知らせる合図が来ない場合に備え、開いてから 5 秒間は確かめ続ける
+{
+  const until = Date.now() + 5000;
+  const watch = () => { fixViewportHeight(); if (Date.now() < until) requestAnimationFrame(watch); };
+  requestAnimationFrame(watch);
+}
 
 // ---------- 画面の切り替え（下のタブ5個＋右上の設定。URLの #home などで管理。D-019 Q1） ----------
 const VIEWS = ['home', 'schedule', 'tasks', 'timer', 'report', 'settings'];

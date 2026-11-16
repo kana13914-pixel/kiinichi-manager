@@ -1273,7 +1273,7 @@ class PwaTest(unittest.TestCase):
           SampleData.eventsOn = (d) => d.getDate() === 11 ? [] : orig(d); Schedule.refresh(); }""")
         self.assertEqual(page.text_content("#schedule-days .schedule-day[data-date='2026-11-11'] .schedule-row"), "予定なし")
         self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-day")), 8)
-        self.assertEqual(page.text_content("#schedule-say-line"), "今日の分はまだ残っている。時間だけ見ておけ。")
+        self.assertEqual(page.text_content("#schedule-say-line"), "今日は何も入っていない。先の分だけ見ておけ。")
         # 8日とも予定がない：空のときの一言（同じ面に出す）
         page.evaluate("SampleData.eventsOn = () => []; Schedule.refresh()")
         page.wait_for_function("document.getElementById('schedule-say-line').textContent === '予定は入っていない。好きに使えばいい。'", timeout=3_000)
@@ -1547,13 +1547,35 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.get_attribute("#timer-list li[data-id=work] .task-main", "aria-label"), "「作業」25分を開始")
         self.assertNotEqual(page.evaluate("getComputedStyle(document.querySelector('.timer-go')).color"), "rgb(232, 196, 92)")  # 金は使わない
 
-    def test_schedule_say_today_left_then_done(self):
-        page = self.schedule_page(hour=12, minute=0)
+    def test_schedule_say_counts_only_calendar_events(self):
+        # 毎日の生活の時刻（起床・就寝など）は予定に数えない（D-041）。11/9 は仮の予定がない日
+        page = self.schedule_page(hour=12, minute=0, day=9)
+        self.assertEqual(self.visible_says(page, "schedule"), ["今日は何も入っていない。先の分だけ見ておけ。"])
+        page = self.schedule_page(hour=12, minute=0, day=12)  # 11/12 は 18:00 に仮の予定
         self.assertEqual(self.visible_says(page, "schedule"), ["今日の分はまだ残っている。時間だけ見ておけ。"])
         page.click("#schedule-mode-month")  # 月表示でも同じ一言が1つ
         self.assertEqual(self.visible_says(page, "schedule"), ["今日の分はまだ残っている。時間だけ見ておけ。"])
-        page = self.schedule_page(hour=23, minute=45)
+        page = self.schedule_page(hour=19, minute=0, day=12)  # 就寝（23:30）は残っているが、予定は過ぎた
         self.assertEqual(self.visible_says(page, "schedule"), ["今日の分はもう過ぎた。先の分を見ておけ。"])
+
+    def test_launch_height_gap_is_compensated_on_iphone_home_screen_app(self):
+        # 開いた直後に高さが 59px 短く伝わる状況を模す（D-041）。足りない分だけタブバーを下げ、高さが直ったら戻す
+        init = """Object.defineProperty(Navigator.prototype, 'standalone', { get: () => true });
+          Object.defineProperty(Screen.prototype, 'height', { get: () => window.__screenH || window.innerHeight + 59 });
+          Object.defineProperty(Screen.prototype, 'width', { get: () => window.innerWidth });"""
+        page = self.clock_page(8, 0, init_script=init)
+        bar = "(() => { const r = document.querySelector('.tabbar').getBoundingClientRect(); return Math.round(r.bottom - window.innerHeight); })()"
+        self.assertEqual(page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--vh-fix')"), "59px")
+        self.assertEqual(page.evaluate(bar), 59)  # 伝わっている下端より 59px 下＝実際の画面の下端
+        home = page.evaluate("Math.round(document.getElementById('view-home').getBoundingClientRect().bottom - document.querySelector('.tabbar').getBoundingClientRect().top)")
+        self.assertLess(home, 0)  # ホームの中身はタブバーに重ならない
+        self.assertIn("差 59", page.text_content("#viewport-height"))
+        page.evaluate("window.__screenH = window.innerHeight; window.dispatchEvent(new Event('resize'))")  # 高さが正しく伝わった
+        self.assertEqual(page.evaluate(bar), 0)
+
+    def test_launch_height_fix_is_off_elsewhere(self):
+        page = self.clock_page(8, 0, init_script="Object.defineProperty(Screen.prototype, 'height', { get: () => window.innerHeight + 59 });")
+        self.assertEqual(page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--vh-fix').trim()"), "0px")
 
     def test_report_say_not_yet_saved_and_reply(self):
         page = self.report_page()
