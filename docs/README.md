@@ -41,6 +41,7 @@
 | `docs/cloudflare_setup.md` | 送信サーバー（Cloudflare Workers）の設定手順 | 送信サーバーを変えるとき |
 | `docs/feedback/README.md` | 利用者の感想の原文（1 件 1 行） | 見た目・使い心地の対応をするとき |
 | `docs/research/2026-11-08_home_review/` | ホーム改訂（D-019）の元資料：`01_knowledge_map.md`（知識領域マップ）、`03_home_instructions.md`（指示書）。知識ベース本体は `docs/ui_knowledge.md` | D-019 の経緯を確かめるとき |
+| `docs/research/2026-11-16_round4_functions/` | 機能画面の見た目（CR-F・CR-G、知識ベース改訂3）の元資料：`README.md`、`01_knowledge_map_v2.md`（知識領域マップ改訂）、`round4_function_screens_for_ai.md`（診断と指示）、`round4_app.patch`（参考実装・未適用）、`images/`（v16 と改善案の画面。半分の大きさの JPEG） | 機能画面を直すとき、R4 の経緯を確かめるとき |
 | `docs/research/2026-11-08_round3_visual/` | 見た目 v7（D-021）の元資料：`README.md`、`kinich_design_research_for_ai.md`（R3-Q1 事実）、`first_impression_response_flow_for_ai.md`（R3-Q2 手順）、`visual_rules_v7_instructions_for_ai.md`（R3-Q3 指示）、`phase1-v7_canopy.patch`（参考実装）、`images/`（v6・v7 の画面。容量を抑えるため半分の大きさの JPEG） | D-021 の経緯、キャラクターの事実を確かめるとき |
 
 ## app/ — PWA 本体（GitHub Pages で公開）

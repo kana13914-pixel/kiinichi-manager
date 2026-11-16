@@ -83,6 +83,13 @@
 | `--stage-min-h` |  | `160px` |
 | `--home-min-h` |  | `520px` |
 | `--tabbar-h` |  | `56px` |
+| `--color-field` | 入力欄・月のタグの地（CR-F01, CR-F04） | `rgba(244, 241, 232, 0.05)` |
+| `--z-tabbar` | タブバーの重なり順（CR-F06） | `20` |
+| `--size-ring` | タイマーの輪の直径（CR-G02） | `232px` |
+| `--ring-w` | 輪の線の太さ | `3px` |
+| `--size-mood` | 調子の印（CR-G03） | `14px` |
+| `--size-mood-s` | 凡例の印 | `10px` |
+| `--dur-quick` | 輪の書き換えの動き | `180ms` |
 | `--blur-dialogue` |  | `6px` |
 | `--shadow-raised` |  | `0 6px 24px rgba(0, 0, 0, 0.35)` |
 | `--dur-fast` |  | `120ms` |
@@ -173,3 +180,10 @@
 | line | bg | 3.0 | 3.21 | 4.10 |
 | line | bg-bottom | 3.0 | 4.65 | 5.05 |
 | line | surface-1 | 3.0 | 4.22 | 4.57 |
+| text | field | 4.5 | 9.61 | 12.35 |
+| border | field | 3.0 | 3.57 | 4.59 |
+| text-tertiary | surface-1 | 4.5 | 8.50 | 9.19 |
+| text-secondary | surface-1 | 4.5 | 10.73 | 11.60 |
+| lime | bg-bottom | 3.0 | 12.22 | 13.28 |
+| sky | bg-bottom | 3.0 | 8.12 | 8.83 |
+| ember | bg-bottom | 3.0 | 8.57 | 9.32 |

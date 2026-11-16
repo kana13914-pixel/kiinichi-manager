@@ -1,0 +1,295 @@
+diff --git a/app/index.html b/app/index.html
+index b16c057..87a509a 100644
+--- a/app/index.html
++++ b/app/index.html
+@@ -188,7 +188,15 @@
+ 
+       <section id="timer-running" class="timer-run" aria-label="動いているタイマー" hidden>
+         <p id="timer-name" class="timer-name">-</p>
+-        <p id="timer-rest" class="timer-rest" role="timer">--:--</p>
++        <div class="timer-dial">
++          <!-- 残り時間の輪（CR-G02）。装飾なので読み上げない。数字は #timer-rest -->
++          <svg class="timer-ring" viewBox="0 0 240 240" aria-hidden="true">
++            <circle class="track" cx="120" cy="120" r="110"/>
++            <circle id="timer-arc" class="arc" cx="120" cy="120" r="110" stroke-dasharray="691.15" stroke-dashoffset="0"/>
++            <g class="ticks"><line x1="220.0" y1="120.0" x2="210.0" y2="120.0"/><line x1="212.4" y1="158.3" x2="206.8" y2="156.0"/><line x1="190.7" y1="190.7" x2="186.5" y2="186.5"/><line x1="158.3" y1="212.4" x2="156.0" y2="206.8"/><line x1="120.0" y1="220.0" x2="120.0" y2="210.0"/><line x1="81.7" y1="212.4" x2="84.0" y2="206.8"/><line x1="49.3" y1="190.7" x2="53.5" y2="186.5"/><line x1="27.6" y1="158.3" x2="33.2" y2="156.0"/><line x1="20.0" y1="120.0" x2="30.0" y2="120.0"/><line x1="27.6" y1="81.7" x2="33.2" y2="84.0"/><line x1="49.3" y1="49.3" x2="53.5" y2="53.5"/><line x1="81.7" y1="27.6" x2="84.0" y2="33.2"/><line x1="120.0" y1="20.0" x2="120.0" y2="30.0"/><line x1="158.3" y1="27.6" x2="156.0" y2="33.2"/><line x1="190.7" y1="49.3" x2="186.5" y2="53.5"/><line x1="212.4" y1="81.7" x2="206.8" y2="84.0"/></g>
++          </svg>
++          <p id="timer-rest" class="timer-rest" role="timer">--:--</p>
++        </div>
+         <p id="timer-end" class="note">-</p>
+         <p id="timer-notify" class="status" role="status"></p>
+         <button id="timer-stop" type="button" class="cut-btn quiet">止める</button>
+@@ -235,6 +243,9 @@
+ 
+       <section class="report-history" aria-labelledby="report-history-title">
+         <h2 id="report-history-title" class="section-title">これまでの日報</h2>
++        <!-- 調子の 7 日（CR-G03）。読み上げは aria-label の文で行う -->
++        <div id="mood-week" class="mood-week" role="img" aria-label="直近7日の調子"></div>
++        <p class="mood-legend" aria-hidden="true"><span><i data-mood="good"></i>元気</span><span><i data-mood="normal"></i>ふつう</span><span><i data-mood="tired"></i>疲れた</span><span><i></i>記録なし</span></p>
+         <p id="report-history-empty" class="note" hidden>…</p>
+         <ul id="report-list" class="report-list"></ul>
+         <button id="report-more" type="button" class="cut-btn quiet" hidden>もっと見る</button>
+diff --git a/app/report.js b/app/report.js
+index fd64784..ecb9691 100644
+--- a/app/report.js
++++ b/app/report.js
+@@ -104,6 +104,29 @@ const Report = (() => {
+     li.append(det);
+     return li;
+   }
++  // 調子の 7 日（CR-G03）：今日（4時区切り）までの 7 日。書いていない日は枠だけ
++  const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
++  function renderMoodWeek(all, now = new Date()) {
++    const base = logicalDay(now);
++    const cells = [];
++    const spoken = [];
++    for (let i = 6; i >= 0; i -= 1) {
++      const d = addDays(base, -i);
++      const key = dateStr(d);
++      const m = all[key] && MOODS[all[key].mood] ? all[key].mood : null;
++      const cell = document.createElement('span');
++      cell.className = 'mood-day';
++      if (m) cell.dataset.mood = m;
++      const mark = document.createElement('i');
++      const day = document.createElement('b');
++      day.textContent = WEEK[d.getDay()];
++      cell.append(mark, day);
++      cells.push(cell);
++      spoken.push(`${d.getMonth() + 1}/${d.getDate()} ${m ? MOODS[m] : '記録なし'}`);
++    }
++    $('mood-week').replaceChildren(...cells);
++    $('mood-week').setAttribute('aria-label', `直近7日の調子：${spoken.join('、')}`);
++  }
+   let historyShown = HISTORY_STEP;
+   function renderHistory(now = new Date()) {
+     const all = load();
+@@ -111,6 +134,7 @@ const Report = (() => {
+     const every = Object.keys(all).filter((k) => k !== today && /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().reverse();
+     const keys = every.slice(0, historyShown);
+     $('report-list').replaceChildren(...keys.map((k) => item(k, all[k])));
++    renderMoodWeek(all, now);
+     const rest = every.length - keys.length;
+     $('report-more').hidden = rest === 0;
+     $('report-more').textContent = `もっと見る（残り${rest}日分）`;
+diff --git a/app/style.css b/app/style.css
+index be0d82e..a36a937 100644
+--- a/app/style.css
++++ b/app/style.css
+@@ -52,6 +52,13 @@
+   --stage-min-h: 160px;
+   --home-min-h: 520px;
+   --tabbar-h: 56px;
++  /* ---- 機能画面の決まり（R4。CR-F/CR-G） ---- */
++  --z-tabbar: 20;          /* タブバーは貼り付く見出し（z-index: 1）より上 */
++  --size-ring: 232px;      /* タイマーの輪の直径 */
++  --ring-w: 3px;           /* 輪の線の太さ */
++  --size-mood: 14px;       /* 調子の印（7日） */
++  --size-mood-s: 10px;     /* 凡例の印 */
++  --dur-quick: 180ms;      /* 押したあとの小さな反応 */
+   --size-dialog: 320px;    /* 確認ダイアログの最大幅 */
+   --size-cal-cell: 76px;   /* 月表示の1マスの高さ（日付＋タグ2つ＋「+n」） */
+ 
+@@ -75,6 +82,7 @@
+   --color-strip-from: rgba(7, 15, 12, 0.6);
+   --color-strip-to: rgba(7, 15, 12, 0.12);
+   --color-card: rgba(7, 15, 12, 0.55);
++  --color-field: rgba(244, 241, 232, 0.05); /* 入力欄の地：黒い穴にしない（CR-F01） */
+   --bg-glow: radial-gradient(120% 55% at 50% -12%, var(--color-canopy-light), transparent 62%);
+   --tex-grain: url("img/grain.svg");
+   --size-grain: 160px;
+@@ -492,6 +500,71 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
+ }
+ .cal-more { padding: 0 var(--space-1); font-size: var(--fs-caption); color: var(--color-text-secondary); }
+ 
++
++/* ========== 機能画面の決まり（R4。docs/visual_rules.md の CR-F・CR-G） ========== */
++/* 重なり：タブバーをいちばん上に（予定の貼り付く見出しが上に重なっていた） */
++.tabbar { z-index: var(--z-tabbar); }
++
++/* 画面の見出し：名前と同じ文法で「見出し＋右へ消える金の線」（CR-F05） */
++.view > h1::after {
++  content: ""; display: block; height: 1px; margin-top: var(--space-2);
++  background: linear-gradient(90deg, var(--color-gold-line), transparent);
++}
++
++/* 入力欄：黒い穴ではなく、地より少し明るい面＋見える縁。選んでいる欄は金の縁（CR-F01） */
++input, textarea { background: var(--color-field); } /* 縁は --color-border のまま（入力欄の上で 3:1 以上） */
++input:focus, textarea:focus { border-color: var(--color-accent); }
++
++/* 控えめなボタン・チップ：最奥の黒をやめ、面 1 段目に。選択中は白い縁＋太字、未選択は文字を一段弱く（CR-F02） */
++.cut-btn.quiet { --btn-fill: var(--color-surface-1); }
++.cut-btn.chip { color: var(--color-text-secondary); font-weight: 500; }
++.cut-btn.chip:not(.mood)[aria-pressed="true"] { color: var(--color-text); } /* 調子は金の文字のまま（D-031 ④） */
++
++/* 表示の切り替え（リスト／月）：2 つのボタンではなく 1 本の切り替え（セグメント。CR-F03） */
++.schedule-modes {
++  gap: var(--space-1); padding: var(--space-1); background: var(--color-surface-1);
++  clip-path: polygon(var(--cut-s) 0, 100% 0, 100% calc(100% - var(--cut-s)), calc(100% - var(--cut-s)) 100%, 0 100%, 0 var(--cut-s));
++}
++.schedule-modes .cut-btn { --btn-line: var(--color-surface-1); --btn-fill: var(--color-surface-1); color: var(--color-text-tertiary); }
++.schedule-modes .cut-btn[aria-pressed="true"] { --btn-line: var(--color-text); --btn-fill: var(--color-surface-2); color: var(--color-text); }
++
++/* 月のタグ：黒い箱をやめ、薄い面＋左の金の線（CR-F04） */
++.cal-tag { background: var(--color-field); font-weight: 500; }
++
++/* タスクの区切り：期限ごとの小見出し（CR-G01） */
++.task-group {
++  display: flex; align-items: baseline; gap: var(--space-2);
++  margin-top: var(--space-4); padding-bottom: var(--space-1);
++  font-size: var(--fs-footnote); font-weight: 700; letter-spacing: 0.08em; color: var(--color-text-tertiary);
++}
++.task-group:first-child { margin-top: var(--space-2); }
++.task-group.overdue { color: var(--color-danger); }
++.task-group .n { font-weight: 400; font-variant-numeric: tabular-nums; }
++
++/* タイマーの輪：紋章の「太陽の輪」で残り時間を見せる（CR-G02） */
++.timer-dial { position: relative; display: grid; place-items: center; width: var(--size-ring); aspect-ratio: 1; margin: var(--space-4) auto var(--space-2); }
++.timer-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
++.timer-ring .track { fill: none; stroke: var(--color-gold-faint); stroke-width: var(--ring-w); }
++.timer-ring .arc { fill: none; stroke: var(--color-accent); stroke-width: var(--ring-w); stroke-linecap: butt; transition: stroke-dashoffset var(--dur-quick) linear; }
++.timer-ring .ticks { stroke: var(--color-gold-line); stroke-width: 1; }
++.timer-dial .timer-rest { margin: 0; }
++.timer-run { text-align: center; }
++.timer-run .status { text-align: left; }
++
++/* 調子の 7 日：日報の「これまで」の上に、印を 7 つ（CR-G03。多色はこの画面ではここだけ） */
++.mood-week { display: flex; justify-content: space-between; margin: var(--space-3) 0 var(--space-2); }
++.mood-day { display: grid; justify-items: center; gap: var(--space-1); font-size: var(--fs-caption); color: var(--color-text-tertiary); }
++.mood-day i, .mood-legend i {
++  display: inline-block; width: var(--size-mood); height: var(--size-mood); background: var(--color-surface-2); /* 記録なしは暗い印 */
++  clip-path: polygon(30% 0, 100% 0, 100% 70%, 70% 100%, 0 100%, 0 30%);
++}
++[data-mood="good"] > i, .mood-legend i[data-mood="good"] { background: var(--color-lime); }
++[data-mood="normal"] > i, .mood-legend i[data-mood="normal"] { background: var(--color-sky); }
++[data-mood="tired"] > i, .mood-legend i[data-mood="tired"] { background: var(--color-ember); }
++.mood-day b { font-weight: 400; }
++.mood-legend { display: flex; gap: var(--space-3); align-items: center; margin: 0; font-size: var(--fs-caption); color: var(--color-text-tertiary); }
++.mood-legend i { width: var(--size-mood-s); height: var(--size-mood-s); margin-right: var(--space-1); vertical-align: middle; }
++
+ /* ---------- 動きを減らす設定（I3-04） ---------- */
+ @media (prefers-reduced-motion: reduce) {
+   *, *::before, *::after { animation: none !important; transition: none !important; }
+diff --git a/app/tasks.js b/app/tasks.js
+index f720d82..bef17dc 100644
+--- a/app/tasks.js
++++ b/app/tasks.js
+@@ -107,6 +107,29 @@ const Tasks = (() => {
+     if (open.some((t) => t.due === today)) return 'tasks_status.today';
+     return 'tasks_status.open';
+   }
++  // 期限ごとの小見出しを挟む（CR-G01）。並び順は sortOpen のまま変えない
++  const GROUPS = [['overdue', '期限切れ'], ['today', '今日まで'], ['later', 'これから'], ['none', '期限なし']];
++  function groupOf(t, today) {
++    if (!t.due) return 'none';
++    if (t.due < today) return 'overdue';
++    return t.due === today ? 'today' : 'later';
++  }
++  function withGroups(open, now) {
++    const today = todayKey(now);
++    const out = [];
++    for (const [id, label] of GROUPS) {
++      const items = open.filter((t) => groupOf(t, today) === id);
++      if (items.length === 0) continue;
++      const head = document.createElement('li');
++      head.className = 'task-group' + (id === 'overdue' ? ' overdue' : '');
++      head.setAttribute('role', 'presentation');
++      const name = document.createElement('span'); name.textContent = label;
++      const n = document.createElement('span'); n.className = 'n'; n.textContent = `${items.length}件`;
++      head.append(name, n);
++      out.push(head, ...items.map((t) => row(t, now)));
++    }
++    return out;
++  }
+   let shownSay = null;
+   function render(now = new Date()) {
+     const tidied = tidy(load(), now);
+@@ -114,7 +137,7 @@ const Tasks = (() => {
+     const list = tidied.list;
+     const open = sortOpen(list);
+     const done = sortDone(list);
+-    $('task-list').replaceChildren(...open.map((t) => row(t, now)));
++    $('task-list').replaceChildren(...withGroups(open, now));
+     $('done-list').replaceChildren(...done.map((t) => row(t, now)));
+     $('done-count').textContent = String(list.filter((t) => t.done).length);
+     $('done-section').hidden = done.length === 0;
+diff --git a/app/timer.js b/app/timer.js
+index 0cc74e6..3391de1 100644
+--- a/app/timer.js
++++ b/app/timer.js
+@@ -196,6 +196,11 @@ const Timer = (() => {
+       const r = state.running;
+       setIf($('timer-name'), `${r.name}（${r.minutes}分）`);
+       setIf($('timer-rest'), clockText(r.endAt - now));
++      // 残りの割合で輪を減らす（CR-G02）。周の長さは HTML の stroke-dasharray
++      const arc = $('timer-arc');
++      const total = r.minutes * 60000;
++      const left = Math.min(1, Math.max(0, (r.endAt - now) / total));
++      arc.setAttribute('stroke-dashoffset', String(Number(arc.getAttribute('stroke-dasharray')) * (1 - left)));
+       setIf($('timer-end'), `${hm(new Date(r.endAt))} に終わる`);
+       const [text, cls] = NOTIFY_TEXT[r.notify]
+         || [`通知を予約できませんでした（${r.notifyError || '理由不明'}）。アプリを開いている間だけ、ここに終了を表示します`, 'status ng'];
+diff --git a/scripts/contrast_check.py b/scripts/contrast_check.py
+index 232e5d6..06c8fb8 100644
+--- a/scripts/contrast_check.py
++++ b/scripts/contrast_check.py
+@@ -48,6 +48,14 @@ PAIRS = [
+     ("line", "bg", 3.0),
+     ("line", "bg-bottom", 3.0),
+     ("line", "surface-1", 3.0),
++    # R4（機能画面の決まり CR-F / CR-G）
++    ("text", "field", 4.5),              # 入力欄の文字
++    ("border", "field", 3.0),            # 入力欄の縁（入力欄だと分かる境界）
++    ("text-tertiary", "surface-1", 4.5), # 切り替えの未選択の文字
++    ("text-secondary", "surface-1", 4.5),# チップの未選択の文字
++    ("lime", "bg-bottom", 3.0),          # 調子の印（図として 3:1）
++    ("sky", "bg-bottom", 3.0),
++    ("ember", "bg-bottom", 3.0),
+ ]
+ 
+ 
+diff --git a/tests/test_pwa.py b/tests/test_pwa.py
+index 5855586..b0c2fee 100644
+--- a/tests/test_pwa.py
++++ b/tests/test_pwa.py
+@@ -641,6 +641,41 @@ class PwaTest(unittest.TestCase):
+         self.assertNotIn("audio", sw)
+         self.assertFalse((APP_DIR / "audio").exists())
+ 
++    # ---------- 機能画面の決まり（R4。CR-F / CR-G） ----------
++    def test_tabbar_stays_above_sticky_day_header(self):
++        """予定の貼り付く日付の見出しが、タブバーの上に重ならない（R4 の不具合修正）。"""
++        page = self.clock_page(20, 30, "#schedule", size=(375, 667))
++        page.wait_for_selector("#view-schedule", state="visible", timeout=3_000)
++        page.wait_for_selector(".schedule-day-title", timeout=3_000)
++        z = page.evaluate("['.tabbar', '.schedule-day-title'].map(s => Number(getComputedStyle(document.querySelector(s)).zIndex))")
++        self.assertGreater(z[0], z[1])
++        # 画面の下端（タブの位置）にあるのはタブバー
++        hit = page.evaluate("document.elementFromPoint(innerWidth / 2, innerHeight - 20).closest('.tabbar') !== null")
++        self.assertTrue(hit)
++
++    def test_task_groups_follow_due(self):
++        """未完了のタスクに期限ごとの小見出しが入り、並び順は変わらない（CR-G01）。"""
++        tasks = [
++            {"id": "1", "title": "古い", "due": "2026-11-07", "done": False, "createdAt": 1},
++            {"id": "2", "title": "今日", "due": "2026-11-09", "done": False, "createdAt": 2},
++            {"id": "3", "title": "なし", "due": None, "done": False, "createdAt": 3},
++        ]
++        page = self.tasks_page(tasks=tasks)
++        heads = page.eval_on_selector_all("#task-list .task-group", "els => els.map(e => e.firstChild.textContent)")
++        self.assertEqual(heads, ["期限切れ", "今日まで", "期限なし"])
++        self.assertEqual(self.open_titles(page), ["古い", "今日", "なし"])
++
++    def test_report_mood_week(self):
++        """日報の「これまで」の上に、直近7日の調子の印が出る（CR-G03）。"""
++        reports = {"2026-11-08": {"mood": "good", "done": "a", "left": "", "tomorrow": "", "savedAt": 1},
++                   "2026-11-06": {"mood": "tired", "done": "b", "left": "", "tomorrow": "", "savedAt": 1}}
++        init = "localStorage.setItem('reports.v1', %s)" % json.dumps(json.dumps(reports))
++        page = self.clock_page(20, 0, "#report", init_script=init)
++        page.wait_for_selector("#mood-week .mood-day", timeout=3_000)
++        moods = page.eval_on_selector_all("#mood-week .mood-day", "els => els.map(e => e.dataset.mood || '')")
++        self.assertEqual(moods, ["", "", "", "tired", "", "good", ""])  # 11/3〜11/9
++        self.assertIn("11/8 元気", page.get_attribute("#mood-week", "aria-label"))
++
+     # ---------- タスク画面（D-026 ①） ----------
+     def tasks_page(self, hour=10, minute=0, day=9, tasks=None, size=(393, 852)):
+         init = None
