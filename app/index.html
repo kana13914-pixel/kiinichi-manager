@@ -84,16 +84,18 @@
     <section id="view-schedule" class="view schedule">
       <h1><span class="label-en" aria-hidden="true">SCHEDULE</span>予定 <small class="tag">仮</small></h1>
 
+      <!-- 予定の状況に合わせた一言（8日とも空・今日の残りあり・今日の分は過ぎた。Q-A, D-039） -->
+      <section id="schedule-say" class="dialogue dialogue-mini" aria-label="キィニチのセリフ">
+        <div class="nameplate" aria-hidden="true">キィニチ</div>
+        <p id="schedule-say-line" class="line" role="status">…</p>
+      </section>
+
       <div class="schedule-modes" role="group" aria-label="表示の切り替え">
         <button id="schedule-mode-list" type="button" class="cut-btn quiet chip" aria-pressed="true">リスト</button>
         <button id="schedule-mode-month" type="button" class="cut-btn quiet chip" aria-pressed="false">月</button>
       </div>
 
       <div id="schedule-list-view">
-        <section id="schedule-empty" class="dialogue dialogue-mini" aria-label="キィニチのセリフ" hidden>
-          <div class="nameplate" aria-hidden="true">キィニチ</div>
-          <p id="schedule-empty-line" class="line">…</p>
-        </section>
         <div id="schedule-days"></div>
       </div>
 
@@ -158,6 +160,12 @@
     <section id="view-timer" class="view timer">
       <h1><span class="label-en" aria-hidden="true">TIMER</span>タイマー</h1>
 
+      <!-- タイマーの状況に合わせた一言（待機・動作中。終了のときは下の終了のセリフだけ。Q-A, D-039） -->
+      <section id="timer-say" class="dialogue dialogue-mini" aria-label="キィニチのセリフ">
+        <div class="nameplate" aria-hidden="true">キィニチ</div>
+        <p id="timer-say-line" class="line" role="status">…</p>
+      </section>
+
       <div id="timer-idle">
         <ul id="timer-list" class="task-list" aria-label="タイマー"></ul>
 
@@ -188,7 +196,15 @@
 
       <section id="timer-running" class="timer-run" aria-label="動いているタイマー" hidden>
         <p id="timer-name" class="timer-name">-</p>
-        <p id="timer-rest" class="timer-rest" role="timer">--:--</p>
+        <div class="timer-dial">
+          <!-- 残り時間の輪（CR-G02）。装飾なので読み上げない。数字は #timer-rest -->
+          <svg class="timer-ring" viewBox="0 0 240 240" aria-hidden="true">
+            <circle class="track" cx="120" cy="120" r="110"/>
+            <circle id="timer-arc" class="arc" cx="120" cy="120" r="110" stroke-dasharray="691.15" stroke-dashoffset="0"/>
+            <g class="ticks"><line x1="220.0" y1="120.0" x2="210.0" y2="120.0"/><line x1="212.4" y1="158.3" x2="206.8" y2="156.0"/><line x1="190.7" y1="190.7" x2="186.5" y2="186.5"/><line x1="158.3" y1="212.4" x2="156.0" y2="206.8"/><line x1="120.0" y1="220.0" x2="120.0" y2="210.0"/><line x1="81.7" y1="212.4" x2="84.0" y2="206.8"/><line x1="49.3" y1="190.7" x2="53.5" y2="186.5"/><line x1="27.6" y1="158.3" x2="33.2" y2="156.0"/><line x1="20.0" y1="120.0" x2="30.0" y2="120.0"/><line x1="27.6" y1="81.7" x2="33.2" y2="84.0"/><line x1="49.3" y1="49.3" x2="53.5" y2="53.5"/><line x1="81.7" y1="27.6" x2="84.0" y2="33.2"/><line x1="120.0" y1="20.0" x2="120.0" y2="30.0"/><line x1="158.3" y1="27.6" x2="156.0" y2="33.2"/><line x1="190.7" y1="49.3" x2="186.5" y2="53.5"/><line x1="212.4" y1="81.7" x2="206.8" y2="84.0"/></g>
+          </svg>
+          <p id="timer-rest" class="timer-rest" role="timer">--:--</p>
+        </div>
         <p id="timer-end" class="note">-</p>
         <p id="timer-notify" class="status" role="status"></p>
         <button id="timer-stop" type="button" class="cut-btn quiet">止める</button>
@@ -209,6 +225,12 @@
     <!-- 日報（D-026 ②, D-027）：今日の日報（4項目）→ 保存 → これまでの日報。主ボタンは「保存する」1つ -->
     <section id="view-report" class="view report">
       <h1><span class="label-en" aria-hidden="true">REPORT</span>日報</h1>
+
+      <!-- 日報の状況に合わせた一言（今日の分がまだ・保存済み。保存した直後は下の返事だけ。Q-A, D-039） -->
+      <section id="report-say" class="dialogue dialogue-mini" aria-label="キィニチのセリフ">
+        <div class="nameplate" aria-hidden="true">キィニチ</div>
+        <p id="report-say-line" class="line" role="status">…</p>
+      </section>
 
       <form id="report-form" class="report-form">
         <p id="report-date" class="report-date">-</p>
@@ -235,6 +257,9 @@
 
       <section class="report-history" aria-labelledby="report-history-title">
         <h2 id="report-history-title" class="section-title">これまでの日報</h2>
+        <!-- 調子の 7 日（CR-G03）。読み上げは aria-label の文で行う -->
+        <div id="mood-week" class="mood-week" role="img" aria-label="直近7日の調子"></div>
+        <p class="mood-legend" aria-hidden="true"><span><i data-mood="good"></i>元気</span><span><i data-mood="normal"></i>ふつう</span><span><i data-mood="tired"></i>疲れた</span><span><i></i>記録なし</span></p>
         <p id="report-history-empty" class="note" hidden>…</p>
         <ul id="report-list" class="report-list"></ul>
         <button id="report-more" type="button" class="cut-btn quiet" hidden>もっと見る</button>

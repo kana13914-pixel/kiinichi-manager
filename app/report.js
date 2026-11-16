@@ -56,6 +56,14 @@ const Report = (() => {
     mood = value;
     for (const b of document.querySelectorAll('#report-form .mood')) b.setAttribute('aria-pressed', String(b.dataset.mood === value));
   }
+  // 画面を開いたときの一言（Q-A）：今日の分をまだ保存していない／保存済み。保存した直後は、返事（report_saved.*）だけを出す（C10-02）
+  const say = makeSay($('report-say-line'));
+  function renderSay() {
+    const replying = !$('report-reply').hidden;
+    $('report-say').hidden = replying;
+    if (!replying) say((load()[shownDate] || {}).savedAt ? 'report_status.saved' : 'report_status.not_yet');
+  }
+
   let shownDate = null;
   function fillForm(now = new Date()) {
     const key = reportDate(now);
@@ -104,6 +112,29 @@ const Report = (() => {
     li.append(det);
     return li;
   }
+  // 調子の 7 日（CR-G03）：今日（4時区切り）までの 7 日。書いていない日は枠だけ
+  const WEEK = ['日', '月', '火', '水', '木', '金', '土'];
+  function renderMoodWeek(all, now = new Date()) {
+    const base = logicalDay(now);
+    const cells = [];
+    const spoken = [];
+    for (let i = 6; i >= 0; i -= 1) {
+      const d = addDays(base, -i);
+      const key = dateStr(d);
+      const m = all[key] && MOODS[all[key].mood] ? all[key].mood : null;
+      const cell = document.createElement('span');
+      cell.className = 'mood-day';
+      if (m) cell.dataset.mood = m;
+      const mark = document.createElement('i');
+      const day = document.createElement('b');
+      day.textContent = WEEK[d.getDay()];
+      cell.append(mark, day);
+      cells.push(cell);
+      spoken.push(`${d.getMonth() + 1}/${d.getDate()} ${m ? MOODS[m] : '記録なし'}`);
+    }
+    $('mood-week').replaceChildren(...cells);
+    $('mood-week').setAttribute('aria-label', `直近7日の調子：${spoken.join('、')}`);
+  }
   let historyShown = HISTORY_STEP;
   function renderHistory(now = new Date()) {
     const all = load();
@@ -111,6 +142,7 @@ const Report = (() => {
     const every = Object.keys(all).filter((k) => k !== today && /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().reverse();
     const keys = every.slice(0, historyShown);
     $('report-list').replaceChildren(...keys.map((k) => item(k, all[k])));
+    renderMoodWeek(all, now);
     const rest = every.length - keys.length;
     $('report-more').hidden = rest === 0;
     $('report-more').textContent = `もっと見る（残り${rest}日分）`;
@@ -151,6 +183,7 @@ const Report = (() => {
       if (!picked) return;
       $('report-reply-line').textContent = picked.text;
       $('report-reply').hidden = false;
+      renderSay();
     });
   });
   for (const b of document.querySelectorAll('#report-form .mood')) {
@@ -163,6 +196,7 @@ const Report = (() => {
   function render(now = new Date()) {
     fillForm(now);
     renderHistory(now);
+    renderSay();
   }
   onShow('report', () => render());
   render();

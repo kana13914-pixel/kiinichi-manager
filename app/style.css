@@ -52,6 +52,13 @@
   --stage-min-h: 160px;
   --home-min-h: 520px;
   --tabbar-h: 56px;
+  /* ---- 機能画面の決まり（R4。CR-F/CR-G） ---- */
+  --z-tabbar: 20;          /* タブバーは貼り付く見出し（z-index: 1）より上 */
+  --size-ring: 232px;      /* タイマーの輪の直径 */
+  --ring-w: 3px;           /* 輪の線の太さ */
+  --size-mood: 14px;       /* 調子の印（7日） */
+  --size-mood-s: 10px;     /* 凡例の印 */
+  --dur-quick: 180ms;      /* 押したあとの小さな反応 */
   --size-dialog: 320px;    /* 確認ダイアログの最大幅 */
   --size-cal-cell: 76px;   /* 月表示の1マスの高さ（日付＋タグ2つ＋「+n」） */
 
@@ -75,6 +82,7 @@
   --color-strip-from: rgba(7, 15, 12, 0.6);
   --color-strip-to: rgba(7, 15, 12, 0.12);
   --color-card: rgba(7, 15, 12, 0.55);
+  --color-field: rgba(244, 241, 232, 0.05); /* 入力欄の地：黒い穴にしない（CR-F01） */
   --bg-glow: radial-gradient(120% 55% at 50% -12%, var(--color-canopy-light), transparent 62%);
   --tex-grain: url("img/grain.svg");
   --size-grain: 160px;
@@ -491,6 +499,77 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
   background: var(--color-ink); box-shadow: inset 2px 0 0 var(--color-gold-line); white-space: nowrap; overflow: hidden;
 }
 .cal-more { padding: 0 var(--space-1); font-size: var(--fs-caption); color: var(--color-text-secondary); }
+
+
+/* ========== 機能画面の決まり（R4。docs/visual_rules.md の CR-F・CR-G） ========== */
+/* 重なり：タブバーをいちばん上に（予定の貼り付く見出しが上に重なっていた） */
+.tabbar { z-index: var(--z-tabbar); }
+
+/* 画面の見出し：名前と同じ文法で「見出し＋右へ消える金の線」（CR-F05） */
+.view > h1::after {
+  content: ""; display: block; height: 1px; margin-top: var(--space-2);
+  background: linear-gradient(90deg, var(--color-gold-line), transparent);
+}
+
+/* 入力欄：黒い穴ではなく、地より少し明るい面＋見える縁。選んでいる欄は金の縁（CR-F01） */
+input, textarea { background: var(--color-field); } /* 縁は --color-border のまま（入力欄の上で 3:1 以上） */
+input:focus, textarea:focus { border-color: var(--color-accent); }
+
+/* 控えめなボタン・チップ：最奥の黒をやめ、面 1 段目に。選択中は白い縁＋太字、未選択は文字を一段弱く（CR-F02） */
+.cut-btn.quiet { --btn-fill: var(--color-surface-1); }
+.cut-btn.chip { color: var(--color-text-secondary); font-weight: 500; }
+.cut-btn.chip:not(.mood)[aria-pressed="true"] { color: var(--color-text); } /* 調子は金の文字のまま（D-031 ④） */
+
+/* 表示の切り替え（リスト／月）：2 つのボタンではなく 1 本の切り替え（セグメント。CR-F03） */
+.schedule-modes {
+  gap: var(--space-1); padding: var(--space-1); background: var(--color-surface-1);
+  clip-path: polygon(var(--cut-s) 0, 100% 0, 100% calc(100% - var(--cut-s)), calc(100% - var(--cut-s)) 100%, 0 100%, 0 var(--cut-s));
+}
+.schedule-modes .cut-btn { --btn-line: var(--color-surface-1); --btn-fill: var(--color-surface-1); color: var(--color-text-tertiary); }
+.schedule-modes .cut-btn[aria-pressed="true"] { --btn-line: var(--color-text); --btn-fill: var(--color-surface-2); color: var(--color-text); }
+
+/* 月のタグ：黒い箱をやめ、薄い面＋左の金の線（CR-F04） */
+.cal-tag { background: var(--color-field); font-weight: 500; }
+
+/* タスクの区切り：期限ごとの小見出し（CR-G01） */
+.task-group {
+  display: flex; align-items: baseline; gap: var(--space-2);
+  margin-top: var(--space-4); padding-bottom: var(--space-1);
+  font-size: var(--fs-footnote); font-weight: 700; letter-spacing: 0.08em; color: var(--color-text-tertiary);
+}
+.task-group:first-child { margin-top: var(--space-2); }
+.task-group.overdue { color: var(--color-danger); }
+.task-group .n { font-weight: 400; font-variant-numeric: tabular-nums; }
+
+/* タイマーの輪：紋章の「太陽の輪」で残り時間を見せる（CR-G02） */
+.timer-dial { position: relative; display: grid; place-items: center; width: var(--size-ring); aspect-ratio: 1; margin: var(--space-4) auto var(--space-2); }
+.timer-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.timer-ring .track { fill: none; stroke: var(--color-gold-faint); stroke-width: var(--ring-w); }
+.timer-ring .arc { fill: none; stroke: var(--color-accent); stroke-width: var(--ring-w); stroke-linecap: butt; transition: stroke-dashoffset var(--dur-quick) linear; }
+.timer-ring .ticks { stroke: var(--color-gold-line); stroke-width: 1; }
+.timer-dial .timer-rest { margin: 0; }
+.timer-run { text-align: center; }
+.timer-run .status { text-align: left; }
+
+/* 調子の 7 日：日報の「これまで」の上に、印を 7 つ（CR-G03。多色はこの画面ではここだけ） */
+.mood-week { display: flex; justify-content: space-between; margin: var(--space-3) 0 var(--space-2); }
+.mood-day { display: grid; justify-items: center; gap: var(--space-1); font-size: var(--fs-caption); color: var(--color-text-tertiary); }
+.mood-day i, .mood-legend i {
+  display: inline-block; width: var(--size-mood); height: var(--size-mood); background: var(--color-surface-2); /* 記録なしは暗い印 */
+  clip-path: polygon(30% 0, 100% 0, 100% 70%, 70% 100%, 0 100%, 0 30%);
+}
+[data-mood="good"] > i, .mood-legend i[data-mood="good"] { background: var(--color-lime); }
+[data-mood="normal"] > i, .mood-legend i[data-mood="normal"] { background: var(--color-sky); }
+[data-mood="tired"] > i, .mood-legend i[data-mood="tired"] { background: var(--color-ember); }
+.mood-day b { font-weight: 400; }
+.mood-legend { display: flex; gap: var(--space-3); align-items: center; margin: 0; font-size: var(--fs-caption); color: var(--color-text-tertiary); }
+.mood-legend i { width: var(--size-mood-s); height: var(--size-mood-s); margin-right: var(--space-1); vertical-align: middle; }
+
+/* タスク完了の小さな反応：押した行のチェックの印が入る（Q-B, C10-04, CR-M02。1 回きり） */
+.task-check.check-enter { animation: check-in var(--dur-quick) var(--ease-hook) both; }
+@keyframes check-in { from { opacity: 0; transform: translateX(calc(var(--space-1) * -1)) scale(0.6); } to { opacity: 1; transform: none; } }
+/* タイマー一覧の行の右端に「開始」の印（Q-D）。金は使わない（V3-08） */
+.timer-go { flex: none; padding-right: var(--space-2); font-size: var(--fs-caption); color: var(--color-text-secondary); }
 
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {

@@ -107,44 +107,76 @@ const Tasks = (() => {
     if (open.some((t) => t.due === today)) return 'tasks_status.today';
     return 'tasks_status.open';
   }
-  let shownSay = null;
+  // 期限ごとの小見出しを挟む（CR-G01）。並び順は sortOpen のまま変えない
+  const GROUPS = [['overdue', '期限切れ'], ['today', '今日まで'], ['later', 'これから'], ['none', '期限なし']];
+  function groupOf(t, today) {
+    if (!t.due) return 'none';
+    if (t.due < today) return 'overdue';
+    return t.due === today ? 'today' : 'later';
+  }
+  function withGroups(open, now) {
+    const today = todayKey(now);
+    const out = [];
+    for (const [id, label] of GROUPS) {
+      const items = open.filter((t) => groupOf(t, today) === id);
+      if (items.length === 0) continue;
+      const head = document.createElement('li');
+      head.className = 'task-group' + (id === 'overdue' ? ' overdue' : '');
+      head.setAttribute('role', 'presentation');
+      const name = document.createElement('span'); name.textContent = label;
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = `${items.length}件`;
+      head.append(name, n);
+      out.push(head, ...items.map((t) => row(t, now)));
+    }
+    return out;
+  }
+  const say = makeSay($('tasks-say-line'));
   function render(now = new Date()) {
     const tidied = tidy(load(), now);
     if (tidied.changed) Store.write(KEY, tidied.list); // 整理の保存は、失敗しても次に開いたときにやり直せる
     const list = tidied.list;
     const open = sortOpen(list);
     const done = sortDone(list);
-    $('task-list').replaceChildren(...open.map((t) => row(t, now)));
+    $('task-list').replaceChildren(...withGroups(open, now));
     $('done-list').replaceChildren(...done.map((t) => row(t, now)));
     $('done-count').textContent = String(list.filter((t) => t.done).length);
     $('done-section').hidden = done.length === 0;
-    const key = sayKey(open, now);
-    if (key !== shownSay) { // 状況が変わったときだけセリフを選び直す（開くたびに変わらないように）
-      shownSay = key;
-      dialogueReady.then(() => {
-        if (shownSay !== key) return;
-        const picked = pickLine(key);
-        $('tasks-say-line').textContent = picked ? picked.text : '…';
-      });
-    }
+    say(sayKey(open, now));
   }
 
   const toast = makeToast($('task-toast')); // 取り消し（5秒）と、保存の失敗の知らせ
 
   // ---------- 操作 ----------
-  function update(id, fn) {
+  function update(id, fn, { later = false } = {}) {
     const list = load();
     const t = list.find((x) => x.id === id);
     if (!t) return null;
     const before = { ...t };
     fn(t);
     if (!save(list)) return null;
-    render();
+    if (!later) render();
     return before;
   }
+  // 完了にしたときだけの小さな反応（Q-B, C10-04, CR-M02）：押した行のチェックの印が入るのを見せてから、完了の一覧へ移す。
+  // 開き直したとき・未完了に戻すときは動かさない。動きを減らす設定では待たずに移す
+  const CHECK_HOLD_MS = 320; // 印が入る 180ms（--dur-quick）＋見える間
+  let moveTimer = null;
+  function showCheck(id) {
+    const li = [...document.querySelectorAll('#task-list .task-row')].find((el) => el.dataset.id === id);
+    if (!li || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { render(); return; }
+    li.classList.add('done');
+    li.querySelector('.task-main').setAttribute('aria-pressed', 'true');
+    const box = li.querySelector('.task-check');
+    box.textContent = '✓';
+    box.classList.add('check-enter');
+    clearTimeout(moveTimer);
+    moveTimer = setTimeout(render, CHECK_HOLD_MS);
+  }
   function toggle(id) {
-    const before = update(id, (t) => { t.done = !t.done; t.doneAt = t.done ? Date.now() : null; });
+    const completing = !(load().find((x) => x.id === id) || {}).done;
+    const before = update(id, (t) => { t.done = !t.done; t.doneAt = t.done ? Date.now() : null; }, { later: completing });
     if (!before) return;
+    if (completing) showCheck(id);
     if (!before.done) {
       toast.show(`「${before.title}」を完了にしました`, () => update(id, (t) => { t.done = false; t.doneAt = null; }));
     } else {

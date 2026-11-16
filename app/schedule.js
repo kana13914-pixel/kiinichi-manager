@@ -55,16 +55,23 @@ const Schedule = (() => {
     return li;
   }
 
+  // ---------- 一言（Q-A）：8日とも空 → 今日の残りがある → 今日の分は過ぎた ----------
+  const say = makeSay($('schedule-say-line'));
+  function sayKey(now) {
+    let total = 0;
+    for (let i = 0; i < LIST_DAYS; i++) total += SampleData.eventsOn(dayAt(now, i)).length;
+    if (total === 0) return 'screen_empty.schedule';
+    const left = SampleData.eventsOn(now).some((e) => e.allDay || e.at > now);
+    return left ? 'schedule_status.today_left' : 'schedule_status.today_done';
+  }
+
   // ---------- リスト ----------
-  let emptyShown = false;
   function renderList(now) {
     const next = nextEvent(now);
     const days = [];
-    let total = 0;
     for (let i = 0; i < LIST_DAYS; i++) {
       const date = dayAt(now, i);
       const events = SampleData.eventsOn(date);
-      total += events.length;
       const sec = document.createElement('section');
       sec.className = 'schedule-day';
       sec.dataset.date = dateStr(date);
@@ -78,16 +85,6 @@ const Schedule = (() => {
       days.push(sec);
     }
     $('schedule-days').replaceChildren(...days);
-
-    const empty = total === 0;
-    $('schedule-empty').hidden = !empty;
-    if (empty && !emptyShown) { // 空になったときだけセリフを選び直す
-      dialogueReady.then(() => {
-        const picked = pickLine('screen_empty.schedule');
-        $('schedule-empty-line').textContent = picked ? picked.text : '…';
-      });
-    }
-    emptyShown = empty;
   }
 
   // ---------- 月 ----------
@@ -157,6 +154,7 @@ const Schedule = (() => {
     $('schedule-month-view').hidden = mode !== 'month';
     $('schedule-mode-list').setAttribute('aria-pressed', String(mode === 'list'));
     $('schedule-mode-month').setAttribute('aria-pressed', String(mode === 'month'));
+    say(sayKey(now));
     if (mode === 'list') renderList(now); else renderMonth(now);
   }
   function setMode(next) {

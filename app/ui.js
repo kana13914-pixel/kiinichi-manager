@@ -51,6 +51,20 @@ function makeToast(el) {
   return { show, hide };
 }
 
+// 画面の一言（1 画面に 1 つ。C10-02）。状況（セリフ集のキー）が変わったときだけ選び直す。開くたびには変えない（D-031 ②）
+function makeSay(lineEl) {
+  let shown = null;
+  return (key) => {
+    if (key === shown) return;
+    shown = key;
+    dialogueReady.then(() => {
+      if (shown !== key) return;
+      const picked = pickLine(key);
+      lineEl.textContent = picked ? picked.text : '…';
+    });
+  };
+}
+
 // ごみ箱のボタン（タスク、利用者が作ったタイマー）
 function trashButton(label, onClick) {
   const del = document.createElement('button');

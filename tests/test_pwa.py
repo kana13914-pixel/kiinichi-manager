@@ -641,6 +641,41 @@ class PwaTest(unittest.TestCase):
         self.assertNotIn("audio", sw)
         self.assertFalse((APP_DIR / "audio").exists())
 
+    # ---------- 機能画面の決まり（R4。CR-F / CR-G） ----------
+    def test_tabbar_stays_above_sticky_day_header(self):
+        """予定の貼り付く日付の見出しが、タブバーの上に重ならない（R4 の不具合修正）。"""
+        page = self.clock_page(20, 30, "#schedule", size=(375, 667))
+        page.wait_for_selector("#view-schedule", state="visible", timeout=3_000)
+        page.wait_for_selector(".schedule-day-title", timeout=3_000)
+        z = page.evaluate("['.tabbar', '.schedule-day-title'].map(s => Number(getComputedStyle(document.querySelector(s)).zIndex))")
+        self.assertGreater(z[0], z[1])
+        # 画面の下端（タブの位置）にあるのはタブバー
+        hit = page.evaluate("document.elementFromPoint(innerWidth / 2, innerHeight - 20).closest('.tabbar') !== null")
+        self.assertTrue(hit)
+
+    def test_task_groups_follow_due(self):
+        """未完了のタスクに期限ごとの小見出しが入り、並び順は変わらない（CR-G01）。"""
+        tasks = [
+            {"id": "1", "title": "古い", "due": "2026-11-07", "done": False, "createdAt": 1},
+            {"id": "2", "title": "今日", "due": "2026-11-09", "done": False, "createdAt": 2},
+            {"id": "3", "title": "なし", "due": None, "done": False, "createdAt": 3},
+        ]
+        page = self.tasks_page(tasks=tasks)
+        heads = page.eval_on_selector_all("#task-list .task-group", "els => els.map(e => e.firstChild.textContent)")
+        self.assertEqual(heads, ["期限切れ", "今日まで", "期限なし"])
+        self.assertEqual(self.open_titles(page), ["古い", "今日", "なし"])
+
+    def test_report_mood_week(self):
+        """日報の「これまで」の上に、直近7日の調子の印が出る（CR-G03）。"""
+        reports = {"2026-11-08": {"mood": "good", "done": "a", "left": "", "tomorrow": "", "savedAt": 1},
+                   "2026-11-06": {"mood": "tired", "done": "b", "left": "", "tomorrow": "", "savedAt": 1}}
+        init = "localStorage.setItem('reports.v1', %s)" % json.dumps(json.dumps(reports))
+        page = self.clock_page(20, 0, "#report", init_script=init)
+        page.wait_for_selector("#mood-week .mood-day", timeout=3_000)
+        moods = page.eval_on_selector_all("#mood-week .mood-day", "els => els.map(e => e.dataset.mood || '')")
+        self.assertEqual(moods, ["", "", "", "tired", "", "good", ""])  # 11/3〜11/9
+        self.assertIn("11/8 元気", page.get_attribute("#mood-week", "aria-label"))
+
     # ---------- タスク画面（D-026 ①） ----------
     def tasks_page(self, hour=10, minute=0, day=9, tasks=None, size=(393, 852)):
         init = None
@@ -704,6 +739,7 @@ class PwaTest(unittest.TestCase):
         tasks = [{"id": "a", "title": "洗濯", "due": None, "done": False, "createdAt": 1}]
         page = self.tasks_page(tasks=tasks)
         page.click("#task-list .task-main")
+        page.wait_for_selector("#done-list li", state="attached", timeout=3_000)  # チェックの印が入るのを見せてから移る（D-039 ⑧）
         self.assertEqual(self.open_titles(page), [])
         self.assertEqual(page.text_content("#done-count"), "1")
         self.assertTrue(page.is_visible("#task-toast"))
@@ -975,7 +1011,7 @@ class PwaTest(unittest.TestCase):
     def test_timer_lists_builtin_timers(self):
         page = self.timer_page()
         rows = page.eval_on_selector_all("#timer-list .task-main", "els => els.map(e => e.textContent)")
-        self.assertEqual(rows, ["作業25分", "休憩5分", "入浴20分", "歯磨き3分"])
+        self.assertEqual(rows, ["作業25分▶", "休憩5分▶", "入浴20分▶", "歯磨き3分▶"])
         self.assertEqual(page.query_selector_all("#timer-list .task-del"), [])  # 用途別のタイマーは消せない
         self.assertTrue(page.is_hidden("#timer-running"))
         self.assertTrue(page.is_hidden("#timer-done"))
@@ -1050,7 +1086,7 @@ class PwaTest(unittest.TestCase):
         self.assertTrue(page.is_hidden("#timer-form"))
         self.assertTrue(page.is_visible("#timer-quick"))
         rows = page.eval_on_selector_all("#timer-list .task-main", "els => els.map(e => e.textContent)")
-        self.assertEqual(rows[-1], "ストレッチ10分")
+        self.assertEqual(rows[-1], "ストレッチ10分▶")
         page.reload()
         page.wait_for_selector("#view-timer", state="visible")
         rows = page.eval_on_selector_all("#timer-list .task-main", "els => els.map(e => e.textContent)")
@@ -1237,12 +1273,11 @@ class PwaTest(unittest.TestCase):
           SampleData.eventsOn = (d) => d.getDate() === 11 ? [] : orig(d); Schedule.refresh(); }""")
         self.assertEqual(page.text_content("#schedule-days .schedule-day[data-date='2026-11-11'] .schedule-row"), "予定なし")
         self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-day")), 8)
-        self.assertTrue(page.is_hidden("#schedule-empty"))
-        # 8日とも予定がない：キィニチの一言
+        self.assertEqual(page.text_content("#schedule-say-line"), "今日の分はまだ残っている。時間だけ見ておけ。")
+        # 8日とも予定がない：空のときの一言（同じ面に出す）
         page.evaluate("SampleData.eventsOn = () => []; Schedule.refresh()")
-        page.wait_for_function("document.getElementById('schedule-empty-line').textContent !== '…'", timeout=3_000)
-        self.assertTrue(page.is_visible("#schedule-empty"))
-        self.assertEqual(page.text_content("#schedule-empty-line"), "予定は入っていない。好きに使えばいい。")
+        page.wait_for_function("document.getElementById('schedule-say-line').textContent === '予定は入っていない。好きに使えばいい。'", timeout=3_000)
+        self.assertTrue(page.is_visible("#schedule-say"))
         self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-row.none")), 8)
 
     def cal_cell(self, page, date):
@@ -1490,6 +1525,73 @@ class PwaTest(unittest.TestCase):
         page.goto(self.base + "send.html")
         self.assertEqual(page.input_value("#wp-worker-url"), "https://kiinichi-push.numwm.workers.dev")
         self.assertIsNone(page.evaluate("localStorage.getItem('phase0.workerUrl')"))
+
+    # ---------- 機能画面の一言・小さな反応・開始の印（D-039 ⑧） ----------
+    def visible_says(self, page, view):
+        return page.evaluate("""(v) => [...document.querySelectorAll('#view-' + v + ' .dialogue')]
+          .filter((e) => e.getClientRects().length).map((e) => e.querySelector('.line').textContent)""", view)
+
+    def test_timer_say_by_state_and_one_per_screen(self):
+        page = self.timer_page()
+        self.assertEqual(self.visible_says(page, "timer"), ["時間を区切るなら、ここで計れ。"])
+        page.click("#timer-list li[data-id=brush] .task-main")
+        page.wait_for_function("document.getElementById('timer-say-line').textContent === '計っている。そのまま続けろ。'", timeout=3_000)
+        self.assertEqual(len(self.visible_says(page, "timer")), 1)
+        page.clock.run_for(3 * 60_000 + 500)  # 終了：終了のセリフだけ（一言は1画面に1つ。C10-02）
+        self.assertEqual(self.visible_says(page, "timer"), ["時間だ。口をゆすげ。"])
+
+    def test_timer_rows_show_start_mark_not_read_aloud(self):
+        page = self.timer_page()
+        marks = page.eval_on_selector_all("#timer-list .timer-go", "els => els.map(e => [e.textContent, e.getAttribute('aria-hidden')])")
+        self.assertEqual(marks, [["▶", "true"]] * 4)
+        self.assertEqual(page.get_attribute("#timer-list li[data-id=work] .task-main", "aria-label"), "「作業」25分を開始")
+        self.assertNotEqual(page.evaluate("getComputedStyle(document.querySelector('.timer-go')).color"), "rgb(232, 196, 92)")  # 金は使わない
+
+    def test_schedule_say_today_left_then_done(self):
+        page = self.schedule_page(hour=12, minute=0)
+        self.assertEqual(self.visible_says(page, "schedule"), ["今日の分はまだ残っている。時間だけ見ておけ。"])
+        page.click("#schedule-mode-month")  # 月表示でも同じ一言が1つ
+        self.assertEqual(self.visible_says(page, "schedule"), ["今日の分はまだ残っている。時間だけ見ておけ。"])
+        page = self.schedule_page(hour=23, minute=45)
+        self.assertEqual(self.visible_says(page, "schedule"), ["今日の分はもう過ぎた。先の分を見ておけ。"])
+
+    def test_report_say_not_yet_saved_and_reply(self):
+        page = self.report_page()
+        self.assertEqual(self.visible_says(page, "report"), ["今日の分はまだだ。書けるときに書いておけ。"])
+        page.fill("#report-done", "書いた")
+        page.click("#report-save")
+        page.wait_for_selector("#report-reply", state="visible", timeout=3_000)
+        self.assertEqual(self.visible_says(page, "report"), ["記録した。今日の分はこれで終わりだ。"])  # 保存の直後は返事だけ
+        page.reload()
+        page.wait_for_function("dialogue !== null")
+        page.wait_for_function("document.getElementById('report-say-line').textContent !== '…'", timeout=3_000)
+        self.assertEqual(self.visible_says(page, "report"), ["今日の分は受け取った。直すなら書き換えろ。"])
+
+    def test_task_check_reaction_only_when_completing(self):
+        tasks = [{"id": "a", "title": "やる", "due": None, "done": False, "createdAt": 1},
+                 {"id": "b", "title": "済み", "due": None, "done": True, "doneAt": int(datetime(2026, 11, 9, 9, 0).timestamp() * 1000), "createdAt": 2}]
+        page = self.tasks_page(tasks=tasks)
+        self.assertEqual(page.query_selector_all(".check-enter"), [])  # 開いたときは動かさない
+        page.click("#task-list li[data-id=a] .task-main")
+        # 押した行のチェックの印が入り（180ms）、そのあと完了の一覧へ移る
+        self.assertEqual(page.evaluate("""() => { const b = document.querySelector('#task-list li[data-id=a] .task-check');
+          return [b.textContent, b.classList.contains('check-enter'), getComputedStyle(b).animationDuration]; }"""), ["✓", True, "0.18s"])
+        self.assertTrue(json.loads(page.evaluate("localStorage.getItem('tasks.v1')"))[0]["done"])  # 保存はすぐ
+        page.wait_for_selector("#done-list li[data-id=a]", state="attached", timeout=3_000)
+        self.assertEqual(page.query_selector_all("#task-list li[data-id=a]"), [])
+        self.assertEqual(page.query_selector_all(".check-enter"), [])  # 移ったあとは動きの印が残らない
+        page.click("#done-section summary")
+        page.click("#done-list li[data-id=b] .task-main")  # 未完了に戻すときは動かさず、すぐ移る
+        self.assertEqual(len(page.query_selector_all("#task-list li[data-id=b]")), 1)
+        self.assertEqual(page.query_selector_all(".check-enter"), [])
+
+    def test_task_check_reaction_skipped_with_reduced_motion(self):
+        tasks = [{"id": "a", "title": "やる", "due": None, "done": False, "createdAt": 1}]
+        page = self.tasks_page(tasks=tasks)
+        page.emulate_media(reduced_motion="reduce")
+        page.click("#task-list li[data-id=a] .task-main")
+        self.assertEqual(page.query_selector_all("#task-list li[data-id=a]"), [])  # 待たずに移る
+        self.assertEqual(page.query_selector_all(".check-enter"), [])
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")

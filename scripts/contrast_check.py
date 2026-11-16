@@ -48,6 +48,14 @@ PAIRS = [
     ("line", "bg", 3.0),
     ("line", "bg-bottom", 3.0),
     ("line", "surface-1", 3.0),
+    # R4（機能画面の決まり CR-F / CR-G）
+    ("text", "field", 4.5),              # 入力欄の文字
+    ("border", "field", 3.0),            # 入力欄の縁（入力欄だと分かる境界）
+    ("text-tertiary", "surface-1", 4.5), # 切り替えの未選択の文字
+    ("text-secondary", "surface-1", 4.5),# チップの未選択の文字
+    ("lime", "bg-bottom", 3.0),          # 調子の印（図として 3:1）
+    ("sky", "bg-bottom", 3.0),
+    ("ember", "bg-bottom", 3.0),
 ]
 
 

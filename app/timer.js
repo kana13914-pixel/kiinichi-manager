@@ -165,7 +165,11 @@ const Timer = (() => {
     const min = document.createElement('span');
     min.className = 'timer-min';
     min.textContent = `${t.minutes}分`;
-    main.append(name, min);
+    const go = document.createElement('span'); // 押すと始まることを見た目で示す（Q-D）。装飾なので読み上げない（aria-label に「開始」がある）
+    go.className = 'timer-go';
+    go.setAttribute('aria-hidden', 'true');
+    go.textContent = '▶';
+    main.append(name, min, go);
     main.addEventListener('click', () => start(t.name, t.minutes, t.kind || 'default'));
     li.append(main);
     if (custom) li.append(trashButton(`「${t.name}」を削除`, () => removeCustom(t.id)));
@@ -176,6 +180,7 @@ const Timer = (() => {
     pending: ['通知を予約しています…', 'status'],
     ok: ['アプリを閉じていても、終わったら通知で知らせます', 'status ok'],
   };
+  const say = makeSay($('timer-say-line')); // 画面を開いたときの一言（Q-A）。終了のときは終了のセリフ（timer_done.*）だけを出す
   let listKey = null;
   let ticker = null;
   function render(now = Date.now()) {
@@ -185,6 +190,8 @@ const Timer = (() => {
     $('timer-idle').hidden = mode !== 'idle';
     $('timer-running').hidden = mode !== 'running';
     $('timer-done').hidden = mode !== 'done';
+    $('timer-say').hidden = mode === 'done'; // 一言は 1 画面に 1 つ（C10-02）
+    if (mode !== 'done') say('timer_status.' + mode);
 
     if (mode === 'idle') {
       const key = JSON.stringify(state.custom);
@@ -196,6 +203,11 @@ const Timer = (() => {
       const r = state.running;
       setIf($('timer-name'), `${r.name}（${r.minutes}分）`);
       setIf($('timer-rest'), clockText(r.endAt - now));
+      // 残りの割合で輪を減らす（CR-G02）。周の長さは HTML の stroke-dasharray
+      const arc = $('timer-arc');
+      const total = r.minutes * 60000;
+      const left = Math.min(1, Math.max(0, (r.endAt - now) / total));
+      arc.setAttribute('stroke-dashoffset', String(Number(arc.getAttribute('stroke-dasharray')) * (1 - left)));
       setIf($('timer-end'), `${hm(new Date(r.endAt))} に終わる`);
       const [text, cls] = NOTIFY_TEXT[r.notify]
         || [`通知を予約できませんでした（${r.notifyError || '理由不明'}）。アプリを開いている間だけ、ここに終了を表示します`, 'status ng'];
