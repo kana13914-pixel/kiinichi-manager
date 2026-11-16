@@ -8,7 +8,7 @@
 | --- | --- |
 | 何をするにも | `CLAUDE.md` → この目次 → `docs/roadmap.md`（今のタスク）→ `NEEDS_HUMAN.md`（人間待ちの作業） |
 | 別のチャットから引き継ぐ | `docs/handoff.md`（現在地・進め方の約束・作業環境のくせ。末尾に新しいチャットに貼り付ける文）→ 上の「何をするにも」 |
-| 機能・会話を作る | `docs/spec.md` → `docs/decisions.md` → `data/dialogue_template.yaml` |
+| 機能・会話を作る | `docs/spec.md` → `docs/decisions.md` → `docs/data_schema.md`（保存の形）→ `data/dialogue_template.yaml` |
 | 画面の見た目を作る・直す | `docs/visual_rules.md`（CR-*）→ `docs/ui_knowledge.md`（V1〜M3）→ `docs/design.md`（トークン・コントラスト表）→ `app/style.css` の `:root` |
 | キャラクターらしさを判断する | `docs/research/2026-11-08_round3_visual/kinich_design_research_for_ai.md`（事実と権利の範囲） |
 | 見た目の不満に対応する | `docs/feedback/README.md`（原文）→ `docs/research/2026-11-08_round3_visual/first_impression_response_flow_for_ai.md`（手順） |
@@ -33,6 +33,7 @@
 | `docs/README.md` | この目次 | 最初に |
 | `docs/spec.md` | 機能と会話設計の仕様 | 機能を作る前 |
 | `docs/decisions.md` | 決定事項と理由（D-001〜） | 判断に迷ったとき、決定を変える前 |
+| `docs/data_schema.md` | 端末に保存するデータの形（キー・項目・版の履歴。D-043） | 保存するデータを足す・変える前 |
 | `docs/handoff.md` | 引き継ぎ資料（ほかのファイルにない、現在地・利用者との進め方・作業環境のくせだけ。貼り付ける文つき） | 別のチャットで作業を始めるとき、作業を終えるとき（内容を最新にする） |
 | `docs/roadmap.md` | フェーズ別タスク、完了条件、実機確認手順、申し送り | 作業の始めと終わり |
 | `docs/visual_rules.md` | 見た目の決まり CR-*（色・形・線・文字・地・気配・動き） | 画面を作る・直す前 |
@@ -49,7 +50,7 @@
 | パス | 内容 |
 | --- | --- |
 | `app/index.html` | 本体の画面（初回導線・ホーム・各タブ・設定） |
-| `app/util.js` | 共通の小道具（日付、1日の区切り＝朝4時 `todayKey`：D-034、端末内の保存 `Store`）。最初に読み込む |
+| `app/util.js` | 共通の小道具（日付、1日の区切り＝朝4時 `todayKey`：D-034、端末内の保存 `Store`、保存の形 `DB` と引き継ぎ `migrateData`：D-043）。最初に読み込む |
 | `app/dialogue.js` | セリフ集から選ぶ（`pickLine`・`dialogueReady`） |
 | `app/ui.js` | 共通の画面部品（確認ダイアログ・取り消しの表示 `makeToast`・画面の一言 `makeSay`・ごみ箱・画面を開いたときの描き直し `onShow`） |
 | `app/app.js` | 本体の動き（画面切替・時計・セリフの表示・主ボタン・記録・復帰時の判定・通知の購読と登録し直し・立ち絵の自動表示。声の再生はなし：D-023）。`APP_VERSION` |
