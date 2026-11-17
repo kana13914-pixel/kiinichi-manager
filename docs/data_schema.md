@@ -17,22 +17,26 @@
 | --- | --- | --- |
 | `db.tasks` | `[ { id, title, due, done, doneAt, createdAt, updatedAt } ]` | タスク。`due` は日付か `null`。`updatedAt` は最後に変えた時点（同期で「どちらが新しいか」を決める） |
 | `db.reports` | `{ 日付: { mood, done, left, tomorrow, savedAt } }` | 日報。1日1件。`mood` は `good`／`normal`／`tired`／`null` |
-| `db.records` | `{ 日付: { 種類: { time, at } } }` | 毎日の記録。`time` は押した時刻、`at` はその時点。種類は下の表 |
+| `db.records` | `{ 日付: { 種類: 値 } }` | 毎日の記録。値はふつう `{ time, at }`（`time` は押した時刻、`at` はその時点）、休憩は `[ { time, at }, … ]`（押した回数だけ）、「今日はなし」は `{ skipped: true, at }`（D-046）。種類は下の表 |
 | `db.timer` の `custom` | `[ { id, name, minutes } ]` | 利用者が作ったタイマー |
 | `db.timer` の `builtin` | `{ 用途別の id: 分数 }` | 用途別のタイマー（`work`・`break`・`bath`・`brush`）のうち、利用者が時間を変えたものだけ（D-044）。ないものは初めの時間 |
 
 ### 記録の種類（`db.records` の「種類」）
 
-| 種類 | 表示 | 状態 |
+| 種類 | 表示 | ホームに出す時間帯 |
 | --- | --- | --- |
-| `wake` | 起きた | あり |
-| `work_start` | 仕事開始 | あり |
-| `breakfast`・`lunch`・`dinner` | 朝食・昼食・夕食 | これから作る（D-043） |
-| `break`・`work_end` | 休憩・仕事終わり | これから作る |
-| `bath`・`brush` | 入浴・歯磨き | これから作る |
-| `sleep` | 就寝 | これから作る |
+| `wake` | 起きた | 4〜11時 |
+| `breakfast` | 朝食 | 5〜11時 |
+| `work_start` | 仕事開始 | 7〜13時 |
+| `lunch` | 昼食 | 11〜15時 |
+| `break` | 休憩（1日に何度でも） | 10〜19時 |
+| `work_end` | 仕事終わり | 16〜23時 |
+| `dinner` | 夕食 | 17〜23時 |
+| `bath` | 入浴 | 19〜翌4時 |
+| `brush` | 歯磨き | 20〜翌4時 |
+| `sleep` | 就寝 | 21〜翌4時 |
 
-1日に何度もありうるもの（休憩）の持ち方は、その記録を作るときに決める。
+右の列はホームに出す時間帯（仮。D-046）。コードの正本は `app/app.js` の `RECORD_KINDS`。
 
 ## この端末だけのもの（同期しない）
 
