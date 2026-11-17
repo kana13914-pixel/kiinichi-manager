@@ -1998,6 +1998,95 @@ class PwaTest(unittest.TestCase):
         page = self.clock_page(23, 50)  # 就寝の予定を過ぎた
         self.assertEqual(page.evaluate("Object.keys(Voice.plan())"), [])
 
+    # ---------- スプレッドシートへの控え（D-050） ----------
+    GAS = "https://script.google.com/macros/s/fake/exec"
+
+    def sync_page(self, hour=10, configured=True, fail=None):
+        posts = []
+        def handler(route):
+            req = route.request
+            if req.method == "OPTIONS":  # 事前確認は起きないはず（Content-Type を付けない）
+                posts.append(("OPTIONS", None))
+                route.fulfill(status=204)
+                return
+            posts.append((req.headers.get("content-type", ""), json.loads(req.post_data)))
+            if fail and fail["on"]:
+                route.abort()
+            else:
+                route.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"}, body='{"ok":true}')
+        init = "localStorage.setItem('db.prefs', JSON.stringify({ voice: false }));"
+        if configured:
+            init += "if (!localStorage.getItem('db.sync')) localStorage.setItem('db.sync', JSON.stringify({ url: %s, token: 'sync-secret' }));" % json.dumps(self.GAS)
+        ctx = self.browser.new_context(permissions=["notifications"], viewport={"width": 393, "height": 852})
+        self.addCleanup(ctx.close)
+        ctx.add_init_script(READY)
+        ctx.add_init_script(VISIBILITY)
+        ctx.add_init_script(init)
+        ctx.route(self.GAS, handler)
+        page = ctx.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.addCleanup(lambda: self.assertEqual(errors, [], "JSエラーが出ている"))
+        page.clock.install(time=datetime(2026, 11, 9, hour, 0, 0))
+        page.goto(self.base + "index.html?mode=standalone")
+        page.wait_for_function("dialogue !== null", timeout=3_000)
+        return page, posts
+
+    def test_sync_sends_after_change_and_skips_same_data(self):
+        page, posts = self.sync_page()
+        page.click(".act[data-record=wake]")
+        page.clock.run_for(6000)  # 5秒待ってまとめて送る
+        page.wait_for_function("JSON.parse(localStorage.getItem('db.sync')).lastAt > 0", timeout=3_000)
+        self.assertEqual(len(posts), 1)
+        ctype, body = posts[0]
+        self.assertNotIn("json", ctype)  # 単純な送信（事前確認なし）
+        self.assertEqual(body["token"], "sync-secret")
+        self.assertEqual(body["records"]["2026-11-09"], [{"kind": "wake", "label": "起きた", "time": "10:00", "n": 1, "state": "記録", "at": "2026-11-09 10:00"}])
+        self.assertEqual(body["routine"][0][:3], ["平日", "07:00", "07:30"])
+        self.assertEqual([t[0] for t in body["timers"]], ["作業", "休憩", "入浴", "歯磨き"])
+        page.evaluate("location.hash = '#settings'")
+        self.assertIn("に送りました", page.text_content("#sync-status"))
+        # 1分以内の変更はまとめて、1分たってから送る
+        page.evaluate("location.hash = '#home'")
+        page.click(".act[data-record=breakfast]")
+        page.clock.run_for(6000)
+        self.assertEqual(len(posts), 1)
+        page.clock.run_for(60_000)
+        page.wait_for_timeout(300)
+        self.assertEqual(len(posts), 2)
+        self.assertEqual([r["kind"] for r in posts[1][1]["records"]["2026-11-09"]], ["wake", "breakfast"])
+
+    def test_sync_retries_after_failure_and_send_now(self):
+        fail = {"on": True}
+        page, posts = self.sync_page(fail=fail)
+        page.click(".act[data-record=wake]")
+        page.clock.run_for(6000)
+        page.wait_for_function("JSON.parse(localStorage.getItem('db.sync')).error", timeout=3_000)
+        page.evaluate("location.hash = '#settings'")
+        self.assertIn("送れませんでした", page.text_content("#sync-status"))
+        fail["on"] = False
+        page.click("#sync-now")
+        page.wait_for_function("document.getElementById('sync-status').textContent.includes('に送りました')", timeout=3_000)
+        self.assertFalse(json.loads(page.evaluate("localStorage.getItem('db.sync')"))["dirty"])
+
+    def test_sync_not_sent_until_configured(self):
+        page, posts = self.sync_page(configured=False)
+        page.click(".act[data-record=wake]")
+        page.clock.run_for(6000)
+        page.wait_for_timeout(300)
+        self.assertEqual(posts, [])
+        page.evaluate("location.hash = '#settings'")
+        self.assertEqual(page.text_content("#sync-status"), "未設定")
+        page.click("#sync-now")
+        self.assertIn("URL と合言葉", page.text_content("#sync-status"))
+        page.fill("#sync-url", self.GAS)
+        page.dispatch_event("#sync-url", "change")
+        page.fill("#sync-token", "sync-secret")
+        page.dispatch_event("#sync-token", "change")
+        page.click("#sync-now")
+        page.wait_for_function("document.getElementById('sync-status').textContent.includes('に送りました')", timeout=3_000)
+        self.assertEqual(len(posts), 1)
+
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")
         import re

@@ -39,7 +39,10 @@ const Store = {
   },
   // 保存できたら true。失敗（容量超過など）しても例外は出さない。呼び出し側が false を見て画面に知らせる
   write(key, value) {
-    try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch (_) { return false; }
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) { return false; }
+    // スプレッドシートに控えるデータが変わったことを知らせる（sync.js。D-050）
+    if (SYNCED.includes(key)) window.dispatchEvent(new CustomEvent('datachange', { detail: key }));
+    return true;
   },
   remove(key) {
     try { localStorage.removeItem(key); } catch (_) {}
@@ -58,9 +61,12 @@ const DB = {
   timer: 'db.timer',             // { custom: [ { id, name, minutes } ], builtin, running, done, cancelPending }
   routine: 'db.routine',         // { weekday: { wake: '07:00', … }, holiday: { … }, holidays: [0, 6], updatedAt } … 毎日の時刻（D-048）
   prefs: 'db.prefs',             // { screenLines: true, voice: true } … 端末ごとの好み（D-047, D-049）
+  sync: 'db.sync',               // { url, token, lastAt, lastSig, dirty, error } … スプレッドシートへの控えの送り先と状態（D-050。この端末だけ）
   notify: 'db.notify',           // { 予約したキー: { at, body } } … 送信サーバーに予約した声掛け（D-049。この端末だけ）
 };
 const SCHEMA = 2;
+// スプレッドシートに控えるデータ（D-050）
+const SYNCED = [DB.tasks, DB.reports, DB.records, DB.routine, DB.timer];
 const MIGRATIONS = {
   // 1（フェーズ1の仮の保存先）→ 2：キーを db.* に移す。記録は当日分だけだったものを、日付ごとの履歴にする
   2() {

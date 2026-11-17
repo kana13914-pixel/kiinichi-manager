@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: '3.13'
       - run: pip install -r requirements-dev.txt
-      - name: 送信サーバーと Service Worker のテスト
-        run: node --test tests/worker.test.mjs tests/sw.test.mjs
+      - name: 送信サーバー・Service Worker・スプレッドシートの受け口のテスト
+        run: node --test tests/worker.test.mjs tests/sw.test.mjs tests/gas.test.mjs
       - name: 画面・セリフ集・見た目・目次のテスト
         run: python3 -m unittest discover -s tests

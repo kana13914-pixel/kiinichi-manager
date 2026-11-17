@@ -354,5 +354,5 @@ const Timer = (() => {
   render();
   retryCancel(); // 前回届かなかった取り消しをやり直す
 
-  return { load, parseMinutes, clockText, render };
+  return { load, builtins, parseMinutes, clockText, render };
 })();

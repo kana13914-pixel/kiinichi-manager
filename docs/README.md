@@ -13,6 +13,7 @@
 | キャラクターらしさを判断する | `docs/research/2026-11-08_round3_visual/kinich_design_research_for_ai.md`（事実と権利の範囲） |
 | 見た目の不満に対応する | `docs/feedback/README.md`（原文）→ `docs/research/2026-11-08_round3_visual/first_impression_response_flow_for_ai.md`（手順） |
 | 通知・送信サーバー | `docs/cloudflare_setup.md` → `worker/worker.js` → `app/sw.js` |
+| スプレッドシートへの控え | `docs/gas_setup.md` → `gas/Code.gs` → `app/sync.js` |
 | 決まったことを確かめる | `docs/decisions.md`（D-001〜。上書きせず追記） |
 
 ## ルート
@@ -40,6 +41,7 @@
 | `docs/ui_knowledge.md` | UI/UX の知識ベース（ルール ID V1〜M3。原文のまま） | 画面を作る・直す前 |
 | `docs/design.md` | 画面の原則、キャラクターの声とシステムの声、トークン表、コントラスト表 | トークンを変えるとき |
 | `docs/cloudflare_setup.md` | 送信サーバー（Cloudflare Workers）の設定手順 | 送信サーバーを変えるとき |
+| `docs/gas_setup.md` | スプレッドシートへの控え（Google Apps Script）の設定手順（D-050） | 控えの仕組みを変えるとき、利用者に設定を頼むとき |
 | `docs/feedback/README.md` | 利用者の感想の原文（1 件 1 行） | 見た目・使い心地の対応をするとき |
 | `docs/research/2026-11-08_home_review/` | ホーム改訂（D-019）の元資料：`01_knowledge_map.md`（知識領域マップ）、`03_home_instructions.md`（指示書）。知識ベース本体は `docs/ui_knowledge.md` | D-019 の経緯を確かめるとき |
 | `docs/research/2026-11-16_round4_functions/` | 機能画面の見た目（CR-F・CR-G、知識ベース改訂3）の元資料：`README.md`、`01_knowledge_map_v2.md`（知識領域マップ改訂）、`round4_function_screens_for_ai.md`（診断と指示）、`round4_app.patch`（参考実装・未適用）、`images/`（v16 と改善案の画面。半分の大きさの JPEG） | 機能画面を直すとき、R4 の経緯を確かめるとき |
@@ -60,6 +62,7 @@
 | `app/timer.js` | タイマー画面（用途別（時間は変えられる：D-044）・時間を指定・利用者が作るタイマー。同時に1つ。終了の通知を予約・取り消し（届かなかった取り消しはやり直す）。仮に localStorage の `timer.v1`。D-026, D-028, D-033） |
 | `app/schedule.js` | 予定画面（見るだけ。リスト＝今日から7日先まで／月＝マス目にタグ、を切り替える。フェーズ2までは `app/sample-data.js` の仮データ。D-026, D-030, D-032） |
 | `app/notify.js` | 声掛けの通知予約（食事・休憩・夜・就寝前。毎日の時刻と記録から、今日このあと送るものを作り直して送信サーバーに予約・取り消し。D-015, D-049） |
+| `app/sync.js` | スプレッドシートへの控え（端末のデータを GAS のウェブアプリに送る。送るだけ。設定の「スプレッドシートへの控え」。D-050） |
 | `app/settings.js` | 送信サーバーの URL（既定値。D-035）と合言葉（端末内保存） |
 | `app/routine.js` | 毎日の時刻（平日・休日の予定時刻と休日の曜日。`db.routine`。設定の「毎日の時刻」の画面も。D-048） |
 | `app/sample-data.js` | 予定の仮データ（毎日の生活の時刻＋仮の予定）。ホーム・予定のリスト・月表示が共通で読む `eventsOn(日付)`（フェーズ 2 で置き換え。D-032） |
@@ -76,15 +79,17 @@
 | --- | --- |
 | `data/dialogue_template.yaml` | セリフ集の正本。編集したら `python3 scripts/build_dialogue.py` |
 | `worker/worker.js` | 送信サーバー（Cloudflare のダッシュボードに貼り付けて使う）。即時送信・予約（`/api/send`）、キー付きの予約と取り消し（`/api/schedule`・`/api/cancel`。D-015, D-028）、送れなかった予約のやり直しと送信結果の記録（D-033） |
+| `gas/Code.gs` | スプレッドシートへの控えの受け口（Google Apps Script。スプレッドシートの「拡張機能 → Apps Script」に貼り付けて使う。D-050） |
 | `worker/package.json` | テストで読み込むための設定（デプロイには不要） |
 | `scripts/build_dialogue.py` | セリフ集の YAML → JSON |
 | `scripts/contrast_check.py` | 色の明暗差の計算（トークンを変えたら実行し、`docs/design.md` に貼る） |
 | `scripts/ntfy_send.py` | PC から ntfy に通知を送る（予備経路） |
-| `tests/` | 自動テスト。`python3 -m unittest discover -s tests` と `node --test tests/worker.test.mjs tests/sw.test.mjs` |
+| `tests/` | 自動テスト。`python3 -m unittest discover -s tests` と `node --test tests/worker.test.mjs tests/sw.test.mjs tests/gas.test.mjs` |
 | `tests/test_pwa.py` | 画面の動き（ヘッドレス Chrome） |
 | `tests/test_style.py` | トークン・コントラスト・装飾画像のキャッシュ |
 | `tests/test_dialogue.py` | セリフ集の YAML と JSON の一致 |
 | `tests/test_ntfy_send.py` | ntfy 送信スクリプト |
 | `tests/test_docs_index.py` | この目次にすべてのファイルが載っているか |
 | `tests/worker.test.mjs` | 送信サーバー（暗号化・予約・認証・キー付きの予約と取り消し） |
+| `tests/gas.test.mjs` | スプレッドシートへの控えの受け口（合言葉、記録・日報・タスクを消さずに書く） |
 | `tests/sw.test.mjs` | Service Worker（通知の表示とタップ・キャッシュの取り方） |
