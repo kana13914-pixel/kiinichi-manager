@@ -84,6 +84,7 @@
 - **斜めに切った部品**（`clip-path`）は `border`・`box-shadow`・`outline` が欠ける。縁や強調の描き方は `docs/visual_rules.md` の CR-S02、CR-S05
 - **iPhone で入力欄を押すと拡大される**のを防ぐため、入力欄（`input`・`textarea`）の文字は16px以上にする（`app/style.css` の `input, textarea, .field` の規則）
 - **Cloudflare のコネクタ**（利用者がチャットにつないだ場合）は読み取り用。`workers_get_worker_code` に `kiinichi-push` を渡すと、デプロイ中のコードが新しい版かを確かめられる。デプロイはできない（D-029 ③）
+- **Cloudflare の作業を頼むとき**は、「今ある `kiinichi-push` を開いて」と Worker の名前をはっきり書き、`docs/cloudflare_setup.md` の作業する節の番号だけを示す。2026-11-17 に、手順書の最初（作る手順）から読まれて、使わない Worker・KV・D1（`…01`）が作られた
 - **送信サーバーを変えたとき**は、利用者に Cloudflare への貼り付け直しを頼む（`docs/cloudflare_setup.md` の 7）。PWA 側は、古い送信サーバーでも困らない作りにする（新しい API は 404 になるので、それを画面に出す）
 - **フォームが下のタブバーに隠れる**ことがある。タスク画面では `scroll-margin-bottom` と `scrollIntoView` で直した（`app/tasks.js`）
 - **コミットの末尾**に付ける行はチャットの指示に従う（これまでは `Co-Authored-By:` と `Claude-Session:` の2行）

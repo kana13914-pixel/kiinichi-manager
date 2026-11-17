@@ -1,5 +1,7 @@
 # Cloudflare Workers 設定手順（Web Push 送信サーバー）
 
+> **送信サーバーはもうある（`kiinichi-push`。2026-11-06 作成）。** 手順 0〜6 は最初に作るときだけのもので、もう行わない。新しい機能のために頼まれたときは、「7. コードを更新するとき」や「8」のように、**今ある `kiinichi-push` を開いて**作業する。新しい Worker・KV・D1 は作らない（作るとアプリから使われず、通知の購読もない）。
+
 ダッシュボードにコードを貼り付ける方式（D-010）。すべて無料プランの範囲で行う。**有料プラン（Workers Paid）には申し込まない。**
 画面の項目名は Cloudflare 側の変更で多少変わることがある。見つからない場合は近い名前の項目を探す。
 
@@ -78,11 +80,13 @@ KVだけだと予約通知が最大1分ほど遅れることがあったため�
 
 ## 8. 週次コメント（Claude API）を使えるようにする（D-058）
 
+**新しい Worker は作らない。** 今ある `kiinichi-push` に鍵を足して、コードを貼り替えるだけ。
+
 Claude API は**利用料がかかる**（Cloudflare ではなく Anthropic への支払い）。月 $1〜2 ほどの見込みで、上限は $5 にする（利用者了承済み）。
 
-1. https://platform.claude.com にログイン → Billing でクレジットを最小額だけ購入 → Limits で月の使いすぎの上限（spend limit）を **$5** にする
-2. API Keys で鍵を作る。鍵は一度しか表示されない。チャット・リポジトリ・メモには貼らず、そのまま次の手順で使う
-3. Worker（`kiinichi-push`）の画面 →「設定」→「変数とシークレット」→「追加」→ 種類「シークレット」、**名前を `ANTHROPIC_API_KEY`**、値に鍵を入れて保存（デプロイ）
+1. https://platform.claude.com にログイン → Billing でクレジットを最小額だけ購入 →「Spend limits」（https://platform.claude.com/settings/spend-limits）の「Monthly spend limit」→「Set limit」で **$5**
+2. 「API keys」（https://platform.claude.com/settings/keys）→「Create key」→ 名前（`kiinichi-weekly` など）、有効期限は「期限なし」か最長、Linked account は自分、workspace は既定のまま。鍵の種類を選ぶ項目があれば、サーバー・本番・サービス用に当たるもの（なければ自分用でよい）。`sk-ant-` で始まる鍵が一度だけ表示される。チャット・リポジトリ・メモには貼らず、そのまま次の手順で使う
+3. Worker **`kiinichi-push`**（`kiinichi-push01` など、ほかの名前のものではない）の画面 →「設定」→「変数とシークレット」→「追加」→ 種類「シークレット」、**名前を `ANTHROPIC_API_KEY`**、値に鍵を入れて保存（デプロイ）
 4. 「7. コードを更新するとき」と同じ手順で、新しい `worker/worker.js` を貼り付けてデプロイ
 5. 確認：週が明けて（月曜以降）アプリの日報を開いたとき、先週の日報が3日分以上あれば「先週のひとこと」が出る。出ないときは日報画面に理由が出る（「…ANTHROPIC_API_KEY が未設定です」なら手順 3）
 
