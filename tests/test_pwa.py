@@ -2271,8 +2271,14 @@ class PwaTest(unittest.TestCase):
                   {"id": "c", "calendarId": "me", "title": "朝会", "start": self.ms(9, 7, 30), "end": self.ms(9, 8), "allDay": False, "editable": True}]
         page, posts = self.sync_page(hour=7, minute=10, events=events, voice=True)
         page.wait_for_function("document.body.classList.contains('calendar-on')", timeout=3_000)
+        # カレンダーを読んだあとに、声掛けの予約が付け替わるのを待つ（読むのは本当の通信、待つのは偽の時計なので少しずつ進める）
+        for _ in range(40):
+            page.clock.run_for(500)
+            page.wait_for_timeout(50)
+            if any(p == "schedule" and b["key"].startswith("event:") for p, b in self.voice_calls):
+                break
         page.clock.run_for(1500)
-        self.wait_calls(page, self.voice_calls, 5)
+        page.wait_for_timeout(200)
         sched = {b["key"]: b for p, b in self.voice_calls if p == "schedule" and b["key"].startswith("event:")}
         self.assertEqual(len(sched), 1)  # 終日の予定と、30分前を過ぎた朝会には掛けない
         ev = list(sched.values())[0]

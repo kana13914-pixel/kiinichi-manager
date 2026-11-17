@@ -35,13 +35,17 @@ const Calendar = (() => {
   }
 
   let fetching = null;
+  let triedAt = 0; // 最後に取ろうとした時点（この画面を開いている間だけ覚える）
   // 取り直す。force は時間をおかずに取る
   function refresh(force = false) {
     if (fetching) return fetching;
     const s = conf();
     if (!s.url || !s.token || !/^https:\/\//.test(s.url)) return Promise.resolve(false);
     const c = cache();
-    if (!force && c && Date.now() - c.fetchedAt < REFRESH_MS) return Promise.resolve(true);
+    // 前に取った（または取ろうとして失敗した）ときから5分たっていなければ取らない。失敗したあと毎分取り直し続けないように
+    const last = Math.max(c ? c.fetchedAt : 0, triedAt);
+    if (!force && Date.now() - last < REFRESH_MS) return Promise.resolve(Boolean(c));
+    triedAt = Date.now();
     const r = range();
     fetching = (async () => {
       try {

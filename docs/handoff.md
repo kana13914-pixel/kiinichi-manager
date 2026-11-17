@@ -1,6 +1,6 @@
 # 引き継ぎ資料（別のチャットで作業を続けるとき）
 
-最終更新：2026-11-17（版 phase2-v10。予定を足す・直す・消す、予定の前の通知を作った直後）
+最終更新：2026-11-17（版 phase2-v11。CI のテスト失敗を直した直後）
 
 この資料には、**ほかのファイルに書かれていないことだけ**を書く。仕様・決定・タスク・手順は該当ファイルを参照する。内容が古くなったら、作業を終えるたびにこのファイルを直す。
 
@@ -17,7 +17,7 @@
 | 項目 | 状態 | 詳しくは |
 | --- | --- | --- |
 | フェーズ | **フェーズ1（画面設計）完了（D-038）。次はフェーズ2（データ設計）の最初から** | `docs/roadmap.md` の「フェーズ2」 |
-| 公開中の版 | `phase2-v10`（版の名前はフェーズ2から `phase2-vN`。`app/app.js` の `APP_VERSION`） | 公開 URL は `NEEDS_HUMAN.md` の H-010 |
+| 公開中の版 | `phase2-v11`（版の名前はフェーズ2から `phase2-vN`。`app/app.js` の `APP_VERSION`） | 公開 URL は `NEEDS_HUMAN.md` の H-010 |
 | ホーム | 完了・実機確認済み | `docs/decisions.md` D-019〜D-025 |
 | タスク画面 | 完了・実機確認済み（phase1-v9） | roadmap「タスク画面」、D-026 ① |
 | 日報画面 | 完了・実機確認済み（phase1-v10） | roadmap「日報画面」、D-026 ②、D-027 |
@@ -72,6 +72,7 @@
 
 ## 6. 作業環境のくせ・つまずいたこと
 
+- **偽の時計を使う画面テスト**（`page.clock`）で、本当の通信（`route` の応答）を待つものは、手元では通っても GitHub Actions では順番が変わって落ちることがある。通信の結果を待ってから時計を進める（少しずつ `run_for` して条件を確かめる）。2026-11-17 に2件で起きた
 - **公開の確認**：`gh api` の Pages API はプロキシで止められる。push の約1分後に、WebFetch で `https://kana13914-pixel.github.io/kiinichi-manager/app/sw.js?check=<版>` を読み、`CACHE_VERSION` が新しい版になっているかで確かめる（`?check=` を変えるとキャッシュを避けられる）
 - **画面テスト**：Chrome（`/usr/bin/google-chrome`）は入っているが、Python の Playwright は入っていないことがある（`ModuleNotFoundError: No module named 'playwright'` で画面テスト全体が始まらない）。`pip install -r requirements-dev.txt` で入れる（リポジトリを汚したくなければ `pip install --target <一時フォルダ>` して `PYTHONPATH` に足す）。push すれば GitHub Actions でも両方のテストが走る
 - **変更を一時的に戻して見た目を比べるとき**は、整理の前後で画面写真を撮り、ファイルを `cmp` で比べる（角丸の縁で1〜数ピクセルのゆらぎは出る）
