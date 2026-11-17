@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase2-v2';
+const APP_VERSION = 'phase2-v3';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -204,18 +204,8 @@ function showIdle(now = new Date()) {
 }
 
 // ---------- 主ボタン（金の塗り）は 1 つ（V3-02, C4-02） ----------
-// data-hours="4-11" … 4時以上11時未満（受付時間帯。仮決定 D-019）
-function inHours(btn, hour) {
-  const m = /^(\d+)-(\d+)$/.exec(btn.dataset.hours || '');
-  if (!m) return false; // data-hours が無いボタンは主にしない
-  return hour >= Number(m[1]) && hour < Number(m[2]);
-}
-function markPrimary(now = new Date()) {
-  const acts = [...document.querySelectorAll('.act')];
-  // 通知から開いた直後も普段どおり（「声を聞く」を見送ったため、通知のセリフは面の金の上辺だけで示す。D-024）
-  const primary = acts.find((b) => !b.classList.contains('done') && inHours(b, now.getHours())) || null;
-  for (const b of acts) b.classList.toggle('primary', b === primary);
-}
+// 選び方は renderDock（下の「記録」）。名前は以前のまま残す（通知から開いた状態などから呼ぶ）
+function markPrimary(now = new Date()) { renderDock(now); }
 
 // ---------- 通知から開いた状態（C5-03。source=webpush のときだけ。ntfy は PWA で開かない） ----------
 // セリフの面の上辺を金にする。記録するか、10分以上裏に置くと終わる（D-024）
@@ -260,83 +250,223 @@ dialogueReady.then(() => {
   clearOpenParams();
 });
 
-// ---------- 記録（I3-02, C6-01） ----------
-// 記録は日付（朝4時区切り。D-034）ごとに残し、消さない（D-043）。形：{ 'YYYY-MM-DD': { wake: { time: '07:12', at: ミリ秒 } } }
+// ---------- 記録（I3-02, C6-01, D-043, D-046） ----------
+// 記録の種類（一日の順）。hours は「ホームに出す時間帯」（仮。朝4時を 4、深夜1時を 25 と数える。設定の「毎日の時刻」ができたらそこから決める）
+// repeat … 1日に何度でも記録できる（休憩）。主ボタン（金の塗り）にはしない
+const RECORD_KINDS = [
+  { id: 'wake', label: '起きた', trigger: 'morning_wake.on_time', hours: [4, 11] },
+  { id: 'breakfast', label: '朝食', trigger: 'record_done.breakfast', hours: [5, 11] },
+  { id: 'work_start', label: '仕事開始', trigger: 'work_start.default', hours: [7, 13] },
+  { id: 'lunch', label: '昼食', trigger: 'record_done.lunch', hours: [11, 15] },
+  { id: 'break', label: '休憩', trigger: 'record_done.break', hours: [10, 19], repeat: true },
+  { id: 'work_end', label: '仕事終わり', trigger: 'record_done.work_end', hours: [16, 23] },
+  { id: 'dinner', label: '夕食', trigger: 'record_done.dinner', hours: [17, 23] },
+  { id: 'bath', label: '入浴', trigger: 'record_done.bath', hours: [19, 28] },
+  { id: 'brush', label: '歯磨き', trigger: 'record_done.brush', hours: [20, 28] },
+  { id: 'sleep', label: '就寝', trigger: 'record_done.sleep', hours: [21, 28] },
+];
+const DOCK_MAX = 3; // ホームに同時に出すのは 3 個まで（I4-04）
+const kindOf = (id) => RECORD_KINDS.find((k) => k.id === id);
+// 朝4時を区切りにした「時」（深夜1時 → 25）
+function logicalHour(now) { const h = now.getHours(); return h < DAY_STARTS_AT ? h + 24 : h; }
+
+// 記録は日付（朝4時区切り。D-034）ごとに残し、消さない（D-043）。形は docs/data_schema.md
+//   ふつう：{ time: '07:12', at: ミリ秒 }／休憩：[ { time, at }, … ]／今日はなし：{ skipped: true, at }
 // 記録による通知予約の取り消し（D-015）は、声掛けを作るときにつなぐ
 const Records = {
   all() {
     const r = Store.read(DB.records, {});
     return r && typeof r === 'object' && !Array.isArray(r) ? r : {};
   },
-  // その日の記録（種類 → { time, at }）
   day(now = new Date()) { return this.all()[todayKey(now)] || {}; },
-  // 記録する。保存できたら true
-  set(kind, now = new Date()) {
+  // 1つの種類の今日の状態：{ state: 'none' | 'done' | 'skipped', count, time }
+  status(kind, day) {
+    const v = day[kind];
+    if (Array.isArray(v)) return v.length ? { state: 'done', count: v.length, time: v[v.length - 1].time } : { state: 'none', count: 0 };
+    if (v && v.skipped) return { state: 'skipped', count: 0 };
+    if (v && v.time) return { state: 'done', count: 1, time: v.time };
+    return { state: 'none', count: 0 };
+  },
+  write(now, change) {
     const all = this.all();
     const key = todayKey(now);
-    all[key] = { ...(all[key] || {}), [kind]: { time: hm(now), at: now.getTime() } };
+    const day = { ...(all[key] || {}) };
+    change(day);
+    if (Object.keys(day).length) all[key] = day; else delete all[key];
     return Store.write(DB.records, all);
   },
-  // 取り消す
+  // 記録する。休憩は1回ずつ足す。保存できたら true
+  set(kind, now = new Date()) {
+    const rec = { time: hm(now), at: now.getTime() };
+    return this.write(now, (day) => {
+      if (kindOf(kind) && kindOf(kind).repeat) day[kind] = [...(Array.isArray(day[kind]) ? day[kind] : []), rec];
+      else day[kind] = rec;
+    });
+  },
+  // 取り消す。休憩は最後の1回だけ
   unset(kind, now = new Date()) {
-    const all = this.all();
-    const key = todayKey(now);
-    if (!all[key] || !all[key][kind]) return true;
-    delete all[key][kind];
-    if (Object.keys(all[key]).length === 0) delete all[key];
-    return Store.write(DB.records, all);
+    return this.write(now, (day) => {
+      if (Array.isArray(day[kind]) && day[kind].length > 1) day[kind] = day[kind].slice(0, -1);
+      else delete day[kind];
+    });
+  },
+  // 「今日はなし」を付ける・外す（付けたものはホームに出さない。未記録の声掛けもしない）
+  skip(kind, on, now = new Date()) {
+    return this.write(now, (day) => { if (on) day[kind] = { skipped: true, at: now.getTime() }; else delete day[kind]; });
   },
 };
-function setDone(btn, time) {
-  btn.classList.add('done');
-  btn.textContent = `✓ ${btn.dataset.label} ${time}`;
-}
-function setUndone(btn) {
-  btn.classList.remove('done');
-  btn.textContent = btn.dataset.label;
-}
-// 保存してある今日の記録を、ボタンの表示に反映する
-function applyRecords(now = new Date()) {
+
+// ---------- ホームの記録ボタン（D-046）：今の時間帯に合うものを、未記録を優先して最大 3 つ。並びは一日の順 ----------
+function dockKinds(now = new Date()) {
+  const h = logicalHour(now);
   const day = Records.day(now);
-  for (const btn of document.querySelectorAll('.act')) {
-    const rec = day[btn.dataset.record];
-    if (rec) setDone(btn, rec.time); else setUndone(btn);
+  const open = RECORD_KINDS.filter((k) => h >= k.hours[0] && h < k.hours[1] && Records.status(k.id, day).state !== 'skipped');
+  const pending = open.filter((k) => Records.status(k.id, day).state === 'none');
+  const picked = [...pending, ...open.filter((k) => !pending.includes(k))].slice(0, DOCK_MAX);
+  return RECORD_KINDS.filter((k) => picked.includes(k));
+}
+function fillAct(btn, kind, st) {
+  btn.classList.toggle('done', st.state === 'done' && !kind.repeat);
+  btn.textContent = '';
+  const label = document.createElement('span');
+  label.className = 'act-label';
+  if (st.state === 'done' && !kind.repeat) {
+    label.textContent = `✓ ${kind.label}`;
+    const time = document.createElement('span');
+    time.className = 'act-time';
+    time.textContent = ` ${st.time}`; // 読み上げと textContent では「✓ 起きた 07:12」と続く
+    btn.append(label, time);
+  } else if (kind.repeat && st.count) {
+    label.textContent = kind.label;
+    const time = document.createElement('span');
+    time.className = 'act-time';
+    time.textContent = ` ${st.count}回・${st.time}`;
+    btn.append(label, time);
+  } else {
+    label.textContent = kind.label;
+    btn.append(label);
   }
 }
+let dockKey = '';
+function renderDock(now = new Date(), force = false) {
+  const day = Records.day(now);
+  const kinds = dockKinds(now);
+  const stats = kinds.map((k) => Records.status(k.id, day));
+  const primary = kinds.find((k, i) => !k.repeat && stats[i].state === 'none') || null;
+  const key = JSON.stringify([kinds.map((k) => k.id), stats, primary && primary.id]);
+  if (key === dockKey && !force) return; // 変わったときだけ作り直す（押している最中のボタンを消さない）
+  dockKey = key;
+  const box = document.getElementById('record-acts');
+  const focused = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.record : null;
+  box.replaceChildren(...kinds.map((k, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'act' + (k === primary ? ' primary' : '');
+    btn.dataset.record = k.id;
+    btn.dataset.label = k.label;
+    fillAct(btn, k, stats[i]);
+    btn.addEventListener('click', () => pressRecord(k.id));
+    return btn;
+  }));
+  if (focused) { const b = box.querySelector(`[data-record="${focused}"]`); if (b) b.focus(); }
+}
+// 以前の名前（日付が変わったとき・裏から戻ったときに呼ぶ）
+function applyRecords(now = new Date()) { renderDock(now, true); if (sheet.open) renderSheet(now); }
 
 // 取り消しの表示（5秒）
 const homeToast = makeToast(document.getElementById('toast'));
-// info = { btn, prevLine, reactionLine } … prevLine は押した直後のときだけ
+// info = { kind, prevLine, reactionLine } … prevLine は押した直後のときだけ
 function showRecordToast(info) {
-  homeToast.show(`「${info.btn.dataset.label}」を記録しました`, () => undoRecord(info));
+  const k = kindOf(info.kind);
+  const st = Records.status(info.kind, Records.day());
+  const nth = k.repeat && st.count > 1 ? `（${st.count}回目）` : '';
+  homeToast.show(`「${k.label}」を記録しました${nth}`, () => undoRecord(info));
 }
-function undoRecord({ btn, prevLine, reactionLine }) {
-  setUndone(btn);
-  Records.unset(btn.dataset.record);
+function undoRecord({ kind, prevLine, reactionLine }) {
+  Records.unset(kind);
   // 押した直後の取り消しで、セリフがまだ反応のままなら、押す前のセリフに戻す
   const bubble = document.getElementById('bubble-text');
-  if (prevLine !== undefined && bubble.textContent === reactionLine) {
-    bubble.textContent = prevLine;
+  if (prevLine !== undefined && bubble.textContent === reactionLine) bubble.textContent = prevLine;
+  applyRecords();
+}
+// 記録する（ホームのボタン・一覧から）。反応のセリフを出す。保存できたら true
+function recordNow(kind) {
+  const now = new Date();
+  if (!Records.set(kind, now)) return false;
+  if (document.body.classList.contains('from-notification')) endNotificationState(); // 記録に移ったら通知の強調は終える（D-020）
+  showLine(kindOf(kind).trigger); // 反応のセリフ
+  applyRecords(now);
+  return true;
+}
+function pressRecord(kind) {
+  const k = kindOf(kind);
+  if (!k.repeat && Records.status(kind, Records.day()).state === 'done') { // 記録済み：新しい記録はせず、取り消しを出し直す（セリフは変えない）
+    showRecordToast({ kind });
+    return;
   }
-  markPrimary();
+  const prevLine = document.getElementById('bubble-text').textContent;
+  if (!recordNow(kind)) { homeToast.show(SAVE_FAILED); return; } // 保存できなければ記録済みにしない
+  showRecordToast({ kind, prevLine, reactionLine: document.getElementById('bubble-text').textContent });
 }
 
-for (const btn of document.querySelectorAll('.act')) {
-  btn.addEventListener('click', () => {
-    if (btn.classList.contains('done')) { // 記録済み：新しい記録はせず、取り消しを出し直す（セリフは変えない）
-      showRecordToast({ btn });
-      return;
-    }
-    const now = new Date();
-    if (!Records.set(btn.dataset.record, now)) { homeToast.show(SAVE_FAILED); return; } // 保存できなければ記録済みにしない
-    const prevLine = document.getElementById('bubble-text').textContent;
-    if (document.body.classList.contains('from-notification')) endNotificationState(); // 記録に移ったら通知の強調は終える（D-020）
-    showLine(btn.dataset.trigger); // 反応のセリフ
-    setDone(btn, hm(now));
-    markPrimary(now);
-    showRecordToast({ btn, prevLine, reactionLine: document.getElementById('bubble-text').textContent });
-  });
+// ---------- ほかの記録（「…」から開く一覧。D-046） ----------
+const sheet = document.getElementById('records-sheet');
+function sheetButton(text, onClick, extra = '') {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'cut-btn quiet chip' + extra;
+  b.textContent = text;
+  b.addEventListener('click', onClick);
+  return b;
 }
+function sheetAct(fn) {
+  return () => {
+    if (!fn()) { document.getElementById('records-sheet-status').textContent = SAVE_FAILED; return; }
+    document.getElementById('records-sheet-status').textContent = '';
+    applyRecords();
+  };
+}
+function renderSheet(now = new Date()) {
+  const day = Records.day(now);
+  document.getElementById('records-sheet-title').textContent = `${labelLong(logicalDay(now))}の記録`;
+  document.getElementById('records-list').replaceChildren(...RECORD_KINDS.map((k) => {
+    const st = Records.status(k.id, day);
+    const li = document.createElement('li');
+    li.className = 'sheet-row' + (st.state === 'done' ? ' done' : st.state === 'skipped' ? ' skipped' : '');
+    li.dataset.record = k.id;
+    const body = document.createElement('span');
+    body.className = 'sheet-body';
+    const name = document.createElement('span');
+    name.className = 'sheet-name';
+    name.textContent = k.label;
+    const state = document.createElement('span');
+    state.className = 'sheet-state';
+    state.textContent = st.state === 'skipped' ? '今日はなし'
+      : st.state === 'done' ? (k.repeat ? `✓ ${st.count}回・最後 ${st.time}` : `✓ ${st.time}`) : '未記録';
+    body.append(name, state);
+    const acts = document.createElement('span');
+    acts.className = 'sheet-acts';
+    if (st.state === 'skipped') {
+      acts.append(sheetButton('なしをやめる', sheetAct(() => Records.skip(k.id, false))));
+    } else if (st.state === 'done') {
+      if (k.repeat) acts.append(sheetButton('もう1回', sheetAct(() => recordNow(k.id))));
+      acts.append(sheetButton(k.repeat ? '1回取り消す' : '取り消す', sheetAct(() => Records.unset(k.id))));
+    } else {
+      acts.append(sheetButton('今日はなし', sheetAct(() => Records.skip(k.id, true))), sheetButton('記録', sheetAct(() => recordNow(k.id))));
+    }
+    li.append(body, acts);
+    return li;
+  }));
+}
+document.getElementById('records-more').addEventListener('click', () => {
+  homeToast.hide();
+  document.getElementById('records-sheet-status').textContent = '';
+  renderSheet();
+  sheet.showModal();
+  document.getElementById('records-sheet-close').focus();
+});
+document.getElementById('records-sheet-close').addEventListener('click', () => sheet.close());
+sheet.addEventListener('click', (e) => { if (e.target === e.currentTarget) sheet.close(); }); // 枠の外を押すと閉じる
 applyRecords();
 
 // ---------- 開いたときの判定し直し（P1-11, P1-12） ----------

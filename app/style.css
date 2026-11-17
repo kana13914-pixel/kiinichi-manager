@@ -276,16 +276,22 @@ body.from-notification .dialogue { --dlg-top: var(--color-accent); }
 .next-title { flex: 1; min-width: 0; font-size: var(--fs-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* 記録（I4-04：1行に3個まで） */
-.record-dock { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: var(--space-3); }
+/* 記録：時間帯に合うものを最大3つ＋右端に「…」（D-046）。3つ並んでも「仕事終わり」が1行に収まるよう、文字は 15px・余白は小さく */
+.record-dock { display: flex; gap: var(--space-2); }
+.record-acts { flex: 1; min-width: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--space-2); }
+.act-more { flex: none; width: var(--tap); min-height: var(--size-record); margin: 0; padding: 0; font-size: var(--fs-body); }
 .record-dock .act {
   --btn-line: var(--color-line); --btn-fill: var(--color-surface-1); --btn-cut: var(--cut-m);
-  position: relative; margin-top: 0; min-height: var(--size-record); padding: 0 var(--space-2);
-  font-size: var(--fs-body); letter-spacing: 0.06em; white-space: nowrap; color: var(--color-text);
+  position: relative; margin-top: 0; min-height: var(--size-record); padding: 0 var(--space-1);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: var(--lh-tight);
+  font-size: var(--fs-subhead); letter-spacing: 0.02em; white-space: nowrap; color: var(--color-text);
 }
 /* 今押すもの（主ボタン）は 1 つだけ金で塗る（V3-02, C4-02） */
 .record-dock .act.primary { --btn-line: var(--color-accent); --btn-fill: var(--color-accent); color: var(--color-on-accent); font-weight: 700; }
 /* 記録済み（I3-02, V3-05）：最奥の黒・ライムの縁と文字 */
-.record-dock .act.done { --btn-line: var(--color-success); --btn-fill: var(--color-ink); color: var(--color-success); font-size: var(--fs-subhead); }
+.record-dock .act.done { --btn-line: var(--color-success); --btn-fill: var(--color-ink); color: var(--color-success); }
+/* 記録した時刻（休憩は回数も）は名前の下に小さく */
+.act-time { font-size: var(--fs-caption); font-weight: 400; font-variant-numeric: tabular-nums; }
 /* 選択中（フォーカス）：clip-path が outline を切り落とすので、縁を金にして示す（CR-S05, D-022 ②, P2-04） */
 .record-dock .act:focus-visible { outline: none; --btn-line: var(--color-accent); }
 
@@ -581,6 +587,26 @@ input:focus, textarea:focus { border-color: var(--color-accent); }
   flex: none; width: var(--tap); min-height: var(--size-record); margin: 0; padding: 0;
   background: transparent; border-radius: 0; font-size: var(--fs-caption); font-weight: 400; color: var(--color-text-secondary);
 }
+
+/* ---------- ほかの記録（D-046）：画面の下から出る一覧。最奥の黒の面（確認ダイアログと同じ） ---------- */
+.sheet {
+  width: 100%; max-width: none; max-height: 85dvh; margin: auto 0 calc(var(--vh-fix) * -1); overflow-y: auto;
+  padding: var(--space-4) var(--space-4) calc(var(--safe-bottom) + var(--space-4));
+  border: 0; box-shadow: inset 0 1px 0 var(--color-gold-line); background: var(--color-ink); color: var(--color-text);
+}
+.sheet::backdrop { background: var(--color-scrim); }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.sheet-head h2 { margin: 0; font-size: var(--fs-body); }
+.sheet-head .cut-btn, .sheet-acts .cut-btn { margin-top: 0; }
+.sheet-list { list-style: none; margin: var(--space-2) 0 0; padding: 0; }
+.sheet-row { display: flex; align-items: center; gap: var(--space-2); min-height: var(--size-record); padding: var(--space-1) 0; box-shadow: inset 0 -1px 0 var(--color-gold-faint); }
+.sheet-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sheet-name { font-size: var(--fs-body); }
+.sheet-state { font-size: var(--fs-footnote); color: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.sheet-row.done .sheet-state { color: var(--color-success); }
+.sheet-row.skipped .sheet-name { color: var(--color-text-tertiary); }
+.sheet-acts { flex: none; display: flex; gap: var(--space-2); }
+.sheet-acts .cut-btn { padding: 0 var(--space-3); }
 
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {

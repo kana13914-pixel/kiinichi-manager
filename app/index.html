@@ -71,9 +71,10 @@
         <div id="next-event" class="next-event">-</div>
       </section>
 
+      <!-- 記録：今の時間帯に合うものを最大3つ（app.js が出す）＋「…」で全部の一覧（D-046） -->
       <section class="record-dock" aria-label="記録">
-        <button type="button" class="act" data-trigger="morning_wake.on_time" data-label="起きた" data-record="wake" data-hours="4-11">起きた</button>
-        <button type="button" class="act" data-trigger="work_start.default" data-label="仕事開始" data-record="work_start" data-hours="7-13">仕事開始</button>
+        <div id="record-acts" class="record-acts"></div>
+        <button id="records-more" type="button" class="cut-btn quiet act-more" aria-label="ほかの記録" aria-haspopup="dialog">…</button>
       </section>
 
       <div id="toast" class="toast" role="status" hidden></div>
@@ -313,6 +314,16 @@
         <button id="confirm-ok" type="submit" value="ok" class="cut-btn quiet danger">削除する</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- ほかの記録（D-046）。ホームの「…」から開く。全部の記録の今日の状態と、記録・取り消し・今日はなし -->
+  <dialog id="records-sheet" class="sheet" aria-labelledby="records-sheet-title">
+    <div class="sheet-head">
+      <h2 id="records-sheet-title">今日の記録</h2>
+      <button id="records-sheet-close" type="button" class="cut-btn quiet chip">閉じる</button>
+    </div>
+    <ul id="records-list" class="sheet-list"></ul>
+    <p id="records-sheet-status" class="status ng" role="status"></p>
   </dialog>
 
   <script src="util.js"></script>

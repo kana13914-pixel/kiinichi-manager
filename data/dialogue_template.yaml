@@ -35,6 +35,42 @@ work_start:
         - "わかった。何かあったら声をかけてくれ。"
         - "了解。進捗、気になったらこっちから聞く。"
 
+record_done:
+  description: "ホームの記録ボタン・ほかの記録で記録したときの一言（起きた・仕事開始は morning_wake・work_start）。種類で分ける（仮案。ユーザー確認待ち。D-046）"
+  conditions:
+    - id: breakfast
+      when: "朝食を記録した"
+      lines:
+        - "朝は食べたな。それで十分だ。"
+    - id: lunch
+      when: "昼食を記録した"
+      lines:
+        - "昼は済ませたな。午後はそこからだ。"
+    - id: break
+      when: "休憩を記録した（何回でも）"
+      lines:
+        - "少し休め。戻る時間は自分で決めろ。"
+    - id: work_end
+      when: "仕事終わりを記録した"
+      lines:
+        - "今日の仕事はここまでだ。切り替えろ。"
+    - id: dinner
+      when: "夕食を記録した"
+      lines:
+        - "夕食は済ませたな。残りは無理のない分だけでいい。"
+    - id: bath
+      when: "入浴を記録した"
+      lines:
+        - "上がったか。体を冷やすなよ。"
+    - id: brush
+      when: "歯磨きを記録した"
+      lines:
+        - "歯は磨いたな。それでいい。"
+    - id: sleep
+      when: "就寝を記録した"
+      lines:
+        - "わかった。今日はここまでだ。おやすみ。"
+
 midday_check:
   description: "食事・休憩の予定時刻を一定時間過ぎても未記録のときのみ発火。基本は干渉しない"
   conditions:

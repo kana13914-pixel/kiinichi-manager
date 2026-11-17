@@ -300,8 +300,7 @@ class PwaTest(unittest.TestCase):
         self.assertIn("e8c45c", top.lower())
 
     def test_record_button_shows_template_line(self):
-        page = self.ready_page()
-        page.wait_for_function("dialogue !== null", timeout=3_000)
+        page = self.clock_page(9, 3)
         page.click(".act[data-record=work_start]")
         line = page.text_content("#bubble-text")
         self.assertIn(line, ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"])
@@ -494,7 +493,7 @@ class PwaTest(unittest.TestCase):
         page.reload()
         page.wait_for_function("dialogue !== null", timeout=3_000)
         self.assertEqual(page.text_content(".act[data-record=wake]"), "✓ 起きた 07:12")
-        self.assertEqual(self.primaries(page), ["work_start"])  # 起きたは記録済みなので次が主
+        self.assertEqual(self.primaries(page), ["breakfast"])  # 起きたは記録済みなので次（朝食）が主（D-046）
         saved = page.evaluate("localStorage.getItem('db.records')")
         self.assertEqual(json.loads(saved)["2026-11-09"]["wake"]["time"], "07:12")
         # 翌日の日付で開くと未記録。前の日の記録は消さずに残し、新しい日の分を足す（D-043）
@@ -549,21 +548,22 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(self.primaries(page), ["work_start"])
 
     def test_records_reload_when_date_changes(self):
-        # 1日の区切りは朝4時（D-034）。0時をまたいでも記録は残り、4時をまたぐと消える
+        # 1日の区切りは朝4時（D-034）。0時をまたいでも今日の記録のまま、4時をまたぐと新しい日になる
         page = self.clock_page(23, 58)
-        page.click(".act[data-record=wake]")
-        self.assertIn("done", page.get_attribute(".act[data-record=wake]", "class"))
+        page.click(".act[data-record=sleep]")
+        self.assertIn("done", page.get_attribute(".act[data-record=sleep]", "class"))
         page.clock.run_for(3 * 60 * 1000)  # 0:01 になる
-        self.assertIn("done", page.get_attribute(".act[data-record=wake]", "class"))
+        self.assertIn("done", page.get_attribute(".act[data-record=sleep]", "class"))
         page.clock.fast_forward(4 * 3600 * 1000)  # 4:01 になる
         page.clock.run_for(1500)
-        self.assertEqual(page.text_content(".act[data-record=wake]"), "起きた")
+        self.assertEqual(page.evaluate("Object.keys(Records.day())"), [])
+        self.assertEqual(page.eval_on_selector_all(".act", "els => els.map(e => e.dataset.record)"), ["wake"])
 
     def test_records_before_4am_belong_to_previous_day(self):
         # フェーズ1の保存の形（records.today）から開く＝引き継ぎも兼ねて確かめる
         saved = json.dumps({"date": "2026-11-09", "items": {"wake": "07:12"}})
         page = self.clock_page(1, 30, day=10, init_script="localStorage.setItem('records.today', %s)" % json.dumps(saved))
-        self.assertEqual(page.text_content(".act[data-record=wake]"), "✓ 起きた 07:12")
+        self.assertEqual(page.evaluate("Records.day().wake.time"), "07:12")
         page = self.clock_page(4, 0, day=10, init_script="localStorage.setItem('records.today', %s)" % json.dumps(saved))
         self.assertEqual(page.text_content(".act[data-record=wake]"), "起きた")
 
@@ -584,12 +584,12 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.eval_on_selector("#bubble-text", "e => getComputedStyle(e).animationName"), "none")
 
     def test_focus_shows_gold_edge_on_cut_buttons(self):
-        page = self.clock_page(13, 30)  # 主ボタンなしの時間
+        page = self.clock_page(13, 30)  # 休憩は主ボタンにならない（D-046）
         page.keyboard.press("Tab")
-        page.focus(".act[data-record=work_start]")
+        page.focus(".act[data-record=break]")
         page.keyboard.press("Shift+Tab")
         page.keyboard.press("Tab")
-        bg = page.eval_on_selector(".act[data-record=work_start]",
+        bg = page.eval_on_selector(".act[data-record=break]",
                                    "e => e.matches(':focus-visible') ? getComputedStyle(e).backgroundColor : 'not-focus-visible'")
         self.assertEqual(bg, "rgb(232, 196, 92)")
 
@@ -1635,7 +1635,7 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.meta')"))["schema"], 2)
         for key in old:
             self.assertIsNone(page.evaluate("localStorage.getItem(%s)" % json.dumps(key)), key)  # 古い場所は片づける
-        self.assertEqual(page.text_content(".act[data-record=wake]"), "✓ 起きた 07:12")
+        self.assertEqual(page.evaluate("Records.day().wake.time"), "07:12")
         tasks = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))
         self.assertEqual([tasks[0]["title"], tasks[0]["updatedAt"]], ["前からのタスク", 5])
         page.goto(self.base + "index.html?mode=standalone#tasks")
@@ -1727,6 +1727,87 @@ class PwaTest(unittest.TestCase):
             r = page.eval_on_selector(sel, "e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }")
             self.assertTrue(r[0] >= 44 and r[1] >= 44, (sel, r))
         self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
+
+    # ---------- 記録の種類を増やす（D-046） ----------
+    def docked(self, page):
+        return page.eval_on_selector_all(".act", "els => els.map(e => e.dataset.record)")
+
+    def test_dock_shows_kinds_for_time_of_day(self):
+        cases = [((7, 12), ["wake", "breakfast", "work_start"], "wake"), ((12, 30), ["work_start", "lunch", "break"], "work_start"),
+                 ((18, 0), ["break", "work_end", "dinner"], "work_end"), ((21, 30), ["work_end", "dinner", "bath"], "work_end"),
+                 ((1, 0), ["bath", "brush", "sleep"], "bath")]
+        for (h, m), kinds, primary in cases:
+            with self.subTest(hour=h):
+                page = self.clock_page(h, m, day=10)
+                self.assertEqual(self.docked(page), kinds)
+                self.assertEqual(self.primaries(page), [primary])
+                self.assertEqual(len(page.query_selector_all("#records-more")), 1)
+
+    def test_dock_prefers_unrecorded_and_moves_on(self):
+        page = self.clock_page(10, 30)
+        self.assertEqual(self.docked(page), ["wake", "breakfast", "work_start"])  # 4つ当てはまる時間帯：一日の順で3つ
+        page.click(".act[data-record=wake]")
+        page.click("#toast .undo")
+        page.click(".act[data-record=wake]")
+        self.assertEqual(self.docked(page), ["breakfast", "work_start", "break"])  # 記録したものは、未記録のものに譲る
+        self.assertEqual(page.evaluate("Records.day().wake.time"), "10:30")
+
+    def test_break_can_be_recorded_many_times_and_is_never_primary(self):
+        page = self.clock_page(14, 0)
+        self.assertNotIn("break", self.primaries(page))
+        page.click(".act[data-record=break]")
+        self.assertEqual(page.text_content("#bubble-text"), "少し休め。戻る時間は自分で決めろ。")
+        page.clock.fast_forward(30 * 60_000)
+        page.click(".act[data-record=break]")
+        self.assertIn("2回目", page.text_content("#toast"))
+        self.assertEqual(page.text_content(".act[data-record=break]"), "休憩 2回・14:30")
+        self.assertNotIn("done", page.get_attribute(".act[data-record=break]", "class"))
+        page.click("#toast .undo")  # 取り消しは最後の1回だけ
+        self.assertEqual(page.evaluate("Records.day().break.map((b) => b.time)"), ["14:00"])
+
+    def test_records_sheet_record_undo_and_skip(self):
+        page = self.clock_page(8, 0)
+        page.click("#records-more")
+        self.assertTrue(page.is_visible("#records-sheet"))
+        self.assertEqual(page.text_content("#records-sheet-title"), "11月9日(月)の記録")
+        rows = page.eval_on_selector_all("#records-list .sheet-row", "els => els.map(e => e.dataset.record)")
+        self.assertEqual(rows, ["wake", "breakfast", "work_start", "lunch", "break", "work_end", "dinner", "bath", "brush", "sleep"])
+        row = "#records-list .sheet-row[data-record=%s]"
+        # 時間帯の外のもの（入浴）を記録する → 一言が出て、状態が変わる
+        page.click(row % "bath" + " button:text-is('記録')")
+        self.assertIn("✓ 08:00", page.text_content(row % "bath"))
+        page.click(row % "bath" + " button:text-is('取り消す')")
+        self.assertIn("未記録", page.text_content(row % "bath"))
+        # 今日はなし：ホームに出なくなる
+        page.click(row % "breakfast" + " button:text-is('今日はなし')")
+        self.assertIn("今日はなし", page.text_content(row % "breakfast" + " .sheet-state"))
+        self.assertEqual(page.evaluate("Records.day().breakfast.skipped"), True)
+        page.click("#records-sheet-close")
+        self.assertFalse(page.is_visible("#records-sheet"))
+        self.assertEqual(self.docked(page), ["wake", "work_start"])
+        page.click("#records-more")
+        page.click(row % "breakfast" + " button:text-is('なしをやめる')")
+        page.click("#records-sheet-close")
+        self.assertEqual(self.docked(page), ["wake", "breakfast", "work_start"])
+        self.assertEqual(page.text_content("#bubble-text"), "上がったか。体を冷やすなよ。")  # 一覧から記録してもセリフで応える
+
+    def test_records_sheet_fits_and_touch_sizes(self):
+        page = self.clock_page(8, 0, size=(375, 667), safe=(20, 0))
+        page.click("#records-more")
+        self.assertLessEqual(page.evaluate("document.getElementById('records-sheet').scrollWidth"), 375)
+        sizes = page.eval_on_selector_all("#records-sheet button", "els => els.map(e => [e.textContent, Math.round(e.getBoundingClientRect().height), Math.round(e.getBoundingClientRect().width)])")
+        self.assertTrue(all(h >= 44 and w >= 44 for _, h, w in sizes), sizes)
+        fills = page.evaluate("""() => [...document.querySelectorAll('#records-sheet *')]
+          .filter((e) => e.getClientRects().length && getComputedStyle(e).backgroundColor === 'rgb(232, 196, 92)').length""")
+        self.assertEqual(fills, 0)  # 一覧には金の塗りを使わない
+
+    def test_dock_labels_fit_with_three_buttons(self):
+        for (h, m) in ((18, 0), (21, 30), (9, 3)):
+            page = self.clock_page(h, m, size=(375, 667), safe=(20, 0))
+            for kind in self.docked(page):
+                page.click(".act[data-record=%s]" % kind)
+            over = page.eval_on_selector_all(".act, #records-more", "els => els.filter(e => e.scrollWidth > e.clientWidth).map(e => e.textContent)")
+            self.assertEqual(over, [], (h, m))
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")
