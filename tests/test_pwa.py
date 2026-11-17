@@ -1910,6 +1910,88 @@ class PwaTest(unittest.TestCase):
         page = self.routed_timer_page(calls, handler=handler, hour=hour, minute=minute, voice=True)
         return page, calls
 
+    # ---------- 先週のひとこと（D-058） ----------
+    def weekly_page(self, reports, day=16, hour=21, reply=None, extra_init="", fail=False):
+        calls = []
+        def handler(route):
+            req = route.request
+            if req.method == "OPTIONS":
+                route.fulfill(status=204, headers=self.CORS)
+                return
+            path = req.url.split("/api/", 1)[1]
+            if path == "weekly":
+                calls.append(json.loads(req.post_data))
+                if fail:
+                    route.fulfill(status=503, content_type="application/json", headers=self.CORS, body=json.dumps({"error": "準備ができていません"}))
+                    return
+                route.fulfill(status=200, content_type="application/json", headers=self.CORS,
+                              body=json.dumps(reply or {"ok": True, "week": "2026-11-09", "text": "疲れた日が多い週だったな。来週は早めに切り上げる日を1つ作ってみろ。", "cached": False}))
+                return
+            route.fulfill(status=200, content_type="application/json", headers=self.CORS, body='{"ok":true,"subscribed":true,"queue":[]}')
+        init = "localStorage.setItem('db.reports', %s);" % json.dumps(json.dumps(reports)) + extra_init
+        ctx = self.browser.new_context(permissions=["notifications"], viewport={"width": 393, "height": 852})
+        self.addCleanup(ctx.close)
+        ctx.add_init_script(READY)
+        ctx.add_init_script(VISIBILITY)
+        ctx.add_init_script("localStorage.setItem('phase0.appToken', 'tok-123'); if (!localStorage.getItem('db.prefs')) localStorage.setItem('db.prefs', JSON.stringify({ voice: false }));" + init)
+        ctx.route(self.WORKER + "/**", handler)
+        page = ctx.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.addCleanup(lambda: self.assertEqual(errors, [], "JSエラーが出ている"))
+        page.clock.install(time=datetime(2026, 11, day, hour, 0, 0))
+        page.goto(self.base + "index.html?mode=standalone#report")
+        page.wait_for_function("dialogue !== null", timeout=3_000)
+        return page, calls
+
+    WEEK_REPORTS = {"2026-11-09": {"mood": "tired", "done": "資料作り", "savedAt": 1}, "2026-11-11": {"mood": "normal", "done": "会議", "left": "見積もり", "savedAt": 2},
+                    "2026-11-13": {"mood": "tired", "done": "片づけ", "tomorrow": "買い物", "savedAt": 3}}
+
+    def test_weekly_comment_made_once_after_week_ends(self):
+        page, calls = self.weekly_page(self.WEEK_REPORTS, extra_init="localStorage.setItem('db.records', JSON.stringify({ '2026-11-09': { wake: { time: '07:40', at: 1 }, break: [{ time: '15:00', at: 2 }], dinner: { skipped: true, at: 3 } } }));")
+        page.wait_for_selector("#weekly", state="visible", timeout=5_000)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["week"], "2026-11-09")  # 先週の月曜（11/16 は月曜）
+        summary = calls[0]["summary"]
+        self.assertIn("11/9(月) ／ 調子：疲れた ／ できたこと：資料作り ／ 記録：起きた07:40、休憩1回、夕食なし", summary)
+        self.assertIn("11/10(火) ／ 日報なし ／ 記録：なし", summary)
+        self.assertIn("この週に完了したタスク：0件", summary)
+        self.assertEqual(summary.count("\n"), 7)  # 7日＋タスクの行
+        self.assertIn("先週のひとこと（11/9(月)〜11/15(日)）", page.text_content("#weekly-title"))
+        self.assertEqual(page.text_content("#weekly-line"), "疲れた日が多い週だったな。来週は早めに切り上げる日を1つ作ってみろ。")
+        page.reload()
+        page.wait_for_function("dialogue !== null")
+        self.assertTrue(page.is_visible("#weekly"))
+        page.wait_for_timeout(300)
+        self.assertEqual(len(calls), 1)  # 端末に控えたので、もう呼ばない
+        # 一言をオフにしても、週次コメントは出る（別の設定）
+        page.evaluate("location.hash = '#settings'")
+        page.click("#pref-lines")
+        page.evaluate("location.hash = '#report'")
+        self.assertTrue(page.is_visible("#weekly"))
+        page.evaluate("location.hash = '#settings'")
+        page.click("#pref-weekly")  # 週次コメントをオフにすると出さない
+        page.evaluate("location.hash = '#report'")
+        self.assertTrue(page.is_hidden("#weekly"))
+
+    def test_weekly_comment_needs_three_reports_and_reports_errors(self):
+        two = dict(list(self.WEEK_REPORTS.items())[:2])
+        page, calls = self.weekly_page(two)
+        page.wait_for_timeout(500)
+        self.assertEqual(calls, [])
+        self.assertTrue(page.is_hidden("#weekly"))
+        page, calls = self.weekly_page(self.WEEK_REPORTS, fail=True)
+        page.wait_for_function("document.getElementById('weekly-status').textContent.includes('作れませんでした')", timeout=5_000)
+        self.assertIn("準備ができていません", page.text_content("#weekly-status"))
+        self.assertTrue(page.is_hidden("#weekly"))
+        page.evaluate("location.hash = '#tasks'")
+        page.evaluate("location.hash = '#report'")
+        page.wait_for_timeout(300)
+        self.assertEqual(len(calls), 1)  # 開いている間は続けて呼ばない
+        page, calls = self.weekly_page(self.WEEK_REPORTS, extra_init="localStorage.setItem('db.prefs', JSON.stringify({ voice: false, weekly: false }));")
+        page.wait_for_timeout(500)
+        self.assertEqual(calls, [])
+
     def at_ms(self, day, h, m):
         return int(datetime(2026, 11, day, h, m).timestamp() * 1000)
 
@@ -2131,7 +2213,7 @@ class PwaTest(unittest.TestCase):
     def test_settings_daily_items_then_system_screen(self):
         page = self.clock_page(10, 0, "#settings")
         cards = page.eval_on_selector_all("#view-settings .card h2", "els => els.map(e => e.textContent)")
-        self.assertEqual(cards, ["毎日の時刻", "声掛けの通知", "キィニチの一言"])  # 日常の設定だけ
+        self.assertEqual(cards, ["毎日の時刻", "声掛けの通知", "週次コメント", "キィニチの一言"])  # 日常の設定だけ
         self.assertIn("（自動保存）", page.text_content("#view-settings .card .note"))
         link = page.eval_on_selector("#view-settings .sub-link", "e => [e.textContent, e.getBoundingClientRect().top > document.querySelector('#view-settings .card:last-of-type').getBoundingClientRect().bottom]")
         self.assertEqual(link, ["仕様関連›", True])  # いちばん下

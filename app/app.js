@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase2-v11';
+const APP_VERSION = 'phase3-v1';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -592,6 +592,12 @@ document.getElementById('pref-voice').addEventListener('click', () => {
   window.dispatchEvent(new Event('routinechange'));
 });
 setSwitch('pref-voice', Prefs.get('voice'));
+// 週次コメントのオン・オフ（D-058）
+document.getElementById('pref-weekly').addEventListener('click', () => {
+  Prefs.set('weekly', !Prefs.get('weekly'));
+  setSwitch('pref-weekly', Prefs.get('weekly'));
+});
+setSwitch('pref-weekly', Prefs.get('weekly'));
 
 // Web Push：ボタン操作 → 通知許可 → 購読 → 送信サーバーに登録
 Settings.bind('app-token', 'appToken');

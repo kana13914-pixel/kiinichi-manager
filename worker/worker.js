@@ -6,6 +6,7 @@
 //     D1 バインディング   DB             … 予約キューの保存先（強い整合性。未設定ならKVで代用するが遅れやすい）
 //     シークレット         APP_TOKEN      … PWA/送信ページが送る合言葉。コードやリポジトリには書かない
 //     変数（任意）         ALLOWED_ORIGIN … 呼び出しを許すサイト（既定 https://kana13914-pixel.github.io）
+//     シークレット（任意） ANTHROPIC_API_KEY … 週次コメント（/api/weekly。D-058）で Claude を呼ぶための鍵。なければ週次コメントは使えない
 //     Cron Trigger         * * * * *      … 毎分、予約キューを確認して時刻が来たものを送る
 // ・VAPID 鍵は初回アクセス時に自動生成して KV に保存する（人間が鍵を扱わなくて済むように）
 // ・Web Push の暗号化は RFC 8291（aes128gcm）、認証は RFC 8292（VAPID）に従う
@@ -19,6 +20,64 @@ const EARLY_MS = 30 * 1000;
 // 送れなかった予約は、予定時刻からこの時間までは次の分にやり直す（毎分の確認で2〜3回。D-033）
 const RETRY_MS = 3 * 60 * 1000;
 const LOG_KEEP = 20; // 送信結果を残す件数（届かなかった理由を後から確かめるため）
+
+// ---------- 週次コメント（D-058）：1週間の日報と記録から、キィニチの短い振り返りを Claude に書いてもらう ----------
+// 鍵は Cloudflare のシークレットにだけ置く（アプリには置かない。CLAUDE.md）。費用を抑えるため：同じ週は1回だけ作って KV に控える、
+// 月に WEEKLY_MONTHLY_MAX 回まで、送る量は WEEKLY_MAX_INPUT 文字まで。Anthropic の管理画面の月の上限（$5）とは別の歯止め
+// このファイルは1つを貼り付けて使う（ライブラリを読み込めない）ので、Claude API は公式の HTTP の形（/v1/messages）で直接呼ぶ
+const CLAUDE_MODEL = 'claude-opus-5-5';
+const WEEKLY_MONTHLY_MAX = 8;
+const WEEKLY_MAX_INPUT = 12000;
+const WEEKLY_SYSTEM = [
+  'あなたは「キィニチ」というキャラクターとして、利用者の1週間を振り返る短いコメントを書く。関係は上司くらいの温度感。',
+  '話し方：短く言い切る。語尾は「〜だな」「〜しておけ」「〜か」「〜ぞ」など。敬語は使わない。一人称は使わない。',
+  '守ること：',
+  '- 渡された日報と記録に書いてあることだけを根拠にする。書いていないことを知っているように言わない。',
+  '- 過剰に褒めない。励まし続けない。よかった点は1つまで、短く。',
+  '- 疲れている日が多ければ、無理をさせない。休むよう促してよいが、決めるのは本人に任せる。',
+  '- 「〜すべきだ」と断定せず、提案にとどめる。次の週に試せることを1つだけ添える。',
+  '- 返事を求める問いかけで終わらない。',
+  '- 3〜5文、全体で200字くらいまで。見出し・箇条書き・絵文字・記号の飾りは使わない。本文だけを書く。',
+].join('\n');
+
+async function weeklyComment(env, p) {
+  const week = typeof p.week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.week) ? p.week : null;
+  if (!week) return { status: 400, body: { error: 'week（週の初めの日付）の形式が正しくありません' } };
+  const input = typeof p.summary === 'string' ? p.summary.trim() : '';
+  if (!input) return { status: 400, body: { error: 'summary（1週間のまとめ）がありません' } };
+  if (input.length > WEEKLY_MAX_INPUT) return { status: 400, body: { error: 'summary が長すぎます' } };
+  const saved = await env.PUSH_KV.get('weekly:' + week, 'json');
+  if (saved) return { status: 200, body: { ok: true, week, text: saved.text, cached: true } }; // 同じ週はもう作らない
+  if (!env.ANTHROPIC_API_KEY) return { status: 503, body: { error: '週次コメントの準備ができていません（シークレット ANTHROPIC_API_KEY が未設定です）' } };
+  const month = new Date().toISOString().slice(0, 7);
+  const used = Number(await env.PUSH_KV.get('weekly-count:' + month)) || 0;
+  if (used >= WEEKLY_MONTHLY_MAX) return { status: 429, body: { error: '今月の週次コメントの回数の上限に達しました' } };
+  await env.PUSH_KV.put('weekly-count:' + month, String(used + 1), { expirationTtl: 40 * 24 * 3600 }); // 失敗しても数える（呼びすぎ防止）
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': env.ANTHROPIC_API_KEY,
+      'anthropic-version': '2026-10-21',
+      'anthropic-beta': 'server-side-fallback-2026-07-01', // 安全の判定で断られたら、別のモデルで書き直してもらう
+    },
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 16000,
+      output_config: { effort: 'medium' },
+      fallbacks: 'default',
+      system: WEEKLY_SYSTEM,
+      messages: [{ role: 'user', content: `${week} から始まる1週間の記録です。これを読んで、振り返りのコメントを書いてください。\n\n${input}` }],
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { status: 502, body: { error: 'Claude を呼べませんでした（' + (data.error && data.error.message ? String(data.error.message).slice(0, 200) : 'HTTP ' + res.status) + '）' } };
+  if (data.stop_reason === 'refusal') return { status: 502, body: { error: '週次コメントを作れませんでした（断られました）' } };
+  const text = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+  if (!text) return { status: 502, body: { error: '週次コメントが空でした' } };
+  await env.PUSH_KV.put('weekly:' + week, JSON.stringify({ text, at: Date.now(), model: data.model || CLAUDE_MODEL }), { expirationTtl: 400 * 24 * 3600 });
+  return { status: 200, body: { ok: true, week, text, cached: false } };
+}
 
 // ---------- 小道具 ----------
 const enc = new TextEncoder();
@@ -355,6 +414,12 @@ async function handle(request, env) {
     // 購読がなければ予約しても届かないので、アプリが気づけるように返す（D-033）
     const subscribed = Boolean(await env.PUSH_KV.get('subscription', 'json'));
     return json({ ok: true, key: p.key, at, queueStore: store.kind, subscribed }, 200, h);
+  }
+
+  if (pathname === '/api/weekly' && request.method === 'POST') {
+    const p = (await request.json().catch(() => null)) || {};
+    const r = await weeklyComment(env, p);
+    return json(r.body, r.status, h);
   }
 
   if (pathname === '/api/cancel' && request.method === 'POST') {

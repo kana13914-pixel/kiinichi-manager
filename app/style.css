@@ -623,7 +623,10 @@ body:not(.calendar-on) #event-add { display: none; }
 .pref-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .pref-row .cut-btn { flex: none; min-width: calc(var(--tap) * 2); }
 /* キィニチの一言をオフにしたとき：各機能画面の一言の面を出さない（ホームのセリフは出す） */
-body.no-screen-lines .dialogue-mini { display: none; }
+body.no-screen-lines .dialogue-mini:not(.weekly-say) { display: none; } /* 週次コメントは別の設定（D-058） */
+.weekly-say { margin-top: var(--space-6); }
+.weekly-title { margin: 0 0 var(--space-1); font-size: var(--fs-footnote); color: var(--color-text-secondary); }
+#weekly-status:empty { display: none; }
 
 /* ---------- ほかの記録（D-046）：画面の下から出る一覧。最奥の黒の面（確認ダイアログと同じ） ---------- */
 .sheet {

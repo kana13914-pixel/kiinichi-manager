@@ -64,6 +64,7 @@ const DB = {
   sync: 'db.sync',               // { url, token, lastAt, lastSig, dirty, error } … スプレッドシートへの控えの送り先と状態（D-050。この端末だけ）
   calendar: 'db.calendar',       // { fetchedAt, from, to, events: [ { title, start, end, allDay } ], error } … カレンダーの予定の控え（D-053。この端末だけ）
   calendarError: 'db.calendarError', // 一度も取れていないときの理由
+  weekly: 'db.weekly',           // { 週の初めの日付: { text, at } } … 週次コメント（D-058）
   notify: 'db.notify',           // { 予約したキー: { at, body } } … 送信サーバーに予約した声掛け（D-049。この端末だけ）
 };
 const SCHEMA = 2;
@@ -107,7 +108,7 @@ function migrateData() {
 migrateData();
 
 // ---------- 端末ごとの好み（D-047）。決まっていないものは既定値 ----------
-const PREF_DEFAULTS = { screenLines: true, voice: true };
+const PREF_DEFAULTS = { screenLines: true, voice: true, weekly: true };
 const Prefs = {
   get(name) {
     const p = Store.read(DB.prefs, {});

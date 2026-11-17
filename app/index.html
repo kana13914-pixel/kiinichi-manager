@@ -288,6 +288,14 @@
         <p id="report-reply-line" class="line">…</p>
       </section>
 
+      <!-- 先週のひとこと（D-058）。週が明けたら、先週の日報と記録から Claude に書いてもらう（送信サーバー経由）。一言のオン・オフとは別 -->
+      <section id="weekly" class="dialogue dialogue-mini weekly-say" aria-labelledby="weekly-title" hidden>
+        <div class="nameplate" aria-hidden="true">キィニチ</div>
+        <p id="weekly-title" class="weekly-title">先週のひとこと</p>
+        <p id="weekly-line" class="line"></p>
+      </section>
+      <p id="weekly-status" class="status" role="status"></p>
+
       <section class="report-history" aria-labelledby="report-history-title">
         <h2 id="report-history-title" class="section-title">これまでの日報</h2>
         <!-- 調子の 7 日（CR-G03）。読み上げは aria-label の文で行う -->
@@ -321,6 +329,14 @@
           <button id="pref-voice" type="button" class="cut-btn quiet chip" role="switch" aria-checked="true" aria-labelledby="pref-voice-label">オン</button>
         </div>
         <p class="note">毎日の時刻をもとに、食事の時刻を30分過ぎても記録がないとき、仕事中に休憩なしで90分たったとき、就寝の1時間前に夕食・入浴・歯磨きが残っているとき、就寝の時刻に、通知で声を掛けます。記録するか「今日はなし」にすると取り消します。タイマーの通知はこの設定と別です。</p>
+      </section>
+      <section class="card">
+        <h2>週次コメント</h2>
+        <div class="pref-row">
+          <span id="pref-weekly-label">先週の日報へのひとこと</span>
+          <button id="pref-weekly" type="button" class="cut-btn quiet chip" role="switch" aria-checked="true" aria-labelledby="pref-weekly-label">オン</button>
+        </div>
+        <p class="note">週が明けて日報を開いたとき、先週の日報（3日分以上あるとき）と記録をもとに、キィニチが短く振り返ります。作るときに、先週の日報の中身と記録が送信サーバーを通して Anthropic の Claude に送られます。1週に1回だけ作ります。</p>
       </section>
       <section class="card">
         <h2>キィニチの一言</h2>

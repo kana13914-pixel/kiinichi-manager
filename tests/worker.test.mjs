@@ -350,3 +350,61 @@ test('内部で失敗しても、理由つきの応答（500・CORSつき）を�
   const { env: env2 } = setup();
   assert.equal((await worker.fetch(req('/api/schedule', { method: 'POST', token: env2.APP_TOKEN, body: null }), env2)).status, 400);
 });
+
+// ---- 週次コメント（D-058） ----
+function weeklySetup({ key = 'sk-test', reply } = {}) {
+  const env = { PUSH_KV: makeKV(), APP_TOKEN: 'secret-token-123', ANTHROPIC_API_KEY: key };
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init, body: JSON.parse(init.body) });
+    const r = reply || { status: 200, body: { model: 'claude-opus-5-5', stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: '今週は疲れた日が多かったな。' }] } };
+    return new Response(JSON.stringify(r.body), { status: r.status });
+  };
+  const post = (body, token = env.APP_TOKEN) => worker.fetch(req('/api/weekly', { method: 'POST', token, body }), env);
+  return { env, calls, post };
+}
+
+test('週次コメント：鍵はサーバーのシークレットから送り、決まった形で Claude を呼ぶ。同じ週は2回作らない', async () => {
+  const { calls, post } = weeklySetup();
+  const res = await post({ week: '2026-11-09', summary: '11/9(月) 調子：疲れた できたこと：資料' });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { ok: true, week: '2026-11-09', text: '今週は疲れた日が多かったな。', cached: false });
+  assert.equal(calls.length, 1);
+  const c = calls[0];
+  assert.equal(c.url, 'https://api.anthropic.com/v1/messages');
+  assert.equal(c.init.headers['x-api-key'], 'sk-test');
+  assert.equal(c.init.headers['anthropic-version'], '2026-10-21');
+  assert.equal(c.init.headers['anthropic-beta'], 'server-side-fallback-2026-07-01');
+  assert.equal(c.body.model, 'claude-opus-5-5');
+  assert.equal(c.body.fallbacks, 'default');
+  assert.deepEqual(c.body.output_config, { effort: 'medium' });
+  assert.ok(!('temperature' in c.body) && !('thinking' in c.body));
+  assert.match(c.body.system, /キィニチ/);
+  assert.match(c.body.messages[0].content, /資料/);
+  const again = await (await post({ week: '2026-11-09', summary: '別の内容' })).json();
+  assert.deepEqual([again.text, again.cached], ['今週は疲れた日が多かったな。', true]);
+  assert.equal(calls.length, 1); // 2回目は呼ばない
+});
+
+test('週次コメント：合言葉・鍵なし・入力の誤り・断られた・月の上限', async () => {
+  let s = weeklySetup();
+  assert.equal((await s.post({ week: '2026-11-09', summary: 'x' }, 'wrong')).status, 401);
+  assert.equal((await s.post({ week: '11/9', summary: 'x' })).status, 400);
+  assert.equal((await s.post({ week: '2026-11-09', summary: '' })).status, 400);
+  assert.equal((await s.post({ week: '2026-11-09', summary: 'x'.repeat(12001) })).status, 400);
+  assert.equal(s.calls.length, 0);
+  s = weeklySetup({ key: '' });
+  const nokey = await s.post({ week: '2026-11-09', summary: 'x' });
+  assert.equal(nokey.status, 503);
+  assert.match((await nokey.json()).error, /ANTHROPIC_API_KEY/);
+  s = weeklySetup({ reply: { status: 200, body: { stop_reason: 'refusal', content: [] } } });
+  assert.equal((await s.post({ week: '2026-11-09', summary: 'x' })).status, 502);
+  assert.equal(await s.env.PUSH_KV.get('weekly:2026-11-09'), null); // 断られた分は控えない
+  s = weeklySetup({ reply: { status: 529, body: { error: { message: 'overloaded' } } } });
+  assert.match((await (await s.post({ week: '2026-11-09', summary: 'x' })).json()).error, /overloaded/);
+  s = weeklySetup();
+  for (let i = 0; i < 8; i++) assert.equal((await s.post({ week: `2026-0${(i % 9) + 1}-0${(i % 7) + 1}`, summary: 'x' })).status, 200);
+  const over = await s.post({ week: '2026-12-28', summary: 'x' });
+  assert.equal(over.status, 429);
+  assert.equal(s.calls.length, 8);
+});

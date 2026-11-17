@@ -193,13 +193,88 @@ const Report = (() => {
 
   $('report-more').addEventListener('click', () => { historyShown += HISTORY_STEP; renderHistory(); });
 
+  // ---------- 先週のひとこと（D-058） ----------
+  // 週は月曜はじまり（日付は朝4時区切り）。週が明けたら、先週の日報が3日分以上あれば、送信サーバー経由で Claude に1回だけ書いてもらう
+  const WEEKLY_MIN_REPORTS = 3;
+  const MOOD_WORDS = { good: '元気', normal: 'ふつう', tired: '疲れた' };
+  function weekStartOf(day) { return addDays(day, -((day.getDay() + 6) % 7)); }
+  function lastWeek(now = new Date()) {
+    const start = addDays(weekStartOf(logicalDay(now)), -7);
+    return { key: dateStr(start), days: [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(start, i)) };
+  }
+  // Claude に渡す1週間のまとめ（日報・記録・完了したタスクの数）。長い文は切る
+  function weekSummary(week) {
+    const reports = load();
+    const records = Records.all();
+    const cut = (t, n = 300) => String(t || '').replace(/\s+/g, ' ').slice(0, n);
+    const lines = [];
+    for (const d of week.days) {
+      const key = dateStr(d);
+      const r = reports[key];
+      const rec = records[key] || {};
+      const recText = RECORD_KINDS.map((k) => {
+        const v = rec[k.id];
+        if (Array.isArray(v)) return v.length ? `${k.label}${v.length}回` : '';
+        if (v && v.skipped) return `${k.label}なし`;
+        return v && v.time ? `${k.label}${v.time}` : '';
+      }).filter(Boolean).join('、');
+      const parts = [`${labelShort(d)}`];
+      if (r) {
+        parts.push(`調子：${MOOD_WORDS[r.mood] || '未記入'}`);
+        if (r.done) parts.push(`できたこと：${cut(r.done)}`);
+        if (r.left) parts.push(`やり残したこと：${cut(r.left)}`);
+        if (r.tomorrow) parts.push(`明日いちばんにやること：${cut(r.tomorrow, 150)}`);
+      } else {
+        parts.push('日報なし');
+      }
+      parts.push(`記録：${recText || 'なし'}`);
+      lines.push(parts.join(' ／ '));
+    }
+    const from = week.days[0].getTime();
+    const to = addDays(week.days[6], 1).getTime();
+    const doneTasks = (Store.read(DB.tasks, []) || []).filter((t) => t && t.done && t.doneAt >= from && t.doneAt < to).length;
+    lines.push(`この週に完了したタスク：${doneTasks}件`);
+    return lines.join('\n');
+  }
+  let weeklyTried = null; // この画面を開いている間に作ろうとした週（失敗しても続けて呼ばない）
+  function renderWeekly(now = new Date()) {
+    const week = lastWeek(now);
+    const saved = (Store.read(DB.weekly, {}) || {})[week.key];
+    const on = Prefs.get('weekly');
+    $('weekly').hidden = !(on && saved);
+    if (on && saved) {
+      $('weekly-title').textContent = `先週のひとこと（${labelShort(week.days[0])}〜${labelShort(week.days[6])}）`;
+      $('weekly-line').textContent = saved.text;
+    }
+    if (!on || saved || weeklyTried === week.key) return;
+    const reports = load();
+    const count = week.days.filter((d) => reports[dateStr(d)]).length;
+    if (count < WEEKLY_MIN_REPORTS || !Settings.get('appToken').trim()) return;
+    weeklyTried = week.key;
+    $('weekly-status').className = 'status';
+    $('weekly-status').textContent = '先週のひとことを書いてもらっています…';
+    Settings.api('/api/weekly', { method: 'POST', body: { week: week.key, summary: weekSummary(week) } })
+      .then((r) => {
+        const all = Store.read(DB.weekly, {}) || {};
+        all[week.key] = { text: r.text, at: Date.now() };
+        Store.write(DB.weekly, all);
+        $('weekly-status').textContent = '';
+        renderWeekly();
+      })
+      .catch((e) => {
+        $('weekly-status').className = 'status ng';
+        $('weekly-status').textContent = `先週のひとことを作れませんでした（${e.message}）。次に開いたときにもう一度試します`;
+      });
+  }
+
   function render(now = new Date()) {
     fillForm(now);
     renderHistory(now);
     renderSay();
+    renderWeekly(now);
   }
   onShow('report', () => render());
   render();
 
-  return { load, reportDate, render };
+  return { load, reportDate, render, lastWeek, weekSummary };
 })();
