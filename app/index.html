@@ -273,18 +273,8 @@
     <section id="view-settings" class="view">
       <header class="sub-header"><a href="#home" class="back">‹ ホーム</a><h1><span class="label-en" aria-hidden="true">SETTINGS</span>設定</h1></header>
       <section class="card">
-        <h2>通知の再設定</h2>
-        <p class="note">通知が届かなくなったときや、合言葉を変えたときに使います。</p>
-        <label for="app-token" class="note">合言葉</label>
-        <input id="app-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" class="field">
-        <button id="enable-push" type="button">通知を有効にする</button>
-        <dl>
-          <dt>状態</dt><dd id="push-status">未設定</dd>
-        </dl>
-      </section>
-      <section class="card">
         <h2>毎日の時刻</h2>
-        <p class="note">ホームの記録ボタンを出す時間帯、予定の一覧、声掛けの時刻の基準になります。変えるとすぐ保存します。</p>
+        <p class="note">ホームの記録ボタンを出す時間帯、予定の一覧、声掛けの時刻の基準になります（自動保存）。</p>
         <div class="schedule-modes" role="group" aria-label="平日と休日">
           <button id="routine-mode-weekday" type="button" class="cut-btn quiet chip" aria-pressed="true">平日</button>
           <button id="routine-mode-holiday" type="button" class="cut-btn quiet chip" aria-pressed="false">休日</button>
@@ -303,16 +293,6 @@
         <p class="note">毎日の時刻をもとに、食事の時刻を30分過ぎても記録がないとき、仕事中に休憩なしで90分たったとき、就寝の1時間前に夕食・入浴・歯磨きが残っているとき、就寝の時刻に、通知で声を掛けます。記録するか「今日はなし」にすると取り消します。タイマーの通知はこの設定と別です。</p>
       </section>
       <section class="card">
-        <h2>スプレッドシートへの控え</h2>
-        <p class="note">記録・日報・タスク・毎日の時刻・タイマーを、Google スプレッドシートに控えとして送ります（送るだけで、スプレッドシートの変更はアプリに戻りません）。用意のしかたは手順書にあります。</p>
-        <label for="sync-url" class="note">送り先の URL（https://script.google.com/…）</label>
-        <input id="sync-url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" class="field">
-        <label for="sync-token" class="note">合言葉</label>
-        <input id="sync-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" class="field">
-        <button id="sync-now" type="button" class="cut-btn quiet">今すぐ送る</button>
-        <p id="sync-status" class="status" role="status">未設定</p>
-      </section>
-      <section class="card">
         <h2>キィニチの一言</h2>
         <div class="pref-row">
           <span id="pref-lines-label">タスク・タイマー・予定・日報の一言</span>
@@ -320,6 +300,13 @@
         </div>
         <p class="note">オフにすると、各画面の上の一言と、日報を保存したとき・タイマーが終わったときの一言を出しません。ホームのセリフと通知はそのままです。</p>
       </section>
+      <!-- 仕様関連はふだん開かないので、日常の設定の下にまとめて別の画面へ（2026-11-17 利用者の修正依頼。D-051） -->
+      <a href="#system" class="cut-btn quiet sub-link" data-view="system">仕様関連<span aria-hidden="true">›</span></a>
+    </section>
+
+    <!-- 仕様関連：起動状態（確認用）・通知の再設定・スプレッドシートへの控え。「‹ 設定」で戻る -->
+    <section id="view-system" class="view">
+      <header class="sub-header"><a href="#settings" class="back">‹ 設定</a><h1><span class="label-en" aria-hidden="true">SYSTEM</span>仕様関連</h1></header>
       <section class="card">
         <h2>起動状態（確認用）</h2>
         <dl>
@@ -330,6 +317,26 @@
           <dt>開いた時刻</dt><dd id="opened-at">-</dd>
           <dt>版</dt><dd id="app-version">-</dd>
         </dl>
+      </section>
+      <section class="card">
+        <h2>通知の再設定</h2>
+        <p class="note">通知が届かなくなったときや、合言葉を変えたときに使います。</p>
+        <label for="app-token" class="note">合言葉</label>
+        <input id="app-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" class="field">
+        <button id="enable-push" type="button">通知を有効にする</button>
+        <dl>
+          <dt>状態</dt><dd id="push-status">未設定</dd>
+        </dl>
+      </section>
+      <section class="card">
+        <h2>スプレッドシートへの控え</h2>
+        <p class="note">記録・日報・タスク・毎日の時刻・タイマーを、Google スプレッドシートに控えとして送ります（送るだけで、スプレッドシートの変更はアプリに戻りません）。用意のしかたは手順書にあります。</p>
+        <label for="sync-url" class="note">送り先の URL（https://script.google.com/…）</label>
+        <input id="sync-url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" class="field">
+        <label for="sync-token" class="note">合言葉</label>
+        <input id="sync-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" class="field">
+        <button id="sync-now" type="button" class="cut-btn quiet">今すぐ送る</button>
+        <p id="sync-status" class="status" role="status">未設定</p>
       </section>
     </section>
 

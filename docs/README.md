@@ -51,7 +51,7 @@
 
 | パス | 内容 |
 | --- | --- |
-| `app/index.html` | 本体の画面（初回導線・ホーム・各タブ・設定） |
+| `app/index.html` | 本体の画面（初回導線・ホーム・各タブ・設定・仕様関連（`#system`。D-051）） |
 | `app/util.js` | 共通の小道具（日付、1日の区切り＝朝4時 `todayKey`：D-034、端末内の保存 `Store`、保存の形 `DB` と引き継ぎ `migrateData`：D-043）。最初に読み込む |
 | `app/dialogue.js` | セリフ集から選ぶ（`pickLine`・`dialogueReady`） |
 | `app/ui.js` | 共通の画面部品（確認ダイアログ・取り消しの表示 `makeToast`・画面の一言 `makeSay`・ごみ箱・画面を開いたときの描き直し `onShow`） |

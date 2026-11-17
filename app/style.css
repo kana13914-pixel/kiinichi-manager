@@ -597,6 +597,12 @@ input:focus, textarea:focus { border-color: var(--color-accent); }
 .routine-days { margin-top: var(--space-1); }
 .routine-days .cut-btn { margin-top: 0; min-width: var(--tap); padding: 0; }
 
+/* 設定の一番下の「仕様関連 ›」（D-051）。控えめなボタンの見た目で、押すと別の画面へ */
+.sub-link {
+  display: flex; align-items: center; justify-content: space-between; min-height: var(--size-btn-primary);
+  margin-top: var(--space-5); padding: 0 var(--space-4); text-decoration: none; font-weight: 600;
+}
+
 /* ---------- 設定の切り替え（D-047） ---------- */
 .pref-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .pref-row .cut-btn { flex: none; min-width: calc(var(--tap) * 2); }

@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase2-v7';
+const APP_VERSION = 'phase2-v8';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -83,9 +83,12 @@ if (window.visualViewport) window.visualViewport.addEventListener('resize', fixV
 }
 
 // ---------- 画面の切り替え（下のタブ5個＋右上の設定。URLの #home などで管理。D-019 Q1） ----------
-const VIEWS = ['home', 'schedule', 'tasks', 'timer', 'report', 'settings'];
+const VIEWS = ['home', 'schedule', 'tasks', 'timer', 'report', 'settings', 'system'];
+let shownView = null;
 function showView() {
   const name = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home';
+  if (shownView !== null && shownView !== name) window.scrollTo(0, 0); // 別の画面に移ったら上から見せる（設定の下から仕様関連へ移ったときなど）
+  shownView = name;
   for (const v of VIEWS) document.getElementById('view-' + v).hidden = v !== name;
   for (const a of document.querySelectorAll('.tabbar a')) {
     if (a.dataset.view === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); // I2-03

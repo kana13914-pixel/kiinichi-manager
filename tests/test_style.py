@@ -52,7 +52,7 @@ class StyleTest(unittest.TestCase):
     def test_english_label_once_per_screen(self):
         """英字の小見出しは各画面に 1 つまで・読み上げない（CR-T02, D-021 Q-R3）。"""
         html = (ROOT / "app" / "index.html").read_text(encoding="utf-8")
-        for view in ("home", "schedule", "tasks", "timer", "report", "settings"):
+        for view in ("home", "schedule", "tasks", "timer", "report", "settings", "system"):
             part = html.split(f'id="view-{view}"', 1)[1].split("<section id=\"view-", 1)[0].split("</nav>", 1)[0]
             labels = re.findall(r'<span class="label-en"([^>]*)>', part)
             self.assertEqual(len(labels), 1, view)

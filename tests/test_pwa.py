@@ -2044,7 +2044,7 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(body["records"]["2026-11-09"], [{"kind": "wake", "label": "起きた", "time": "10:00", "n": 1, "state": "記録", "at": "2026-11-09 10:00"}])
         self.assertEqual(body["routine"][0][:3], ["平日", "07:00", "07:30"])
         self.assertEqual([t[0] for t in body["timers"]], ["作業", "休憩", "入浴", "歯磨き"])
-        page.evaluate("location.hash = '#settings'")
+        page.evaluate("location.hash = '#system'")
         self.assertIn("に送りました", page.text_content("#sync-status"))
         # 1分以内の変更はまとめて、1分たってから送る
         page.evaluate("location.hash = '#home'")
@@ -2062,7 +2062,7 @@ class PwaTest(unittest.TestCase):
         page.click(".act[data-record=wake]")
         page.clock.run_for(6000)
         page.wait_for_function("JSON.parse(localStorage.getItem('db.sync')).error", timeout=3_000)
-        page.evaluate("location.hash = '#settings'")
+        page.evaluate("location.hash = '#system'")
         self.assertIn("送れませんでした", page.text_content("#sync-status"))
         fail["on"] = False
         page.click("#sync-now")
@@ -2075,7 +2075,7 @@ class PwaTest(unittest.TestCase):
         page.clock.run_for(6000)
         page.wait_for_timeout(300)
         self.assertEqual(posts, [])
-        page.evaluate("location.hash = '#settings'")
+        page.evaluate("location.hash = '#system'")
         self.assertEqual(page.text_content("#sync-status"), "未設定")
         page.click("#sync-now")
         self.assertIn("URL と合言葉", page.text_content("#sync-status"))
@@ -2086,6 +2086,25 @@ class PwaTest(unittest.TestCase):
         page.click("#sync-now")
         page.wait_for_function("document.getElementById('sync-status').textContent.includes('に送りました')", timeout=3_000)
         self.assertEqual(len(posts), 1)
+
+    # ---------- 設定と仕様関連（D-051） ----------
+    def test_settings_daily_items_then_system_screen(self):
+        page = self.clock_page(10, 0, "#settings")
+        cards = page.eval_on_selector_all("#view-settings .card h2", "els => els.map(e => e.textContent)")
+        self.assertEqual(cards, ["毎日の時刻", "声掛けの通知", "キィニチの一言"])  # 日常の設定だけ
+        self.assertIn("（自動保存）", page.text_content("#view-settings .card .note"))
+        link = page.eval_on_selector("#view-settings .sub-link", "e => [e.textContent, e.getBoundingClientRect().top > document.querySelector('#view-settings .card:last-of-type').getBoundingClientRect().bottom]")
+        self.assertEqual(link, ["仕様関連›", True])  # いちばん下
+        page.click("#view-settings .sub-link")
+        page.wait_for_selector("#view-system", state="visible")
+        self.assertTrue(page.is_hidden("#view-settings"))
+        cards = page.eval_on_selector_all("#view-system .card h2", "els => els.map(e => e.textContent)")
+        self.assertEqual(cards, ["起動状態（確認用）", "通知の再設定", "スプレッドシートへの控え"])
+        self.assertEqual(page.text_content("#app-version"), page.evaluate("APP_VERSION"))
+        page.click("#view-system .back")
+        page.wait_for_selector("#view-settings", state="visible")
+        h = page.eval_on_selector("#view-settings .sub-link", "e => e.getBoundingClientRect().height")
+        self.assertGreaterEqual(h, 44)
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")
