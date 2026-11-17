@@ -1,10 +1,11 @@
 // Service Worker。オフラインでも画面が開けるよう静的ファイルをキャッシュし、通知の表示とタップを受け持つ。
 // ファイルを更新したら CACHE_VERSION を上げること（古いキャッシュが残るのを防ぐ）。
-const CACHE_VERSION = 'phase2-v4';
+const CACHE_VERSION = 'phase2-v5';
 const ASSETS = [
   './',
   './index.html',
   './util.js',
+  './routine.js',
   './dialogue.js',
   './ui.js',
   './app.js',

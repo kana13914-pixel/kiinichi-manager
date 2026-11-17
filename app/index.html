@@ -283,6 +283,18 @@
         </dl>
       </section>
       <section class="card">
+        <h2>毎日の時刻</h2>
+        <p class="note">ホームの記録ボタンを出す時間帯、予定の一覧、声掛けの時刻の基準になります。変えるとすぐ保存します。</p>
+        <div class="schedule-modes" role="group" aria-label="平日と休日">
+          <button id="routine-mode-weekday" type="button" class="cut-btn quiet chip" aria-pressed="true">平日</button>
+          <button id="routine-mode-holiday" type="button" class="cut-btn quiet chip" aria-pressed="false">休日</button>
+        </div>
+        <ul id="routine-list" class="routine-list"></ul>
+        <span class="form-label" id="routine-holidays-label">休日にする曜日</span>
+        <div id="routine-holidays" class="due-chips routine-days" role="group" aria-labelledby="routine-holidays-label"></div>
+        <p id="routine-status" class="status" role="status"></p>
+      </section>
+      <section class="card">
         <h2>キィニチの一言</h2>
         <div class="pref-row">
           <span id="pref-lines-label">タスク・タイマー・予定・日報の一言</span>
@@ -337,6 +349,7 @@
   <script src="util.js"></script>
   <script src="dialogue.js"></script>
   <script src="ui.js"></script>
+  <script src="routine.js"></script>
   <script src="sample-data.js"></script>
   <script src="settings.js"></script>
   <script src="app.js"></script>

@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase2-v4';
+const APP_VERSION = 'phase2-v5';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -251,24 +251,41 @@ dialogueReady.then(() => {
 });
 
 // ---------- 記録（I3-02, C6-01, D-043, D-046） ----------
-// 記録の種類（一日の順）。hours は「ホームに出す時間帯」（仮。朝4時を 4、深夜1時を 25 と数える。設定の「毎日の時刻」ができたらそこから決める）
+// 記録の種類（一日の順）。win は「ホームに出す時間帯」を毎日の時刻（routine.js。D-048）から決める（分。朝4時を 240、深夜1時を 1500 と数える）。
+// 予定時刻が「なし」の記録はホームに出さない（一覧からは記録できる）。既定の時刻なら D-046 の時間帯と同じになる
 // repeat … 1日に何度でも記録できる（休憩）。主ボタン（金の塗り）にはしない
+const DAY_END = (24 + DAY_STARTS_AT) * 60; // 次の朝4時
+const around = (t, before, after) => (t === null ? null : [Math.max(DAY_STARTS_AT * 60, t - before), Math.min(DAY_END, t + after)]);
+const untilDayEnd = (t, before) => (t === null ? null : [Math.max(DAY_STARTS_AT * 60, t - before), DAY_END]);
 const RECORD_KINDS = [
-  { id: 'wake', label: '起きた', trigger: 'morning_wake.on_time', hours: [4, 11] },
-  { id: 'breakfast', label: '朝食', trigger: 'record_done.breakfast', hours: [5, 11] },
-  { id: 'work_start', label: '仕事開始', trigger: 'work_start.default', hours: [7, 13] },
-  { id: 'lunch', label: '昼食', trigger: 'record_done.lunch', hours: [11, 15] },
-  { id: 'break', label: '休憩', trigger: 'record_done.break', hours: [10, 19], repeat: true },
-  { id: 'work_end', label: '仕事終わり', trigger: 'record_done.work_end', hours: [16, 23] },
-  { id: 'dinner', label: '夕食', trigger: 'record_done.dinner', hours: [17, 23] },
-  { id: 'bath', label: '入浴', trigger: 'record_done.bath', hours: [19, 28] },
-  { id: 'brush', label: '歯磨き', trigger: 'record_done.brush', hours: [20, 28] },
-  { id: 'sleep', label: '就寝', trigger: 'record_done.sleep', hours: [21, 28] },
+  { id: 'wake', label: '起きた', trigger: 'morning_wake.on_time', win: (m) => around(m.wake, 180, 240) },
+  { id: 'breakfast', label: '朝食', trigger: 'record_done.breakfast', win: (m) => around(m.breakfast, 150, 210) },
+  { id: 'work_start', label: '仕事開始', trigger: 'work_start.default', win: (m) => around(m.work_start, 120, 240) },
+  { id: 'lunch', label: '昼食', trigger: 'record_done.lunch', win: (m) => around(m.lunch, 60, 180) },
+  { id: 'break', label: '休憩', trigger: 'record_done.break', repeat: true,
+    win: (m) => (m.work_start === null || m.work_end === null ? null : [m.work_start + 60, Math.min(DAY_END, m.work_end + 30)]) },
+  { id: 'work_end', label: '仕事終わり', trigger: 'record_done.work_end', win: (m) => around(m.work_end, 150, 270) },
+  { id: 'dinner', label: '夕食', trigger: 'record_done.dinner', win: (m) => around(m.dinner, 150, 210) },
+  { id: 'bath', label: '入浴', trigger: 'record_done.bath', win: (m) => untilDayEnd(m.bath, 210) },
+  { id: 'brush', label: '歯磨き', trigger: 'record_done.brush', win: (m) => untilDayEnd(m.sleep, 210) },
+  { id: 'sleep', label: '就寝', trigger: 'record_done.sleep', win: (m) => untilDayEnd(m.sleep, 150) },
 ];
 const DOCK_MAX = 3; // ホームに同時に出すのは 3 個まで（I4-04）
 const kindOf = (id) => RECORD_KINDS.find((k) => k.id === id);
-// 朝4時を区切りにした「時」（深夜1時 → 25）
-function logicalHour(now) { const h = now.getHours(); return h < DAY_STARTS_AT ? h + 24 : h; }
+// その日の予定時刻を分で（なしは null）
+function plannedMinutes(now = new Date()) {
+  const times = Routine.timesFor(logicalDay(now));
+  const out = {};
+  for (const [id] of ROUTINE_ITEMS) out[id] = routineMinutes(times[id]);
+  return out;
+}
+// 起きたときの一言は、予定の起床時刻との差で分ける（spec：±15分以内は定刻）
+function wakeTrigger(now) {
+  const planned = plannedMinutes(now).wake;
+  if (planned === null) return 'morning_wake.on_time';
+  const diff = logicalMinutes(now) - planned;
+  return diff < -15 ? 'morning_wake.early' : diff > 15 ? 'morning_wake.late' : 'morning_wake.on_time';
+}
 
 // 記録は日付（朝4時区切り。D-034）ごとに残し、消さない（D-043）。形は docs/data_schema.md
 //   ふつう：{ time: '07:12', at: ミリ秒 }／休憩：[ { time, at }, … ]／今日はなし：{ skipped: true, at }
@@ -318,9 +335,13 @@ const Records = {
 
 // ---------- ホームの記録ボタン（D-046）：今の時間帯に合うものを、未記録を優先して最大 3 つ。並びは一日の順 ----------
 function dockKinds(now = new Date()) {
-  const h = logicalHour(now);
+  const lm = logicalMinutes(now);
+  const planned = plannedMinutes(now);
   const day = Records.day(now);
-  const open = RECORD_KINDS.filter((k) => h >= k.hours[0] && h < k.hours[1] && Records.status(k.id, day).state !== 'skipped');
+  const open = RECORD_KINDS.filter((k) => {
+    const w = k.win(planned);
+    return w && lm >= w[0] && lm < w[1] && Records.status(k.id, day).state !== 'skipped';
+  });
   const pending = open.filter((k) => Records.status(k.id, day).state === 'none');
   const picked = [...pending, ...open.filter((k) => !pending.includes(k))].slice(0, DOCK_MAX);
   return RECORD_KINDS.filter((k) => picked.includes(k));
@@ -394,7 +415,7 @@ function recordNow(kind) {
   const now = new Date();
   if (!Records.set(kind, now)) return false;
   if (document.body.classList.contains('from-notification')) endNotificationState(); // 記録に移ったら通知の強調は終える（D-020）
-  showLine(kindOf(kind).trigger); // 反応のセリフ
+  showLine(kind === 'wake' ? wakeTrigger(now) : kindOf(kind).trigger); // 反応のセリフ
   applyRecords(now);
   return true;
 }
@@ -468,6 +489,8 @@ document.getElementById('records-more').addEventListener('click', () => {
 document.getElementById('records-sheet-close').addEventListener('click', () => sheet.close());
 sheet.addEventListener('click', (e) => { if (e.target === e.currentTarget) sheet.close(); }); // 枠の外を押すと閉じる
 applyRecords();
+// 毎日の時刻を変えたら、ホームの記録ボタンと次の予定を決め直す
+window.addEventListener('routinechange', () => { applyRecords(); lastEventKey = ''; renderNextEvent(); });
 
 // ---------- 開いたときの判定し直し（P1-11, P1-12） ----------
 // ホーム画面のアプリは裏から再開されることが多い。表示に戻ったときに、セリフ・主ボタン・記録・時間帯を判定し直す

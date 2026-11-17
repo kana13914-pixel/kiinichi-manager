@@ -283,13 +283,13 @@ class PwaTest(unittest.TestCase):
         self.assertFalse(page.is_visible("#view-settings"))
 
     def test_next_event_picks_first_future_item(self):
-        page = self.ready_page()
+        page = self.clock_page(10, 0)  # 月曜（平日の毎日の時刻。D-048）
         titles = page.evaluate("""() => {
           const at = (h, m) => { const d = new Date(); d.setHours(h, m, 0, 0); return d; };
           const pick = (now) => (SampleData.todayEvents(now).find((e) => e.at > now) || {}).title || null;
           return [pick(at(8, 0)), pick(at(12, 0)), pick(at(23, 45))];
         }""")
-        self.assertEqual(titles, ["仕事開始", "休憩", None])
+        self.assertEqual(titles, ["仕事開始", "仕事終わり", None])
 
     def test_opened_from_notification_shows_that_triggers_line(self):
         page = self.ready_page("&source=webpush&trigger=midday_check.meal_overdue")
@@ -367,8 +367,8 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.text_content("#next-rest"), "あと7時間12分")
 
     def test_next_event_rest_under_an_hour(self):
-        page = self.clock_page(14, 20)
-        self.assertEqual(page.text_content(".next-title"), "休憩")
+        page = self.clock_page(17, 50)
+        self.assertEqual(page.text_content(".next-title"), "仕事終わり")
         self.assertEqual(page.text_content("#next-rest"), "あと40分")
         self.assertEqual(page.query_selector(".next-day"), None)
 
@@ -1241,13 +1241,15 @@ class PwaTest(unittest.TestCase):
         today = self.schedule_rows(page, "2026-11-09")
         self.assertEqual(len(today), 8)
         self.assertEqual(today[0], ["07:00", "起床", True, False, None])
-        self.assertEqual(today[2], ["12:00", "昼食", False, True, "次 ・ あと2時間"])
+        self.assertEqual(today[1], ["07:30", "朝食", True, False, None])  # 生活の時刻は設定の「毎日の時刻」（D-048）
+        self.assertEqual(today[3], ["12:00", "昼食", False, True, "次 ・ あと2時間"])
         self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-row.next")), 1)
         self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-day:not([data-date='2026-11-09']) .schedule-row.past")), 0)
         # 予定のある日：終日が先、あとは時刻順に生活の時刻と混ざる
         sat = [r[:2] for r in self.schedule_rows(page, "2026-11-14")]
         self.assertEqual(sat[0], ["終日", "部屋の片づけ"])
-        self.assertEqual(sat[2:4], [["09:00", "仕事開始"], ["10:00", "買い出し"]])
+        self.assertEqual(sat[2:4], [["07:30", "朝食"], ["10:00", "買い出し"]])
+        self.assertNotIn("仕事開始", [r[1] for r in sat])  # 休日（土日）は仕事の時刻なし
         self.assertIn(["19:00", "友人と夕食"], sat)
         self.assertIn("仮", page.text_content("#view-schedule h1"))
         # 日付の見出しは帯にして、スクロール中も上に残す
@@ -1260,11 +1262,11 @@ class PwaTest(unittest.TestCase):
 
     def test_schedule_next_moves_as_time_passes(self):
         page = self.schedule_page(hour=11, minute=59)
-        self.assertEqual(self.schedule_rows(page, "2026-11-09")[2][4], "次 ・ あと1分")
+        self.assertEqual(self.schedule_rows(page, "2026-11-09")[3][4], "次 ・ あと1分")
         page.clock.run_for(62_000)  # 12:00 を過ぎる
         today = self.schedule_rows(page, "2026-11-09")
-        self.assertEqual(today[2][2:], [True, False, None])
-        self.assertEqual(today[3], ["15:00", "休憩", False, True, "次 ・ あと3時間"])
+        self.assertEqual(today[3][2:], [True, False, None])
+        self.assertEqual(today[4], ["18:30", "仕事終わり", False, True, "次 ・ あと6時間30分"])
 
     def test_schedule_after_last_event_marks_tomorrow_first(self):
         page = self.schedule_page(hour=23, minute=45)
@@ -1834,6 +1836,60 @@ class PwaTest(unittest.TestCase):
         page.click("#pref-lines")
         page.evaluate("location.hash = '#timer'")
         self.assertEqual(len(self.visible_says(page, "timer")), 1)
+
+    # ---------- 毎日の時刻（D-048） ----------
+    def test_routine_drives_dock_schedule_and_holidays(self):
+        page = self.clock_page(9, 30, day=14)  # 土曜（休日。仕事の時刻なし）
+        self.assertEqual(self.docked(page), ["wake", "breakfast"])
+        page = self.clock_page(13, 0, day=14)
+        self.assertNotIn("break", self.docked(page))  # 仕事のない日は休憩も出さない
+        page.click("#records-more")
+        self.assertEqual(len(page.query_selector_all("#records-list .sheet-row[data-record=work_start]")), 1)  # 一覧からは記録できる
+
+    def test_routine_settings_change_and_persist(self):
+        page = self.clock_page(12, 30, "#settings")
+        self.assertEqual(page.input_value("#routine-lunch"), "12:00")
+        self.assertEqual(page.get_attribute("#routine-mode-weekday", "aria-pressed"), "true")
+        page.fill("#routine-lunch", "13:30")
+        page.dispatch_event("#routine-lunch", "change")
+        self.assertIn("保存しました", page.text_content("#routine-status"))
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.routine')"))["weekday"]["lunch"], "13:30")
+        page.evaluate("location.hash = '#home'")
+        self.assertEqual(self.docked(page), ["work_start", "lunch", "break"])  # 昼食の時間帯は 12:30〜16:30 になる
+        self.assertEqual(page.text_content(".next-title"), "昼食")
+        self.assertEqual(page.text_content(".next-time"), "13:30")
+        # 休日：「なし」と曜日
+        page.evaluate("location.hash = '#settings'")
+        page.click("#routine-mode-holiday")
+        self.assertEqual(page.input_value("#routine-work_start"), "")
+        self.assertEqual(page.get_attribute("#routine-list li:nth-child(3) .cut-btn", "aria-pressed"), "true")
+        page.click("#routine-list li:nth-child(2) .cut-btn")  # 休日の朝食をなしに
+        self.assertEqual(page.input_value("#routine-breakfast"), "")
+        days = page.eval_on_selector_all("#routine-holidays .cut-btn", "els => els.map(e => e.getAttribute('aria-pressed'))")
+        self.assertEqual(days, ["true", "false", "false", "false", "false", "false", "true"])
+        page.click("#routine-holidays .cut-btn:nth-child(2)")  # 月曜も休日に
+        page.reload()
+        page.wait_for_function("dialogue !== null")
+        r = json.loads(page.evaluate("localStorage.getItem('db.routine')"))
+        self.assertEqual([r["holidays"], r["holiday"]["breakfast"], r["weekday"]["lunch"]], [[0, 1, 6], None, "13:30"])
+        page.evaluate("location.hash = '#home'")
+        self.assertNotIn("work_start", self.docked(page))  # 11/9 は月曜＝休日になった
+        page.evaluate("location.hash = '#settings'")
+        page.wait_for_selector("#view-settings", state="visible")
+        sizes = page.eval_on_selector_all("#routine-list button, #routine-holidays button",
+                                          "els => els.map((b) => { const r = b.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; })")
+        self.assertTrue(all(w >= 44 and h >= 44 for w, h in sizes), sizes)
+
+    def test_wake_line_depends_on_planned_time(self):
+        for (h, m), cond in (((6, 30), "early"), ((7, 10), "on_time"), ((7, 40), "late")):
+            with self.subTest(cond=cond):
+                page = self.clock_page(h, m)
+                page.click(".act[data-record=wake]")
+                self.assertIn(page.text_content("#bubble-text"), self.lines_of("morning_wake", cond))
+
+    def test_routine_settings_fit_on_small_screen(self):
+        page = self.clock_page(10, 0, "#settings", size=(375, 667), safe=(20, 0))
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")

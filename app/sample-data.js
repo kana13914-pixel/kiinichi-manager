@@ -1,18 +1,8 @@
-// 仮データ（フェーズ1の画面確認用）。フェーズ2でローカル保存・Googleカレンダー連携に置き換える。
+// 予定の取得元。生活の時刻は設定の「毎日の時刻」（routine.js）、カレンダーの予定は仮データ（Google カレンダー連携で置き換える）。
 // 本物の予定は使わない。予定画面の縦リストも月表示もホームも、ここ（eventsOn）だけを読む（D-032）。
-//   kind … 'routine'＝毎日の生活の時刻（起床・食事など）／'event'＝カレンダーに入れる予定
+//   kind … 'routine'＝毎日の生活の時刻（起床・食事など。D-048）／'event'＝カレンダーに入れる予定（仮）
 //   allDay … 時刻のない終日の予定
 const SampleData = (() => {
-  const routine = [
-    ['07:00', '起床'],
-    ['09:00', '仕事開始'],
-    ['12:00', '昼食'],
-    ['15:00', '休憩'],
-    ['18:30', '仕事終わり'],
-    ['19:30', '夕食'],
-    ['22:30', '入浴'],
-    ['23:30', '就寝'],
-  ];
   // 仮の予定。毎月この日に置く（days は続く日数）
   const monthly = [
     { day: 3, time: '19:00', title: '読書会' },
@@ -31,10 +21,12 @@ const SampleData = (() => {
     at.setHours(h, m, 0, 0);
     return at;
   }
-  // その日の予定。終日が先、あとは時刻順
+  // その日（暦日）の予定。終日が先、あとは時刻順。
+  // 生活の時刻は設定の「毎日の時刻」（routine.js。D-048）から。深夜0〜4時の時刻は、前の日の分としてこの日に並ぶ
   function eventsOn(date) {
     const d = date.getDate();
-    const list = routine.map(([hm, title]) => ({ at: timeOn(date, hm), title, kind: 'routine', allDay: false }));
+    const day = startOfDay(date);
+    const list = [...Routine.eventsFor(addDays(day, -1)), ...Routine.eventsFor(day)].filter((e) => dateStr(e.at) === dateStr(day));
     for (const m of monthly) {
       if (d < m.day || d >= m.day + (m.days || 1)) continue;
       list.push({ at: timeOn(date, m.time || '00:00'), title: m.title, kind: 'event', allDay: !m.time });

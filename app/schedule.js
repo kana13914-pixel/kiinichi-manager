@@ -173,7 +173,8 @@ const Schedule = (() => {
   $('cal-today').addEventListener('click', () => { cursor = null; render(new Date(), true); });
 
   onShow('schedule', () => render());
-  setInterval(() => { if (location.hash === '#schedule') render(); }, 1000); // 「あと何分」と過ぎた予定を、分が変わったら直す
+  setInterval(() => { if (location.hash === '#schedule') render(); }, 1000);
+  window.addEventListener('routinechange', () => render(new Date(), true)); // 毎日の時刻を変えたら描き直す // 「あと何分」と過ぎた予定を、分が変わったら直す
   render();
 
   return { render, refresh: () => render(new Date(), true) };

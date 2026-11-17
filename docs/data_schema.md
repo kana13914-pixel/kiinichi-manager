@@ -18,6 +18,7 @@
 | `db.tasks` | `[ { id, title, due, done, doneAt, createdAt, updatedAt } ]` | タスク。`due` は日付か `null`。`updatedAt` は最後に変えた時点（同期で「どちらが新しいか」を決める） |
 | `db.reports` | `{ 日付: { mood, done, left, tomorrow, savedAt } }` | 日報。1日1件。`mood` は `good`／`normal`／`tired`／`null` |
 | `db.records` | `{ 日付: { 種類: 値 } }` | 毎日の記録。値はふつう `{ time, at }`（`time` は押した時刻、`at` はその時点）、休憩は `[ { time, at }, … ]`（押した回数だけ）、「今日はなし」は `{ skipped: true, at }`（D-046）。種類は下の表 |
+| `db.routine` | `{ weekday: { 項目: 'HH:MM' か null }, holiday: { … }, holidays: [曜日の番号], updatedAt }` | 毎日の時刻（D-048）。項目は `wake`・`breakfast`・`work_start`・`lunch`・`work_end`・`dinner`・`bath`・`sleep`。曜日は 0＝日〜6＝土 |
 | `db.timer` の `custom` | `[ { id, name, minutes } ]` | 利用者が作ったタイマー |
 | `db.timer` の `builtin` | `{ 用途別の id: 分数 }` | 用途別のタイマー（`work`・`break`・`bath`・`brush`）のうち、利用者が時間を変えたものだけ（D-044）。ないものは初めの時間 |
 
@@ -36,7 +37,7 @@
 | `brush` | 歯磨き | 20〜翌4時 |
 | `sleep` | 就寝 | 21〜翌4時 |
 
-右の列はホームに出す時間帯（仮。D-046）。コードの正本は `app/app.js` の `RECORD_KINDS`。
+右の列はホームに出す時間帯（既定の毎日の時刻のとき。D-046）。実際は設定の「毎日の時刻」の前後で決まる（D-048）。コードの正本は `app/app.js` の `RECORD_KINDS`。
 
 ## この端末だけのもの（同期しない）
 
@@ -53,7 +54,6 @@
 
 ## これから足すもの（決まったら上の表に移す）
 
-- `db.routine`：毎日の予定時刻（起床・食事・就寝など）。設定画面で決める（D-043）。平日と休日で分けるかは未定。
 - 同期のための印：タスクを消したことを伝える印（`deletedAt`）、最後に同期した時点。スプレッドシート同期を作るときに決める。
 - 予定（Google カレンダーから読んだものの控え）。カレンダー連携を作るときに決める。
 
