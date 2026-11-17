@@ -61,6 +61,11 @@
       <section class="dialogue" aria-label="キィニチのセリフ">
         <div class="nameplate" aria-hidden="true">キィニチ</div>
         <p id="bubble-text" class="line" role="status">…</p>
+        <!-- 仕事終わりに今日までのタスクが残っているときだけ出す（D-059）。決めるのは本人 -->
+        <div id="bubble-choices" class="bubble-choices" hidden>
+          <button id="choice-postpone" type="button" class="cut-btn quiet chip">明日に回す</button>
+          <button id="choice-keep" type="button" class="cut-btn quiet chip">このまま</button>
+        </div>
       </section>
 
       <section class="next-strip" aria-label="次の予定">
@@ -176,6 +181,10 @@
           </div>
           <label for="task-due">日付を選ぶ</label>
           <input id="task-due" type="date">
+          <div class="pref-row task-report-row">
+            <span id="task-report-label">完了したら日報に入れる</span>
+            <button id="task-report" type="button" class="cut-btn quiet chip" role="switch" aria-checked="false" aria-labelledby="task-report-label">オフ</button>
+          </div>
           <div class="form-actions">
             <button id="task-cancel" type="button" class="cut-btn quiet">やめる</button>
             <button id="task-submit" type="submit" class="cut-btn primary">追加</button>

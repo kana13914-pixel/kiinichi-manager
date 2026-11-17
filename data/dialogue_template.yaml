@@ -87,6 +87,40 @@ calendar_today:
       lines:
         - "今日は予定が{n}件ある。最初は{first}だ。"
 
+work_end_check:
+  description: "「仕事終わり」を押したときに、今日まで（期限切れを含む）の未完了のタスクが残っていれば出す。{n} に件数。選択肢「明日に回す」「このまま」を一緒に出す（仮案。ユーザー確認待ち。D-059）"
+  conditions:
+    - id: left
+      when: "今日までのタスクが残っている"
+      lines:
+        - "今日までのものが{n}件残っている。明日に回すかどうかは、自分で決めろ。"
+    - id: postponed
+      when: "「明日に回す」を押した"
+      lines:
+        - "明日に回した。今日はここまでだ。"
+    - id: kept
+      when: "「このまま」を押した"
+      lines:
+        - "わかった。無理のない分だけでいい。"
+
+task_done:
+  description: "タスクを完了にしたときの、タスク画面の一言の面の短い反応（仮案。ユーザー確認待ち。D-059）"
+  conditions:
+    - id: default
+      when: "タスクを完了にした"
+      lines:
+        - "片づいたな。次に移れ。"
+        - "一つ減ったな。"
+
+timer_start:
+  description: "タイマーを始めたときの、タイマー画面の一言の面の短い反応。{min} に分数（仮案。ユーザー確認待ち。D-059）"
+  conditions:
+    - id: default
+      when: "タイマーを始めた"
+      lines:
+        - "始めたな。{min}分たったら知らせる。"
+        - "時間はこっちで見ておく。"
+
 midday_check:
   description: "食事・休憩の予定時刻を一定時間過ぎても未記録のときのみ発火。基本は干渉しない"
   conditions:

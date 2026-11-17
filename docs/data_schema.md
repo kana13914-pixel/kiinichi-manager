@@ -15,7 +15,7 @@
 
 | キー | 形 | 説明 |
 | --- | --- | --- |
-| `db.tasks` | `[ { id, title, due, done, doneAt, createdAt, updatedAt } ]` | タスク。`due` は日付か `null`。`updatedAt` は最後に変えた時点（同期で「どちらが新しいか」を決める） |
+| `db.tasks` | `[ { id, title, due, done, doneAt, createdAt, updatedAt, toReport } ]` | タスク。`toReport` は完了したら日報に入れるか（D-059。ないものは false）。`due` は日付か `null`。`updatedAt` は最後に変えた時点（同期で「どちらが新しいか」を決める） |
 | `db.reports` | `{ 日付: { mood, done, left, tomorrow, savedAt } }` | 日報。1日1件。`mood` は `good`／`normal`／`tired`／`null` |
 | `db.records` | `{ 日付: { 種類: 値 } }` | 毎日の記録。値はふつう `{ time, at }`（`time` は押した時刻、`at` はその時点）、休憩は `[ { time, at }, … ]`（押した回数だけ）、「今日はなし」は `{ skipped: true, at }`（D-046）。種類は下の表 |
 | `db.routine` | `{ weekday: { 項目: 'HH:MM' か null }, holiday: { … }, holidays: [曜日の番号], updatedAt }` | 毎日の時刻（D-048）。項目は `wake`・`breakfast`・`work_start`・`lunch`・`work_end`・`dinner`・`bath`・`sleep`。曜日は 0＝日〜6＝土 |

@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase3-v1';
+const APP_VERSION = 'phase3-v2';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -196,6 +196,7 @@ function showLine(key, { index, vars, extra } = {}) {
   if (!picked) return false;
   const bubble = document.getElementById('bubble-text');
   bubble.textContent = fillLine(picked.text, vars) + (extra || '');
+  document.getElementById('bubble-choices').hidden = true; // 選択肢は、それを出したセリフのときだけ
   bubble.classList.remove('line-enter'); void bubble.offsetWidth; bubble.classList.add('line-enter'); // CR-M01：入りの動きをやり直す
   return true;
 }
@@ -434,9 +435,25 @@ function recordNow(kind) {
   if (!Records.set(kind, now)) return false;
   if (document.body.classList.contains('from-notification')) endNotificationState(); // 記録に移ったら通知の強調は終える（D-020）
   showLine(kind === 'wake' ? wakeTrigger(now) : kindOf(kind).trigger, { extra: kind === 'wake' ? todayPlansLine(now) : '' }); // 反応のセリフ
+  if (kind === 'work_end') offerPostpone(now);
   applyRecords(now);
   return true;
 }
+
+// 仕事終わりに、今日まで（期限切れを含む）のタスクが残っていれば、明日に回すかを本人に選んでもらう（夕方の予定見直し。D-059）。
+// 決めるのは本人（ボタン2つ）。通知は増やさない
+function offerPostpone(now = new Date()) {
+  const n = Tasks.dueLeft(now);
+  if (!n) return;
+  showLine('work_end_check.left', { vars: { n } });
+  document.getElementById('bubble-choices').hidden = false;
+}
+document.getElementById('choice-postpone').addEventListener('click', () => {
+  const n = Tasks.postponeToTomorrow();
+  if (n < 0) { homeToast.show(SAVE_FAILED); return; }
+  showLine('work_end_check.postponed', { vars: { n } });
+});
+document.getElementById('choice-keep').addEventListener('click', () => showLine('work_end_check.kept'));
 function pressRecord(kind) {
   const k = kindOf(kind);
   if (!k.repeat && Records.status(kind, Records.day()).state === 'done') { // 記録済み：新しい記録はせず、取り消しを出し直す（セリフは変えない）

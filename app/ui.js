@@ -52,17 +52,28 @@ function makeToast(el) {
 }
 
 // 画面の一言（1 画面に 1 つ。C10-02）。状況（セリフ集のキー）が変わったときだけ選び直す。開くたびには変えない（D-031 ②）
+// say.react(key, vars) … 区切りのよい操作のあとの短い反応（D-059）。状況が変わるまで、反応のセリフを残す
 function makeSay(lineEl) {
   let shown = null;
-  return (key) => {
-    if (key === shown) return;
+  let reacting = false;
+  const say = (key) => {
+    if (key === shown) return; // 同じ状況なら選び直さない（反応を出していれば、それを残す）
     shown = key;
+    reacting = false;
     dialogueReady.then(() => {
-      if (shown !== key) return;
+      if (shown !== key || reacting) return;
       const picked = pickLine(key);
       lineEl.textContent = picked ? picked.text : '…';
     });
   };
+  say.react = (key, vars = {}) => {
+    reacting = true;
+    dialogueReady.then(() => {
+      const picked = pickLine(key); // 候補が2つ以上なら、続けて同じ言い回しにしない（C1-02）
+      if (picked) lineEl.textContent = fillLine(picked.text, vars);
+    });
+  };
+  return say;
 }
 
 // ごみ箱のボタン（タスク、利用者が作ったタイマー）

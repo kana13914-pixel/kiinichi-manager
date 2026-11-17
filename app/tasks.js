@@ -1,5 +1,6 @@
 // タスク画面（D-026 ①, D-031）。1件は「名前・期限（日付。なくてもよい）・完了」。
 // 完了したタスクは完了日を持ち、完了日から7日たつと自動で消す。削除は確認してから行う。
+// 「完了したら日報に入れる」をオンにしたタスクは、完了したときにその日の日報の「できたこと」に「・名前」を足す（D-059。report.js）。
 // 「今日」「完了日」は朝4時で区切る（D-034）。
 // 保存は localStorage の db.tasks（D-043。形は docs/data_schema.md）。
 // util.js（日付・保存）、dialogue.js（セリフ）、ui.js（確認・取り消しの表示・ごみ箱）を使う。
@@ -80,10 +81,10 @@ const Tasks = (() => {
     title.textContent = task.title;
     body.append(title);
     const info = dueInfo(task.due, now);
-    if (info && !task.done) {
+    if ((info || task.toReport) && !task.done) {
       const due = document.createElement('span');
-      due.className = 'task-due' + (info.overdue ? ' overdue' : '');
-      due.textContent = info.text;
+      due.className = 'task-due' + (info && info.overdue ? ' overdue' : '');
+      due.textContent = [info && info.text, task.toReport && '完了したら日報へ'].filter(Boolean).join(' ・ ');
       body.append(due);
     }
     if (task.done && task.doneAt) {
@@ -173,16 +174,26 @@ const Tasks = (() => {
     clearTimeout(moveTimer);
     moveTimer = setTimeout(render, CHECK_HOLD_MS);
   }
+  // 未完了に戻す。日報に入れていたら、その行を日報から外す（D-059）
+  function reopen(id) {
+    const before = update(id, (t) => { t.done = false; t.doneAt = null; });
+    if (before && before.toReport && before.done && before.doneAt) Report.removeDone(before.title, new Date(before.doneAt));
+    return before;
+  }
   function toggle(id) {
-    const completing = !(load().find((x) => x.id === id) || {}).done;
-    const before = update(id, (t) => { t.done = !t.done; t.doneAt = t.done ? Date.now() : null; }, { later: completing });
-    if (!before) return;
-    if (completing) showCheck(id);
-    if (!before.done) {
-      toast.show(`「${before.title}」を完了にしました`, () => update(id, (t) => { t.done = false; t.doneAt = null; }));
-    } else {
-      toast.hide(); // 完了→未完了に戻すのは、それ自体が取り消しなのでトーストは出さない
+    const current = load().find((x) => x.id === id) || {};
+    if (current.done) { // 完了→未完了に戻すのは、それ自体が取り消しなのでトーストは出さない
+      reopen(id);
+      toast.hide();
+      return;
     }
+    const at = Date.now();
+    const before = update(id, (t) => { t.done = true; t.doneAt = at; }, { later: true });
+    if (!before) return;
+    showCheck(id);
+    say.react('task_done.default'); // 区切りのよい操作への短い反応（D-059）
+    if (before.toReport) Report.addDone(before.title, new Date(at)); // 日報の「できたこと」に足す（D-059）
+    toast.show(`「${before.title}」を完了にしました${before.toReport ? '（日報に入れました）' : ''}`, () => reopen(id));
   }
   async function remove(id) {
     const target = load().find((x) => x.id === id);
@@ -200,10 +211,10 @@ const Tasks = (() => {
       render();
     });
   }
-  function add(title, due) {
+  function add(title, due, toReport = false) {
     const list = load();
     const at = Date.now();
-    list.push({ id: newId(), title, due: due || null, done: false, doneAt: null, createdAt: at, updatedAt: at });
+    list.push({ id: newId(), title, due: due || null, done: false, doneAt: null, createdAt: at, updatedAt: at, toReport });
     if (!Store.write(KEY, list)) return false;
     render();
     return true;
@@ -211,6 +222,13 @@ const Tasks = (() => {
 
   // ---------- 追加フォーム ----------
   let chosenDue = null; // 'YYYY-MM-DD' または null
+  let toReport = false; // 完了したら日報に入れる（D-059）。作るたびにオフから
+  function setToReport(on) {
+    toReport = on;
+    $('task-report').setAttribute('aria-checked', String(on));
+    $('task-report').textContent = on ? 'オン' : 'オフ';
+  }
+  $('task-report').addEventListener('click', () => setToReport(!toReport));
   function setChip(kind) {
     for (const c of document.querySelectorAll('#task-form .chip')) c.setAttribute('aria-pressed', String(c.dataset.due === kind));
   }
@@ -222,6 +240,7 @@ const Tasks = (() => {
     $('task-form-status').textContent = '';
     chosenDue = null;
     setChip('none');
+    setToReport(false);
     $('task-title').focus();
     $('task-form').scrollIntoView({ block: 'end' }); // フォームの下端（追加ボタン）まで見えるように
   }
@@ -250,7 +269,7 @@ const Tasks = (() => {
       $('task-form-status').textContent = 'やることを入力してください';
       return;
     }
-    if (!add(title.slice(0, 100), chosenDue)) { // 入力を残したまま知らせる
+    if (!add(title.slice(0, 100), chosenDue, toReport)) { // 入力を残したまま知らせる
       $('task-form-status').textContent = SAVE_FAILED;
       return;
     }
@@ -261,5 +280,22 @@ const Tasks = (() => {
   onShow('tasks', render);
   render();
 
-  return { load, dueInfo, sortOpen, tidy, render };
+  // 今日まで（期限切れを含む）の未完了のタスクの数と、それを明日に回す（仕事終わりの提案。D-059）
+  function dueLeft(now = new Date()) {
+    const today = todayKey(now);
+    return load().filter((t) => !t.done && t.due && t.due <= today).length;
+  }
+  function postponeToTomorrow(now = new Date()) {
+    const today = todayKey(now);
+    const tomorrow = dateStr(addDays(logicalDay(now), 1));
+    const list = load();
+    let n = 0;
+    for (const t of list) {
+      if (!t.done && t.due && t.due <= today) { t.due = tomorrow; t.updatedAt = Date.now(); n++; }
+    }
+    if (n && !save(list)) return -1;
+    render(now);
+    return n;
+  }
+  return { load, dueInfo, sortOpen, tidy, render, dueLeft, postponeToTomorrow };
 })();

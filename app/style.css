@@ -61,6 +61,7 @@
   --dur-quick: 180ms;      /* 押したあとの小さな反応 */
   --size-dialog: 320px;    /* 確認ダイアログの最大幅 */
   --size-cal-cell: 76px;   /* 月表示の1マスの高さ（日付＋タグ2つ＋「+n」） */
+  --size-mini-emblem: 40px; /* 各画面の一言の面に添える紋章（D-059） */
 
   /* 効果・動き */
   --blur-dialogue: 6px;
@@ -364,7 +365,20 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
 .cut-btn.chip[aria-pressed="true"], .cut-btn.chip[role="switch"][aria-checked="true"] { --btn-line: var(--color-text); --btn-fill: var(--color-surface-2); font-weight: 700; }
 
 /* 画面の中の小さなセリフ（空の状態など。C1-01） */
-.dialogue.dialogue-mini { margin: var(--space-3) 0; padding-bottom: var(--space-3); }
+/* 各画面の一言の面（D-059）：左に小さな紋章を添え、地はカードと同じ半透明の面にして画面になじませる。
+   見出しの金の線のすぐ下に寄せ、上辺の金の細線でつなぐ。立ち絵が入ったら、紋章を顔の小さな絵に差し替えられる（--mini-face） */
+.dialogue.dialogue-mini {
+  --mini-face: url("img/mini-emblem.svg");
+  display: grid; grid-template-columns: var(--size-mini-emblem) minmax(0, 1fr); column-gap: var(--space-3); align-items: start;
+  margin: var(--space-2) 0 var(--space-3); padding-bottom: var(--space-3);
+  background: linear-gradient(var(--dlg-top), var(--dlg-top)) top left / 100% 1px no-repeat, var(--color-card);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.dialogue.dialogue-mini::before {
+  content: ""; grid-row: 1 / span 3; width: var(--size-mini-emblem); height: var(--size-mini-emblem); margin-top: var(--space-1);
+  background: var(--mini-face) center / contain no-repeat;
+}
+.dialogue.dialogue-mini > * { grid-column: 2; }
 .dialogue.dialogue-mini .line { min-height: 0; }
 
 /* ---------- タスク（D-026 ①） ---------- */
@@ -618,6 +632,13 @@ body:not(.calendar-on) #event-add { display: none; }
 /* 予定の行の「直す」（鉛筆）。ごみ箱と同じ大きさ */
 .event-edit { flex: none; width: var(--tap); min-height: var(--tap); margin: 0; padding: 0; background: transparent; color: var(--color-text-tertiary); border-radius: 0; }
 .event-edit svg { width: var(--size-icon); height: var(--size-icon); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 仕事終わりの提案の選択肢（D-059）。金は使わない（ホームの主ボタンは記録の1つだけ） */
+.bubble-choices { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
+.bubble-choices .cut-btn { flex: 1; }
+
+/* タスクの「完了したら日報に入れる」（D-059） */
+.task-report-row { margin-top: var(--space-2); }
 
 /* ---------- 設定の切り替え（D-047） ---------- */
 .pref-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }

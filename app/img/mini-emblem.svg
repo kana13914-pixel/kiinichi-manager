@@ -1,0 +1,9 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48' fill='none' stroke-linecap='round' stroke-linejoin='round'>
+<!-- 各画面の一言の面に添える小さな紋章（D-059）。ホームの紋章（canopy-emblem.svg）の太陽の輪と花を、小さくても見える線の太さで描き直したもの -->
+<g stroke='#e8c45c'>
+<circle cx='24' cy='24' r='14' stroke-opacity='.75' stroke-width='1.4'/>
+<g stroke-opacity='.6' stroke-width='1.4'><line x1='41.0' y1='24.0' x2='45.0' y2='24.0'/><line x1='36.0' y1='36.0' x2='38.8' y2='38.8'/><line x1='24.0' y1='41.0' x2='24.0' y2='45.0'/><line x1='12.0' y1='36.0' x2='9.2' y2='38.8'/><line x1='7.0' y1='24.0' x2='3.0' y2='24.0'/><line x1='12.0' y1='12.0' x2='9.2' y2='9.2'/><line x1='24.0' y1='7.0' x2='24.0' y2='3.0'/><line x1='36.0' y1='12.0' x2='38.8' y2='9.2'/></g>
+<g stroke-opacity='.95' stroke-width='1.5'><path d='M24 13 C28 17 28 20 24 23 C20 20 20 17 24 13Z' transform='rotate(0 24 24)'/><path d='M24 13 C28 17 28 20 24 23 C20 20 20 17 24 13Z' transform='rotate(90 24 24)'/><path d='M24 13 C28 17 28 20 24 23 C20 20 20 17 24 13Z' transform='rotate(180 24 24)'/><path d='M24 13 C28 17 28 20 24 23 C20 20 20 17 24 13Z' transform='rotate(270 24 24)'/></g>
+</g>
+<circle cx='24' cy='24' r='1.6' fill='#b9e35f'/>
+</svg>

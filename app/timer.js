@@ -122,6 +122,7 @@ const Timer = (() => {
     toast.hide();
     reserve(state.running);
     render();
+    say.react('timer_start.default', { min: minutes }); // 区切りのよい操作への短い反応（D-059）
   }
   function stop() {
     const state = load();

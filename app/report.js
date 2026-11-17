@@ -193,6 +193,44 @@ const Report = (() => {
 
   $('report-more').addEventListener('click', () => { historyShown += HISTORY_STEP; renderHistory(); });
 
+  // ---------- 完了したタスクを「できたこと」に入れる・外す（D-059。tasks.js から呼ぶ） ----------
+  // 完了した日（朝4時区切り）の日報に「・名前」を1行足す。日報がなければ作る（保存済みにする）。
+  // 書きかけがあれば書きかけにも、その日の入力欄を開いていれば入力欄にも同じ行を足す
+  function changeDone(at, fn) {
+    const key = todayKey(at);
+    const all = load();
+    const r = all[key] || { mood: null, done: '', left: '', tomorrow: '' };
+    const next = { ...r, done: fn(r.done || '') };
+    if (hasContent(next)) all[key] = { ...next, savedAt: r.savedAt || Date.now() };
+    else delete all[key]; // タスクの行だけだった日報から、その行を外したら空になった
+    if (!save(all)) return false;
+    const d = loadDraft();
+    if (d && d.date === key) Store.write(DRAFT_KEY, { ...d, done: fn(d.done || '') });
+    if (shownDate === key) {
+      $('report-done').value = fn($('report-done').value);
+      if (all[key]) {
+        $('report-save').textContent = '更新する';
+        if (!d || d.date !== key) { $('report-status').textContent = `保存済み（${hm(new Date(all[key].savedAt))}）`; $('report-status').className = 'status'; }
+      }
+    }
+    renderHistory();
+    return true;
+  }
+  const doneLine = (title) => `・${title}`;
+  function addDone(title, at = new Date()) {
+    const line = doneLine(title);
+    return changeDone(at, (text) => (text ? `${text}\n${line}` : line));
+  }
+  function removeDone(title, at = new Date()) {
+    const line = doneLine(title);
+    return changeDone(at, (text) => {
+      const lines = text.split('\n');
+      const i = lines.lastIndexOf(line);
+      if (i >= 0) lines.splice(i, 1);
+      return lines.join('\n');
+    });
+  }
+
   // ---------- 先週のひとこと（D-058） ----------
   // 週は月曜はじまり（日付は朝4時区切り）。週が明けたら、先週の日報が3日分以上あれば、送信サーバー経由で Claude に1回だけ書いてもらう
   const WEEKLY_MIN_REPORTS = 3;
@@ -276,5 +314,5 @@ const Report = (() => {
   onShow('report', () => render());
   render();
 
-  return { load, reportDate, render, lastWeek, weekSummary };
+  return { load, reportDate, render, lastWeek, weekSummary, addDone, removeDone };
 })();

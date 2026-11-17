@@ -1544,7 +1544,7 @@ class PwaTest(unittest.TestCase):
         page = self.timer_page()
         self.assertEqual(self.visible_says(page, "timer"), ["時間を区切るなら、ここで計れ。"])
         page.click("#timer-list li[data-id=brush] .task-main")
-        page.wait_for_function("document.getElementById('timer-say-line').textContent === '計っている。そのまま続けろ。'", timeout=3_000)
+        page.wait_for_function("['始めたな。3分たったら知らせる。', '時間はこっちで見ておく。'].includes(document.getElementById('timer-say-line').textContent)", timeout=3_000)  # 始めたときの反応（D-059）
         self.assertEqual(len(self.visible_says(page, "timer")), 1)
         page.clock.run_for(3 * 60_000 + 500)  # 終了：終了のセリフだけ（一言は1画面に1つ。C10-02）
         self.assertEqual(self.visible_says(page, "timer"), ["時間だ。口をゆすげ。"])
@@ -2376,6 +2376,87 @@ class PwaTest(unittest.TestCase):
         page.wait_for_function("dialogue !== null")
         self.assertEqual(page.text_content("#bubble-text"), "「歯医者」まであと30分だ。準備しておけ。")
         self.assertNotIn("title=", page.url)
+
+    # ---------- 完了したタスクを日報へ・仕事終わりの提案・操作への反応・一言の面の紋章（D-059） ----------
+    def test_task_to_report_on_complete_and_undo(self):
+        page = self.tasks_page(hour=10)
+        page.click("#task-add-open")
+        self.assertEqual(page.get_attribute("#task-report", "aria-checked"), "false")  # 作るたびにオフから
+        page.fill("#task-title", "見積もりを送る")
+        page.click("#task-report")
+        page.click("#task-submit")
+        self.assertIn("完了したら日報へ", page.text_content("#task-list"))
+        self.assertTrue(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["toReport"])
+        page.click("#task-list .task-main")
+        page.wait_for_selector("#done-list li", state="attached", timeout=3_000)
+        self.assertIn("日報に入れました", page.text_content("#task-toast"))
+        r = json.loads(page.evaluate("localStorage.getItem('db.reports')"))["2026-11-09"]
+        self.assertEqual(r["done"], "・見積もりを送る")
+        self.assertTrue(r["savedAt"])
+        page.click("#task-toast .undo")  # 取り消すと日報からも外す（ほかに何もなければ日報ごと消える）
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.reports')")), {})
+        # 日報に書いてある日：その下に足す。入力欄にも出る
+        page.evaluate("location.hash = '#report'")
+        page.fill("#report-done", "会議")
+        page.click("#report-save")
+        page.evaluate("location.hash = '#tasks'")
+        page.click("#task-list .task-main")
+        page.wait_for_selector("#done-list li", state="attached", timeout=3_000)
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.reports')"))["2026-11-09"]["done"], "会議\n・見積もりを送る")
+        page.evaluate("location.hash = '#report'")
+        self.assertEqual(page.input_value("#report-done"), "会議\n・見積もりを送る")
+        page.evaluate("location.hash = '#tasks'")
+        page.click("#done-section summary")
+        page.click("#done-list .task-main")  # 未完了に戻すと外す
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.reports')"))["2026-11-09"]["done"], "会議")
+
+    def test_task_without_report_switch_does_not_touch_report(self):
+        tasks = [{"id": "a", "title": "洗濯", "due": None, "done": False, "createdAt": 1}]
+        page = self.tasks_page(tasks=tasks)
+        page.click("#task-list .task-main")
+        page.wait_for_selector("#done-list li", state="attached", timeout=3_000)
+        self.assertIsNone(page.evaluate("localStorage.getItem('db.reports')"))
+        # 完了の反応（D-059）
+        self.assertIn(page.text_content("#tasks-say-line"), ["今は抱えているものはないな。", "やることが出てきたら、ここに書いておけ。"])  # 0件になったら空の一言
+        tasks = [{"id": "a", "title": "洗濯", "due": None, "done": False, "createdAt": 1}, {"id": "b", "title": "掃除", "due": None, "done": False, "createdAt": 2}]
+        page = self.tasks_page(tasks=tasks)
+        page.click("#task-list li[data-id=a] .task-main")
+        page.wait_for_selector("#done-list li", state="attached", timeout=3_000)
+        self.assertIn(page.text_content("#tasks-say-line"), ["片づいたな。次に移れ。", "一つ減ったな。"])
+
+    def test_work_end_offers_to_postpone_due_tasks(self):
+        tasks = [{"id": "a", "title": "見積もり", "due": "2026-11-09", "done": False, "createdAt": 1},
+                 {"id": "b", "title": "請求書", "due": "2026-11-05", "done": False, "createdAt": 2},
+                 {"id": "c", "title": "読書", "due": None, "done": False, "createdAt": 3}]
+        init = "localStorage.setItem('db.tasks', %s)" % json.dumps(json.dumps(tasks))
+        page = self.clock_page(18, 40, init_script=init)
+        self.assertTrue(page.is_hidden("#bubble-choices"))
+        page.click(".act[data-record=work_end]")
+        self.assertEqual(page.text_content("#bubble-text"), "今日までのものが2件残っている。明日に回すかどうかは、自分で決めろ。")
+        self.assertTrue(page.is_visible("#bubble-choices"))
+        self.assertEqual(self.primaries(page), ["dinner"])  # 金の塗りは記録の1つだけ（選択肢は塗らない）
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollHeight"), page.evaluate("innerHeight"))  # ホームはスクロールしない
+        page.click("#choice-postpone")
+        self.assertEqual(page.text_content("#bubble-text"), "明日に回した。今日はここまでだ。")
+        self.assertTrue(page.is_hidden("#bubble-choices"))
+        due = {t["id"]: t["due"] for t in json.loads(page.evaluate("localStorage.getItem('db.tasks')"))}
+        self.assertEqual(due, {"a": "2026-11-10", "b": "2026-11-10", "c": None})
+        # 「このまま」・残りがない日は聞かない
+        page = self.clock_page(18, 40, init_script=init)
+        page.click(".act[data-record=work_end]")
+        page.click("#choice-keep")
+        self.assertEqual(page.text_content("#bubble-text"), "わかった。無理のない分だけでいい。")
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["due"], "2026-11-09")
+        page = self.clock_page(18, 40)
+        page.click(".act[data-record=work_end]")
+        self.assertTrue(page.is_hidden("#bubble-choices"))
+        self.assertEqual(page.text_content("#bubble-text"), "今日の仕事はここまでだ。切り替えろ。")
+
+    def test_mini_dialogue_has_small_emblem(self):
+        page = self.timer_page()
+        bg = page.eval_on_selector("#timer-say", "e => [getComputedStyle(e, '::before').backgroundImage, getComputedStyle(e, '::before').width]")
+        self.assertIn("mini-emblem.svg", bg[0])
+        self.assertEqual(bg[1], "40px")
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")

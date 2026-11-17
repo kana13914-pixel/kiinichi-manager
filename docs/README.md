@@ -71,7 +71,7 @@
 | `app/manifest.webmanifest` | ホーム画面に追加したときの名前・色・アイコン |
 | `app/send.html`, `app/send.js` | 検証用の送信ページ（ntfy と Web Push） |
 | `app/data/dialogue.json` | セリフ集（`data/dialogue_template.yaml` から生成。直接編集しない） |
-| `app/img/` | 装飾の SVG（紋章・吊り線・段々の帯・粒）。立ち絵を置く場所（`portrait.webp`） |
+| `app/img/` | 装飾の SVG（紋章・吊り線・段々の帯・粒、各画面の一言の面の小さな紋章 `mini-emblem.svg`：D-059）。立ち絵を置く場所（`portrait.webp`） |
 | `app/icons/` | アプリのアイコン |
 
 ## その他のフォルダ
