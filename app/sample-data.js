@@ -27,9 +27,13 @@ const SampleData = (() => {
     const d = date.getDate();
     const day = startOfDay(date);
     const list = [...Routine.eventsFor(addDays(day, -1)), ...Routine.eventsFor(day)].filter((e) => dateStr(e.at) === dateStr(day));
-    for (const m of monthly) {
-      if (d < m.day || d >= m.day + (m.days || 1)) continue;
-      list.push({ at: timeOn(date, m.time || '00:00'), title: m.title, kind: 'event', allDay: !m.time });
+    if (Calendar.ready()) {
+      list.push(...Calendar.eventsOn(date)); // Google カレンダーの予定（D-053）
+    } else {
+      for (const m of monthly) { // カレンダーをつなぐまでは仮の予定
+        if (d < m.day || d >= m.day + (m.days || 1)) continue;
+        list.push({ at: timeOn(date, m.time || '00:00'), title: m.title, kind: 'event', allDay: !m.time });
+      }
     }
     return list.sort((a, b) => (a.allDay !== b.allDay ? (a.allDay ? -1 : 1) : a.at - b.at));
   }

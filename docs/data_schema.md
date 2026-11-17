@@ -47,6 +47,7 @@
 | `db.reportDraft` | 日報の書きかけ（D-033） |
 | `db.prefs` | 端末ごとの好み。`screenLines`（キィニチの一言を出すか。既定 true。D-047）、`voice`（声掛けの通知。既定 true。D-049） |
 | `db.sync` | `{ url, token, lastAt, lastSig, dirty, error }` スプレッドシートへの控えの送り先・合言葉・最後に送った時点・まだ送っていない変更があるか（D-050） |
+| `db.calendar` | `{ fetchedAt, from, to, events: [ { title, start, end, allDay } ], error }` Google カレンダーの予定の控え（D-053。読むだけ。同期しない）。`db.calendarError` は一度も取れていないときの理由 |
 | `db.notify` | `{ キー: { at, body } }` 送信サーバーに予約した声掛け（D-049）。変わったものだけ送り直すための控え |
 | `db.timer` の `running`・`done`・`cancelPending` | 動いているタイマー、終わったタイマー、届いていない取り消し（D-028, D-033） |
 | `schedule.view` | 予定画面の表示（リスト／月） |
@@ -57,7 +58,6 @@
 ## これから足すもの（決まったら上の表に移す）
 
 - 同期のための印：タスクを消したことを伝える印（`deletedAt`）、最後に同期した時点。スプレッドシート同期を作るときに決める。
-- 予定（Google カレンダーから読んだものの控え）。カレンダー連携を作るときに決める。
 
 ## 版の履歴
 

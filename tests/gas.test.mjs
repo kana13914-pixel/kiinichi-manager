@@ -75,3 +75,27 @@ test('毎日の時刻・タイマー・同期の控えは書き直す', () => {
   assert.deepEqual(JSON.parse(JSON.stringify(g.rows('タイマー'))), [['作業', '50', '用途別（初めは25分）']]);
   assert.deepEqual(JSON.parse(JSON.stringify(g.rows('同期'))), [['最後に受け取った日時', '2026-11-17 10:00'], ['アプリの版', 'phase2-v7']]);
 });
+
+test('カレンダーの予定を読む（読むだけ。合言葉が必要、範囲は130日まで、CALENDAR_IDS があればそのカレンダー）', () => {
+  const ev = (title, s, e, allDay = false) => ({ getTitle: () => title, getStartTime: () => new Date(s), getEndTime: () => new Date(e), isAllDayEvent: () => allDay });
+  const asked = [];
+  const cal = (name, list) => ({ getEvents: (from, to) => { asked.push([name, from.getTime(), to.getTime()]); return list; } });
+  const g = loadGas();
+  g.ctx.CalendarApp = {
+    getDefaultCalendar: () => cal('default', [ev('歯医者', 1000, 2000), ev('旅行', 0, 86400000, true)]),
+    getCalendarById: (id) => (id === 'work@example.com' ? cal('work', [ev('会議', 3000, 4000)]) : null),
+  };
+  const day = 86400000;
+  const r = g.post({ token: 'sync-secret', action: 'events', from: 0, to: 40 * day });
+  assert.deepEqual(JSON.parse(JSON.stringify(r)), { ok: true, events: [
+    { title: '歯医者', start: 1000, end: 2000, allDay: false }, { title: '旅行', start: 0, end: day, allDay: true }] });
+  assert.deepEqual(asked, [['default', 0, 40 * day]]);
+  assert.deepEqual(g.sheets, {}); // 読むだけ。シートには書かない
+  assert.match(g.post({ token: 'wrong', action: 'events', from: 0, to: day }).error, /合言葉/);
+  assert.match(g.post({ token: 'sync-secret', action: 'events', from: 0, to: 200 * day }).error, /範囲/);
+  // CALENDAR_IDS
+  const g2 = loadGas();
+  g2.ctx.PropertiesService = { getScriptProperties: () => ({ getProperty: (k) => ({ SYNC_TOKEN: 'sync-secret', CALENDAR_IDS: 'work@example.com, nothing' }[k] || null) }) };
+  g2.ctx.CalendarApp = g.ctx.CalendarApp;
+  assert.deepEqual(g2.post({ token: 'sync-secret', action: 'events', from: 0, to: day }).events.map((e) => e.title), ['会議']);
+});

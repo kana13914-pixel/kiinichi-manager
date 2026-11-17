@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase2-v8';
+const APP_VERSION = 'phase2-v9';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -496,6 +496,26 @@ sheet.addEventListener('click', (e) => { if (e.target === e.currentTarget) sheet
 applyRecords();
 // 毎日の時刻を変えたら、ホームの記録ボタンと次の予定を決め直す
 window.addEventListener('routinechange', () => { applyRecords(); lastEventKey = ''; renderNextEvent(); });
+
+// ---------- Google カレンダー（D-053） ----------
+// 取れたら「仮」の印を消し、次の予定・予定画面を描き直す。仕様関連に状態を出す
+function applyCalendar() {
+  document.body.classList.toggle('calendar-on', Calendar.ready());
+  setText('calendar-status', Calendar.statusText());
+  const note = document.getElementById('calendar-note');
+  note.hidden = !Calendar.ready();
+  if (Calendar.ready()) {
+    const c = Store.read(DB.calendar);
+    note.textContent = `Google カレンダーの予定です（${hm(new Date(c.fetchedAt))} に取得）。生活の時刻は設定の「毎日の時刻」から出しています。`;
+  }
+}
+window.addEventListener('calendarchange', () => { applyCalendar(); lastEventKey = ''; renderNextEvent(); if (typeof Schedule !== 'undefined') Schedule.refresh(); });
+window.addEventListener('calendarstatus', applyCalendar);
+document.getElementById('calendar-now').addEventListener('click', () => {
+  setText('calendar-status', 'カレンダー：読んでいます…');
+  Calendar.refresh(true).then(applyCalendar);
+});
+applyCalendar();
 
 // ---------- 開いたときの判定し直し（P1-11, P1-12） ----------
 // ホーム画面のアプリは裏から再開されることが多い。表示に戻ったときに、セリフ・主ボタン・記録・時間帯を判定し直す

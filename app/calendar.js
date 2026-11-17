@@ -1,0 +1,84 @@
+// Google カレンダーの予定（D-053）。スプレッドシートへの控えと同じ GAS のウェブアプリ（gas/Code.gs）から、予定を読むだけ。
+// 送り先の URL と合言葉は「スプレッドシートへの控え」の設定（db.sync）を使う。取った予定は端末に控え（db.calendar）、
+// 開いたとき・表示に戻ったとき・予定画面を開いたときに、5分以上たっていれば取り直す（spec：反映の遅れは5分以内）。
+// 一度も取れていないあいだは、予定画面とホームは仮の予定（sample-data.js）を出す。util.js の後、sample-data.js の前に読み込む。
+
+const Calendar = (() => {
+  const REFRESH_MS = 5 * 60 * 1000;
+  // 取る範囲：先月の1日から、再来月の終わりまで（月表示で前後に動かしても見えるように）
+  function range(now = new Date()) {
+    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const to = new Date(now.getFullYear(), now.getMonth() + 3, 1);
+    return { from: from.getTime(), to: to.getTime() };
+  }
+  function cache() { const c = Store.read(DB.calendar); return c && Array.isArray(c.events) ? c : null; }
+  function conf() { const c = Store.read(DB.sync, {}); return c && typeof c === 'object' ? c : {}; }
+  // カレンダーの予定を出せるか（一度でも取れたか）
+  function ready() { return Boolean(cache()); }
+
+  // その暦日の予定（予定画面の kind 'event' の形）。終日は日をまたぐものも日ごとに出す（終わりの日は含まない）
+  function eventsOn(date) {
+    const c = cache();
+    if (!c) return [];
+    const start = startOfDay(date).getTime();
+    const end = addDays(startOfDay(date), 1).getTime();
+    const out = [];
+    for (const ev of c.events) {
+      if (ev.allDay) {
+        if (ev.start < end && ev.end > start) out.push({ at: new Date(start), title: ev.title, kind: 'event', allDay: true });
+      } else if (ev.start >= start && ev.start < end) {
+        out.push({ at: new Date(ev.start), title: ev.title, kind: 'event', allDay: false });
+      }
+    }
+    return out;
+  }
+
+  let fetching = null;
+  // 取り直す。force は時間をおかずに取る
+  function refresh(force = false) {
+    if (fetching) return fetching;
+    const s = conf();
+    if (!s.url || !s.token || !/^https:\/\//.test(s.url)) return Promise.resolve(false);
+    const c = cache();
+    if (!force && c && Date.now() - c.fetchedAt < REFRESH_MS) return Promise.resolve(true);
+    const r = range();
+    fetching = (async () => {
+      try {
+        // Content-Type を付けない（text/plain の単純な送信）。GAS が答えられない事前確認を避ける
+        const res = await fetch(s.url, { method: 'POST', body: JSON.stringify({ action: 'events', token: s.token, from: r.from, to: r.to }) });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.error || !Array.isArray(data.events)) throw new Error(data.error || 'HTTP ' + res.status);
+        const events = data.events.filter((e) => e && typeof e.title === 'string' && Number.isFinite(e.start) && Number.isFinite(e.end))
+          .map((e) => ({ title: e.title || '（名前なし）', start: e.start, end: e.end, allDay: e.allDay === true }));
+        Store.write(DB.calendar, { fetchedAt: Date.now(), from: r.from, to: r.to, events, error: '' });
+        window.dispatchEvent(new Event('calendarchange'));
+        return true;
+      } catch (e) {
+        const old = cache();
+        if (old) Store.write(DB.calendar, { ...old, error: e.message === 'Failed to fetch' ? '通信できません' : e.message });
+        else Store.write(DB.calendarError, e.message === 'Failed to fetch' ? '通信できません' : e.message);
+        window.dispatchEvent(new Event('calendarstatus'));
+        return false;
+      } finally {
+        fetching = null;
+      }
+    })();
+    return fetching;
+  }
+  // 設定の「仕様関連」に出す状態
+  function statusText() {
+    const s = conf();
+    if (!s.url || !s.token) return 'カレンダー：未設定（送り先の URL と合言葉を入れると読みます）';
+    const c = cache();
+    if (c && c.error) return `カレンダー：取れませんでした（${c.error}）。${hm(new Date(c.fetchedAt))} に取った分を出しています`;
+    if (c) return `カレンダー：${dateStr(new Date(c.fetchedAt))} ${hm(new Date(c.fetchedAt))} に取りました（${c.events.length}件）`;
+    const err = Store.read(DB.calendarError);
+    return err ? `カレンダー：取れませんでした（${err}）` : 'カレンダー：まだ取っていません';
+  }
+
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); });
+  window.addEventListener('hashchange', () => { if (location.hash === '#schedule' || location.hash === '#home' || location.hash === '') refresh(); });
+  setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 60 * 1000);
+  setTimeout(() => refresh(), 0);
+  return { ready, eventsOn, refresh, statusText, range };
+})();

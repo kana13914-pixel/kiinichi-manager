@@ -65,7 +65,7 @@
 
       <section class="next-strip" aria-label="次の予定">
         <div class="next-head">
-          <span class="next-label"><span class="label-en" aria-hidden="true">NEXT</span>次の予定 <small class="tag">仮</small></span>
+          <span class="next-label"><span class="label-en" aria-hidden="true">NEXT</span>次の予定 <small class="tag sample-tag">仮</small></span>
           <span id="next-rest" class="next-rest"></span>
         </div>
         <div id="next-event" class="next-event">-</div>
@@ -83,7 +83,7 @@
     <!-- 予定（D-026 ④, D-030, D-032）：見るだけ。リスト（今日から7日先まで）と月（マス目）を上のボタンで切り替える。
          フェーズ2までは仮データ。主な操作がないので金の塗りはない -->
     <section id="view-schedule" class="view schedule">
-      <h1><span class="label-en" aria-hidden="true">SCHEDULE</span>予定 <small class="tag">仮</small></h1>
+      <h1><span class="label-en" aria-hidden="true">SCHEDULE</span>予定 <small class="tag sample-tag">仮</small></h1>
 
       <!-- 予定の状況に合わせた一言（8日とも空・今日の残りあり・今日の分は過ぎた。Q-A, D-039） -->
       <section id="schedule-say" class="dialogue dialogue-mini" aria-label="キィニチのセリフ">
@@ -113,7 +113,8 @@
         <ul id="cal-day-list" class="schedule-list" aria-labelledby="cal-day-title"></ul>
       </div>
 
-      <p class="note schedule-note">仮の予定を表示しています。Google カレンダーとつなぐと、ここに実際の予定が出ます。</p>
+      <p id="calendar-note" class="note schedule-note" hidden></p>
+      <p class="note schedule-note sample-note">仮の予定を表示しています。Google カレンダーとつなぐと、ここに実際の予定が出ます。</p>
     </section>
 
     <section id="view-tasks" class="view tasks">
@@ -330,13 +331,15 @@
       </section>
       <section class="card">
         <h2>スプレッドシートへの控え</h2>
-        <p class="note">記録・日報・タスク・毎日の時刻・タイマーを、Google スプレッドシートに控えとして送ります（送るだけで、スプレッドシートの変更はアプリに戻りません）。用意のしかたは手順書にあります。</p>
+        <p class="note">記録・日報・タスク・毎日の時刻・タイマーを、Google スプレッドシートに控えとして送ります（送るだけで、スプレッドシートの変更はアプリに戻りません）。同じ送り先から Google カレンダーの予定を読み、予定画面に出します（読むだけ）。用意のしかたは手順書にあります。</p>
         <label for="sync-url" class="note">送り先の URL（https://script.google.com/…）</label>
         <input id="sync-url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" class="field">
         <label for="sync-token" class="note">合言葉</label>
         <input id="sync-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" class="field">
         <button id="sync-now" type="button" class="cut-btn quiet">今すぐ送る</button>
         <p id="sync-status" class="status" role="status">未設定</p>
+        <p id="calendar-status" class="status" role="status">-</p>
+        <button id="calendar-now" type="button" class="cut-btn quiet">カレンダーを今すぐ読む</button>
       </section>
     </section>
 
@@ -375,6 +378,7 @@
   <script src="dialogue.js"></script>
   <script src="ui.js"></script>
   <script src="routine.js"></script>
+  <script src="calendar.js"></script>
   <script src="sample-data.js"></script>
   <script src="settings.js"></script>
   <script src="app.js"></script>

@@ -2001,7 +2001,7 @@ class PwaTest(unittest.TestCase):
     # ---------- スプレッドシートへの控え（D-050） ----------
     GAS = "https://script.google.com/macros/s/fake/exec"
 
-    def sync_page(self, hour=10, configured=True, fail=None):
+    def sync_page(self, hour=10, configured=True, fail=None, events=None, reads=None, day=9):
         posts = []
         def handler(route):
             req = route.request
@@ -2009,7 +2009,17 @@ class PwaTest(unittest.TestCase):
                 posts.append(("OPTIONS", None))
                 route.fulfill(status=204)
                 return
-            posts.append((req.headers.get("content-type", ""), json.loads(req.post_data)))
+            body = json.loads(req.post_data)
+            if body.get("action") == "events":  # カレンダーを読む（D-053）。送る呼び出しとは別に数える
+                if reads is not None:
+                    reads.append(body)
+                if fail and fail["on"]:
+                    route.abort()
+                    return
+                route.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"},
+                              body=json.dumps({"ok": True, "events": events if events is not None else []}))
+                return
+            posts.append((req.headers.get("content-type", ""), body))
             if fail and fail["on"]:
                 route.abort()
             else:
@@ -2027,7 +2037,7 @@ class PwaTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         self.addCleanup(lambda: self.assertEqual(errors, [], "JSエラーが出ている"))
-        page.clock.install(time=datetime(2026, 11, 9, hour, 0, 0))
+        page.clock.install(time=datetime(2026, 11, day, hour, 0, 0))
         page.goto(self.base + "index.html?mode=standalone")
         page.wait_for_function("dialogue !== null", timeout=3_000)
         return page, posts
@@ -2105,6 +2115,64 @@ class PwaTest(unittest.TestCase):
         page.wait_for_selector("#view-settings", state="visible")
         h = page.eval_on_selector("#view-settings .sub-link", "e => e.getBoundingClientRect().height")
         self.assertGreaterEqual(h, 44)
+
+    # ---------- Google カレンダー（D-053） ----------
+    def ms(self, day, h=0, m=0, month=11):
+        return int(datetime(2026, month, day, h, m).timestamp() * 1000)
+
+    def test_calendar_events_replace_sample_events(self):
+        events = [{"title": "打ち合わせ", "start": self.ms(9, 14), "end": self.ms(9, 15), "allDay": False},
+                  {"title": "出張", "start": self.ms(11), "end": self.ms(13), "allDay": True}]
+        reads = []
+        page, posts = self.sync_page(events=events, reads=reads)
+        page.wait_for_function("document.body.classList.contains('calendar-on')", timeout=3_000)
+        self.assertEqual(reads[0]["token"], "sync-secret")
+        self.assertEqual([reads[0]["from"], reads[0]["to"]], [self.ms(1, month=10), int(datetime(2027, 2, 1).timestamp() * 1000)])  # 先月の1日〜再来月の終わり
+        self.assertEqual(page.text_content(".next-title"), "昼食")  # 10:00 の次。生活の時刻と混ざる
+        page.evaluate("location.hash = '#schedule'")
+        today = [r[:2] for r in self.schedule_rows(page, "2026-11-09")]
+        self.assertIn(["14:00", "打ち合わせ"], today)
+        self.assertEqual([r[:2] for r in self.schedule_rows(page, "2026-11-11")][0], ["終日", "出張"])
+        self.assertEqual([r[:2] for r in self.schedule_rows(page, "2026-11-12")][0], ["終日", "出張"])
+        self.assertNotIn("歯医者", page.text_content("#schedule-days"))  # 仮の予定は出さない
+        self.assertTrue(page.is_hidden("#view-schedule h1 .sample-tag"))
+        self.assertTrue(page.is_visible("#calendar-note"))
+        self.assertTrue(page.is_hidden("#view-schedule .sample-note"))
+        page.click("#schedule-mode-month")
+        tags = page.eval_on_selector_all(".cal-cell[data-date='2026-11-12'] .cal-tag", "els => els.map(e => e.textContent)")
+        self.assertEqual(tags, ["出張"])
+        page.evaluate("location.hash = '#system'")
+        self.assertIn("取りました（2件）", page.text_content("#calendar-status"))
+
+    def test_calendar_refresh_every_five_minutes_and_keeps_old_on_failure(self):
+        reads, fail = [], {"on": False}
+        events = [{"title": "打ち合わせ", "start": self.ms(9, 14), "end": self.ms(9, 15), "allDay": False}]
+        page, posts = self.sync_page(events=events, reads=reads, fail=fail)
+        page.wait_for_function("document.body.classList.contains('calendar-on')", timeout=3_000)
+        self.hide_and_return(page, 60_000)  # 5分たっていなければ取り直さない
+        page.wait_for_timeout(300)
+        self.assertEqual(len(reads), 1)
+        fail["on"] = True
+        page.clock.run_for(5 * 60_000 + 61_000)  # 開いている間も、5分ごとに取り直す
+        page.wait_for_function("JSON.parse(localStorage.getItem('db.calendar')).error", timeout=3_000)
+        self.assertEqual(len(reads), 2)
+        page.evaluate("location.hash = '#schedule'")
+        self.assertIn("打ち合わせ", page.text_content("#schedule-days"))  # 取れなくても前の分を出す
+        page.evaluate("location.hash = '#system'")
+        self.assertIn("取れませんでした", page.text_content("#calendar-status"))
+        fail["on"] = False
+        page.click("#calendar-now")
+        page.wait_for_function("document.getElementById('calendar-status').textContent.includes('取りました')", timeout=3_000)
+
+    def test_calendar_not_read_until_configured_and_sample_shown(self):
+        reads = []
+        page, posts = self.sync_page(configured=False, reads=reads)
+        page.wait_for_timeout(500)
+        self.assertEqual(reads, [])
+        self.assertFalse(page.evaluate("document.body.classList.contains('calendar-on')"))
+        self.assertTrue(page.is_visible(".next-label .sample-tag"))
+        page.evaluate("location.hash = '#system'")
+        self.assertIn("未設定", page.text_content("#calendar-status"))
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")

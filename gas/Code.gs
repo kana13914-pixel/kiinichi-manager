@@ -3,6 +3,8 @@
 // ・控え用のスプレッドシートの「拡張機能 → Apps Script」に、このファイルの中身を丸ごと貼り付けて使う（手順は docs/gas_setup.md）
 // ・スクリプト プロパティ SYNC_TOKEN … アプリの設定で入れる合言葉と同じ文字列。コードやリポジトリには書かない
 // ・ウェブアプリとしてデプロイし、その URL をアプリの設定に入れる
+// ・Google カレンダーの予定を読んでアプリに返す（action: 'events'。読むだけ。app/calendar.js。D-053）
+//   スクリプト プロパティ CALENDAR_IDS（任意）… 読むカレンダーの ID をカンマ区切り。なければ既定のカレンダー
 // ・アプリ（app/sync.js）が端末のデータを送ってくる。ここでは書き込むだけで、アプリへは返さない（端末が正本。D-004）
 //   消えないように：記録は届いた日付の分だけ入れ替える／日報は日付ごとに上書き／タスクは id ごとに上書きし、端末から消えたものは行を残して日時を付ける
 
@@ -25,6 +27,7 @@ function doPost(e) {
   var token = PropertiesService.getScriptProperties().getProperty('SYNC_TOKEN');
   if (!token) return out_({ error: 'スクリプト プロパティ SYNC_TOKEN が未設定です' });
   if (!p || typeof p.token !== 'string' || !same_(p.token, token)) return out_({ error: '合言葉が違います' });
+  if (p.action === 'events') return out_(events_(p.from, p.to));
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -74,6 +77,31 @@ function writeTasks_(ss, tasks, sentAt) {
   replace_(ss, SHEET.tasks, rows);
 }
 function taskRow_(t) { return [t.id, t.title, t.due, t.state, t.doneAt, t.createdAt, t.updatedAt, '']; }
+
+// カレンダーの予定を読む（読むだけ）。範囲は最大 130 日
+var MAX_RANGE_MS = 130 * 24 * 3600 * 1000;
+function events_(from, to) {
+  from = Number(from); to = Number(to);
+  if (!isFinite(from) || !isFinite(to) || to <= from || to - from > MAX_RANGE_MS) return { error: '読む範囲が正しくありません' };
+  var ids = String(PropertiesService.getScriptProperties().getProperty('CALENDAR_IDS') || '')
+    .split(',').map(function (x) { return x.trim(); }).filter(function (x) { return x; });
+  var cals = ids.length ? ids.map(function (id) { return CalendarApp.getCalendarById(id); }).filter(function (c) { return c; })
+    : [CalendarApp.getDefaultCalendar()];
+  var events = [];
+  cals.forEach(function (cal) {
+    cal.getEvents(new Date(from), new Date(to)).forEach(function (ev) {
+      events.push({ title: ev.getTitle(), start: ev.getStartTime().getTime(), end: ev.getEndTime().getTime(), allDay: ev.isAllDayEvent() });
+    });
+  });
+  return { ok: true, events: events };
+}
+
+// 初めて使うとき・コードを更新したときに、Apps Script の画面でこの関数を選んで「実行」し、カレンダーを読む許可を与える
+function checkCalendar() {
+  var now = Date.now();
+  var r = events_(now, now + 7 * 24 * 3600 * 1000);
+  Logger.log(r.error ? r.error : '今日から7日の予定：' + r.events.length + '件');
+}
 
 // ---------- 小道具 ----------
 function sheet_(ss, def) {

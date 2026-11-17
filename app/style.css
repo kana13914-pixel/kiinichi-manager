@@ -603,6 +603,9 @@ input:focus, textarea:focus { border-color: var(--color-accent); }
   margin-top: var(--space-5); padding: 0 var(--space-4); text-decoration: none; font-weight: 600;
 }
 
+/* カレンダーをつないだら「仮」の印と仮の予定の説明を消す（D-053） */
+body.calendar-on .sample-tag, body.calendar-on .sample-note { display: none; }
+
 /* ---------- 設定の切り替え（D-047） ---------- */
 .pref-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .pref-row .cut-btn { flex: none; min-width: calc(var(--tap) * 2); }
