@@ -1,4 +1,5 @@
-// Google カレンダーの予定（D-053）。スプレッドシートへの控えと同じ GAS のウェブアプリ（gas/Code.gs）から、予定を読むだけ。
+// Google カレンダーの予定（D-053, D-054）。スプレッドシートへの控えと同じ GAS のウェブアプリ（gas/Code.gs）から予定を読み、
+// 予定画面から足す・直す・消す（足すのは既定のカレンダー。繰り返しの予定と招待された予定は直せない）。
 // 送り先の URL と合言葉は「スプレッドシートへの控え」の設定（db.sync）を使う。取った予定は端末に控え（db.calendar）、
 // 開いたとき・表示に戻ったとき・予定画面を開いたときに、5分以上たっていれば取り直す（spec：反映の遅れは5分以内）。
 // 一度も取れていないあいだは、予定画面とホームは仮の予定（sample-data.js）を出す。util.js の後、sample-data.js の前に読み込む。
@@ -25,9 +26,9 @@ const Calendar = (() => {
     const out = [];
     for (const ev of c.events) {
       if (ev.allDay) {
-        if (ev.start < end && ev.end > start) out.push({ at: new Date(start), title: ev.title, kind: 'event', allDay: true });
+        if (ev.start < end && ev.end > start) out.push({ at: new Date(start), title: ev.title, kind: 'event', allDay: true, ref: ev });
       } else if (ev.start >= start && ev.start < end) {
-        out.push({ at: new Date(ev.start), title: ev.title, kind: 'event', allDay: false });
+        out.push({ at: new Date(ev.start), title: ev.title, kind: 'event', allDay: false, ref: ev });
       }
     }
     return out;
@@ -49,7 +50,8 @@ const Calendar = (() => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.error || !Array.isArray(data.events)) throw new Error(data.error || 'HTTP ' + res.status);
         const events = data.events.filter((e) => e && typeof e.title === 'string' && Number.isFinite(e.start) && Number.isFinite(e.end))
-          .map((e) => ({ title: e.title || '（名前なし）', start: e.start, end: e.end, allDay: e.allDay === true }));
+          .map((e) => ({ id: e.id || '', calendarId: e.calendarId || '', title: e.title || '（名前なし）', start: e.start, end: e.end,
+            allDay: e.allDay === true, editable: e.editable === true && Boolean(e.id) }));
         Store.write(DB.calendar, { fetchedAt: Date.now(), from: r.from, to: r.to, events, error: '' });
         window.dispatchEvent(new Event('calendarchange'));
         return true;
@@ -65,6 +67,22 @@ const Calendar = (() => {
     })();
     return fetching;
   }
+  // 予定を足す・直す・消す（D-054）。action は 'add' / 'update' / 'remove'。できたら読み直す。できなければ理由の文で例外
+  async function change(action, data) {
+    const s = conf();
+    if (!s.url || !s.token) throw new Error('スプレッドシートへの控えの送り先が未設定です（設定 → 仕様関連）');
+    let res;
+    try {
+      res = await fetch(s.url, { method: 'POST', body: JSON.stringify({ action, token: s.token, ...data }) });
+    } catch (_) {
+      throw new Error('通信できません。つながってから、もう一度押してください');
+    }
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || out.error || !out.ok) throw new Error(out.error || 'HTTP ' + res.status);
+    await refresh(true);
+    return out;
+  }
+
   // 設定の「仕様関連」に出す状態
   function statusText() {
     const s = conf();
@@ -80,5 +98,10 @@ const Calendar = (() => {
   window.addEventListener('hashchange', () => { if (location.hash === '#schedule' || location.hash === '#home' || location.hash === '') refresh(); });
   setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 60 * 1000);
   setTimeout(() => refresh(), 0);
-  return { ready, eventsOn, refresh, statusText, range };
+  // 今日（朝4時区切り）のこのあとの、時刻のある予定（予定の前の声掛け用）
+  function timedBetween(from, to) {
+    const c = cache();
+    return c ? c.events.filter((e) => !e.allDay && e.start >= from && e.start < to) : [];
+  }
+  return { ready, eventsOn, refresh, statusText, range, change, timedBetween };
 })();

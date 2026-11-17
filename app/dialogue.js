@@ -13,6 +13,11 @@ function candidates(key) {
 
 // "morning_wake.on_time" のようなキーからセリフを1つ選び、{ text, index } を返す
 // index が範囲内の整数ならその候補（通知の line 指定。C5-05）。それ以外は直前と違うものをランダムに（C1-02）
+// セリフの中の {title} などを差し込む（カレンダーの予定の名前など。D-054）
+function fillLine(text, vars = {}) {
+  return text.replace(/\{(\w+)\}/g, (m, k) => (vars[k] === undefined ? '' : String(vars[k])));
+}
+
 function pickLine(key, { index } = {}) {
   const lines = candidates(key);
   if (!lines) return null;

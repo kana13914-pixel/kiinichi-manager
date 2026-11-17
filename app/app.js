@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase2-v9';
+const APP_VERSION = 'phase2-v10';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -191,11 +191,11 @@ function applyPeriod(now = new Date()) {
 
 // ---------- セリフ（選び方は dialogue.js） ----------
 // セリフを表示する（声の再生は見送り。D-023）
-function showLine(key, { index } = {}) {
+function showLine(key, { index, vars, extra } = {}) {
   const picked = pickLine(key, { index });
   if (!picked) return false;
   const bubble = document.getElementById('bubble-text');
-  bubble.textContent = picked.text;
+  bubble.textContent = fillLine(picked.text, vars) + (extra || '');
   bubble.classList.remove('line-enter'); void bubble.offsetWidth; bubble.classList.add('line-enter'); // CR-M01：入りの動きをやり直す
   return true;
 }
@@ -226,7 +226,8 @@ function applyOpenParams(params, now = new Date()) {
   const trigger = params.get('trigger');
   const index = params.has('line') ? Number(params.get('line')) : undefined; // Number(null) は 0 になるため has を確かめる
   const fromPush = params.get('source') === 'webpush';
-  if (trigger && showLine(trigger, { index })) {
+  const vars = { title: params.get('title') || '' }; // 予定の前の声掛けは予定の名前を差し込む（D-054）
+  if (trigger && showLine(trigger, { index, vars })) {
     if (fromPush) startNotificationState(); else markPrimary(now);
     return;
   }
@@ -239,9 +240,10 @@ function applyOpenParams(params, now = new Date()) {
 // 残したままだと、再読み込みのたびに同じ通知のセリフと金の上辺が出直す（D-033）
 function clearOpenParams() {
   const params = new URLSearchParams(location.search);
-  if (!params.has('trigger') && !params.has('line') && params.get('source') !== 'webpush') return;
+  if (!params.has('trigger') && !params.has('line') && !params.has('title') && params.get('source') !== 'webpush') return;
   params.delete('trigger');
   params.delete('line');
+  params.delete('title');
   if (params.get('source') === 'webpush') params.delete('source');
   const query = params.toString();
   history.replaceState(null, '', location.pathname + (query ? '?' + query : '') + location.hash);
@@ -281,6 +283,17 @@ function plannedMinutes(now = new Date()) {
   const out = {};
   for (const [id] of ROUTINE_ITEMS) out[id] = routineMinutes(times[id]);
   return out;
+}
+// 起きたときに、今日のカレンダーの予定の数と最初の予定を添える（D-054。通知は増やさない）。予定がなければ添えない
+function todayPlansLine(now = new Date()) {
+  if (!Calendar.ready()) return '';
+  const day = logicalDay(now);
+  const plans = Calendar.eventsOn(day).sort((a, b) => (a.allDay !== b.allDay ? (a.allDay ? -1 : 1) : a.at - b.at));
+  if (!plans.length) return '';
+  const timed = plans.find((e) => !e.allDay);
+  const first = timed ? `${hm(timed.at)}の「${timed.title}」` : `終日の「${plans[0].title}」`;
+  const picked = pickLine('calendar_today.some');
+  return picked ? fillLine(picked.text, { n: plans.length, first }) : '';
 }
 // 起きたときの一言は、予定の起床時刻との差で分ける（spec：±15分以内は定刻）
 function wakeTrigger(now) {
@@ -420,7 +433,7 @@ function recordNow(kind) {
   const now = new Date();
   if (!Records.set(kind, now)) return false;
   if (document.body.classList.contains('from-notification')) endNotificationState(); // 記録に移ったら通知の強調は終える（D-020）
-  showLine(kind === 'wake' ? wakeTrigger(now) : kindOf(kind).trigger); // 反応のセリフ
+  showLine(kind === 'wake' ? wakeTrigger(now) : kindOf(kind).trigger, { extra: kind === 'wake' ? todayPlansLine(now) : '' }); // 反応のセリフ
   applyRecords(now);
   return true;
 }

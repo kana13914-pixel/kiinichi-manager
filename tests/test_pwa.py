@@ -2001,7 +2001,7 @@ class PwaTest(unittest.TestCase):
     # ---------- スプレッドシートへの控え（D-050） ----------
     GAS = "https://script.google.com/macros/s/fake/exec"
 
-    def sync_page(self, hour=10, configured=True, fail=None, events=None, reads=None, day=9):
+    def sync_page(self, hour=10, configured=True, fail=None, events=None, reads=None, day=9, writes=None, minute=0, voice=False):
         posts = []
         def handler(route):
             req = route.request
@@ -2019,12 +2019,30 @@ class PwaTest(unittest.TestCase):
                 route.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"},
                               body=json.dumps({"ok": True, "events": events if events is not None else []}))
                 return
+            if body.get("action") in ("add", "update", "remove"):  # 予定を足す・直す・消す（D-054）
+                if writes is not None:
+                    writes.append(body)
+                if fail and fail["on"]:
+                    route.abort()
+                    return
+                if events is not None and body["action"] == "add":
+                    events.append({"id": "new%d" % len(writes or []), "calendarId": "me", "title": body["title"], "start": body["start"], "end": body["end"], "allDay": body["allDay"], "editable": True})
+                elif events is not None and body["action"] == "update":
+                    for e in events:
+                        if e.get("id") == body["id"]:
+                            e.update(title=body["title"], start=body["start"], end=body["end"], allDay=body["allDay"])
+                elif events is not None:
+                    events[:] = [e for e in events if e.get("id") != body["id"]]
+                route.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"}, body='{"ok":true}')
+                return
             posts.append((req.headers.get("content-type", ""), body))
             if fail and fail["on"]:
                 route.abort()
             else:
                 route.fulfill(status=200, content_type="application/json", headers={"Access-Control-Allow-Origin": "*"}, body='{"ok":true}')
-        init = "localStorage.setItem('db.prefs', JSON.stringify({ voice: false }));"
+        init = "" if voice else "localStorage.setItem('db.prefs', JSON.stringify({ voice: false }));"
+        if voice:
+            init += "localStorage.setItem('phase0.appToken', 'tok-123');"
         if configured:
             init += "if (!localStorage.getItem('db.sync')) localStorage.setItem('db.sync', JSON.stringify({ url: %s, token: 'sync-secret' }));" % json.dumps(self.GAS)
         ctx = self.browser.new_context(permissions=["notifications"], viewport={"width": 393, "height": 852})
@@ -2037,7 +2055,19 @@ class PwaTest(unittest.TestCase):
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))
         self.addCleanup(lambda: self.assertEqual(errors, [], "JSエラーが出ている"))
-        page.clock.install(time=datetime(2026, 11, day, hour, 0, 0))
+        if voice:  # 声掛けの予約も送信サーバー（偽物）で受ける
+            self.voice_calls = []
+            def worker(route):
+                req = route.request
+                if req.method == "OPTIONS":
+                    route.fulfill(status=204, headers=self.CORS)
+                    return
+                path = req.url.split("/api/", 1)[1]
+                if path != "status":
+                    self.voice_calls.append((path, json.loads(req.post_data) if req.post_data else None))
+                route.fulfill(status=200, content_type="application/json", headers=self.CORS, body='{"ok":true,"subscribed":true,"queue":[]}')
+            ctx.route(self.WORKER + "/**", worker)
+        page.clock.install(time=datetime(2026, 11, day, hour, minute, 0))
         page.goto(self.base + "index.html?mode=standalone")
         page.wait_for_function("dialogue !== null", timeout=3_000)
         return page, posts
@@ -2173,6 +2203,91 @@ class PwaTest(unittest.TestCase):
         self.assertTrue(page.is_visible(".next-label .sample-tag"))
         page.evaluate("location.hash = '#system'")
         self.assertIn("未設定", page.text_content("#calendar-status"))
+
+    # ---------- カレンダーの続き（D-054） ----------
+    def test_event_add_edit_delete_from_schedule(self):
+        events, writes, reads = [{"id": "w1", "calendarId": "me", "title": "毎週の会議", "start": self.ms(9, 15), "end": self.ms(9, 16), "allDay": False, "editable": False}], [], []
+        page, posts = self.sync_page(events=events, writes=writes, reads=reads)
+        page.wait_for_function("document.body.classList.contains('calendar-on')", timeout=3_000)
+        page.evaluate("location.hash = '#schedule'")
+        self.assertTrue(page.is_visible("#event-add-open"))
+        self.assertEqual(page.query_selector_all(".event-edit"), [])  # 繰り返し・招待の予定は直せない
+        page.click("#event-add-open")
+        self.assertEqual(page.evaluate(self.GOLD_FILLS.replace("#view-timer", "#view-schedule")), ["event-save"])  # 金の塗りは「保存」だけ
+        self.assertEqual([page.input_value("#event-date"), page.input_value("#event-start"), page.input_value("#event-end")], ["2026-11-09", "11:00", "12:00"])
+        page.click("#event-save")
+        self.assertIn("名前", page.text_content("#event-form-status"))
+        page.fill("#event-title", "歯医者")
+        page.fill("#event-start", "17:30")
+        page.fill("#event-end", "18:00")
+        page.click("#event-save")
+        page.wait_for_selector("#event-form", state="hidden", timeout=3_000)
+        self.assertEqual({k: writes[0][k] for k in ("action", "title", "start", "end", "allDay")},
+                         {"action": "add", "title": "歯医者", "start": self.ms(9, 17, 30), "end": self.ms(9, 18), "allDay": False})
+        self.assertIn("「歯医者」を足しました", page.text_content("#event-status"))
+        self.assertIn(["17:30", "歯医者"], [r[:2] for r in self.schedule_rows(page, "2026-11-09")])  # 読み直して出る
+        # 直す：終日にする
+        page.click("#schedule-days .schedule-day[data-date='2026-11-09'] .event-edit")
+        self.assertEqual(page.text_content("#event-form-title"), "予定を直す")
+        self.assertEqual(page.input_value("#event-title"), "歯医者")
+        page.click("#event-allday")
+        self.assertTrue(page.is_hidden("#event-times"))
+        page.fill("#event-date", "2026-11-10")
+        page.click("#event-save")
+        page.wait_for_selector("#event-form", state="hidden", timeout=3_000)
+        self.assertEqual({k: writes[1][k] for k in ("action", "id", "start", "end", "allDay")},
+                         {"action": "update", "id": "new1", "start": self.ms(10), "end": self.ms(11), "allDay": True})
+        self.assertEqual([r[:2] for r in self.schedule_rows(page, "2026-11-10")][0], ["終日", "歯医者"])
+        # 消す：確認してから
+        page.click("#schedule-days .schedule-day[data-date='2026-11-10'] .event-edit")
+        page.click("#event-delete")
+        self.assertIn("消しますか", page.text_content("#confirm-text"))
+        page.click("#confirm-cancel")
+        self.assertEqual(len(writes), 2)
+        page.click("#event-delete")
+        page.click("#confirm-ok")
+        page.wait_for_selector("#event-form", state="hidden", timeout=3_000)
+        self.assertEqual({k: writes[2][k] for k in ("action", "id")}, {"action": "remove", "id": "new1"})
+        self.assertNotIn("歯医者", page.text_content("#schedule-days"))
+
+    def test_event_form_shows_error_when_offline_and_hidden_without_calendar(self):
+        fail, writes = {"on": False}, []
+        page, posts = self.sync_page(events=[], writes=writes, fail=fail)
+        page.wait_for_function("document.body.classList.contains('calendar-on')", timeout=3_000)
+        page.evaluate("location.hash = '#schedule'")
+        page.click("#event-add-open")
+        page.fill("#event-title", "買い出し")
+        fail["on"] = True
+        page.click("#event-save")
+        page.wait_for_function("document.getElementById('event-form-status').textContent.includes('通信できません')", timeout=3_000)
+        self.assertTrue(page.is_visible("#event-form"))  # 入力は残す
+        page2, _ = self.sync_page(configured=False)
+        page2.evaluate("location.hash = '#schedule'")
+        self.assertTrue(page2.is_hidden("#event-add-open"))  # カレンダーをつなぐまで出さない
+
+    def test_event_reminders_and_wake_line(self):
+        events = [{"id": "a", "calendarId": "me", "title": "歯医者", "start": self.ms(9, 17, 30), "end": self.ms(9, 18), "allDay": False, "editable": True},
+                  {"id": "b", "calendarId": "me", "title": "出張", "start": self.ms(9), "end": self.ms(10), "allDay": True, "editable": True},
+                  {"id": "c", "calendarId": "me", "title": "朝会", "start": self.ms(9, 7, 30), "end": self.ms(9, 8), "allDay": False, "editable": True}]
+        page, posts = self.sync_page(hour=7, minute=10, events=events, voice=True)
+        page.wait_for_function("document.body.classList.contains('calendar-on')", timeout=3_000)
+        page.clock.run_for(1500)
+        self.wait_calls(page, self.voice_calls, 5)
+        sched = {b["key"]: b for p, b in self.voice_calls if p == "schedule" and b["key"].startswith("event:")}
+        self.assertEqual(len(sched), 1)  # 終日の予定と、30分前を過ぎた朝会には掛けない
+        ev = list(sched.values())[0]
+        self.assertEqual(ev["at"], self.ms(9, 17))
+        self.assertEqual(ev["body"], "「歯医者」まであと30分だ。準備しておけ。")
+        self.assertIn("trigger=event_before.default", ev["url"])
+        self.assertIn("title=%E6%AD%AF%E5%8C%BB%E8%80%85", ev["url"])
+        # 起きたときに今日の予定を添える
+        page.click(".act[data-record=wake]")
+        self.assertTrue(page.text_content("#bubble-text").endswith("今日は予定が3件ある。最初は07:30の「朝会」だ。"))
+        # 通知から開くと予定の名前入りのセリフ
+        page.goto(self.base + "index.html?mode=standalone&source=webpush&trigger=event_before.default&line=0&title=" + "%E6%AD%AF%E5%8C%BB%E8%80%85")
+        page.wait_for_function("dialogue !== null")
+        self.assertEqual(page.text_content("#bubble-text"), "「歯医者」まであと30分だ。準備しておけ。")
+        self.assertNotIn("title=", page.url)
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")

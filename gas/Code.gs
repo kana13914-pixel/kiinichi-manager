@@ -3,7 +3,9 @@
 // ・控え用のスプレッドシートの「拡張機能 → Apps Script」に、このファイルの中身を丸ごと貼り付けて使う（手順は docs/gas_setup.md）
 // ・スクリプト プロパティ SYNC_TOKEN … アプリの設定で入れる合言葉と同じ文字列。コードやリポジトリには書かない
 // ・ウェブアプリとしてデプロイし、その URL をアプリの設定に入れる
-// ・Google カレンダーの予定を読んでアプリに返す（action: 'events'。読むだけ。app/calendar.js。D-053）
+// ・Google カレンダーの予定を読んでアプリに返す（action: 'events'。app/calendar.js。D-053）
+// ・アプリから予定を足す・直す・消す（action: 'add' / 'update' / 'remove'。足すのは既定のカレンダー。
+//   繰り返しの予定と、人から招待された予定は直さない・消さない。D-054）
 //   スクリプト プロパティ CALENDAR_IDS（任意）… 読むカレンダーの ID をカンマ区切り。なければ既定のカレンダー
 // ・アプリ（app/sync.js）が端末のデータを送ってくる。ここでは書き込むだけで、アプリへは返さない（端末が正本。D-004）
 //   消えないように：記録は届いた日付の分だけ入れ替える／日報は日付ごとに上書き／タスクは id ごとに上書きし、端末から消えたものは行を残して日時を付ける
@@ -28,6 +30,7 @@ function doPost(e) {
   if (!token) return out_({ error: 'スクリプト プロパティ SYNC_TOKEN が未設定です' });
   if (!p || typeof p.token !== 'string' || !same_(p.token, token)) return out_({ error: '合言葉が違います' });
   if (p.action === 'events') return out_(events_(p.from, p.to));
+  if (p.action === 'add' || p.action === 'update' || p.action === 'remove') return out_(changeEvent_(p));
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -89,18 +92,61 @@ function events_(from, to) {
     : [CalendarApp.getDefaultCalendar()];
   var events = [];
   cals.forEach(function (cal) {
-    cal.getEvents(new Date(from), new Date(to)).forEach(function (ev) {
-      events.push({ title: ev.getTitle(), start: ev.getStartTime().getTime(), end: ev.getEndTime().getTime(), allDay: ev.isAllDayEvent() });
-    });
+    cal.getEvents(new Date(from), new Date(to)).forEach(function (ev) { events.push(info_(ev, cal)); });
   });
   return { ok: true, events: events };
 }
+function info_(ev, cal) {
+  return { id: ev.getId(), calendarId: cal.getId(), title: ev.getTitle(), start: ev.getStartTime().getTime(),
+    end: ev.getEndTime().getTime(), allDay: ev.isAllDayEvent(), editable: editable_(ev) };
+}
+// アプリから直してよい予定か：繰り返しでない（1回分を直すつもりで全部が変わるのを防ぐ）、自分が作った（招待された予定は変えない）
+function editable_(ev) {
+  return !ev.isRecurringEvent() && (typeof ev.isOwnedByMe !== 'function' || ev.isOwnedByMe());
+}
 
-// 初めて使うとき・コードを更新したときに、Apps Script の画面でこの関数を選んで「実行」し、カレンダーを読む許可を与える
+// 予定を足す・直す・消す（D-054）
+var MAX_EVENT_MS = 31 * 24 * 3600 * 1000;
+function changeEvent_(p) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    if (p.action !== 'remove') {
+      var start = Number(p.start), end = Number(p.end);
+      if (typeof p.title !== 'string' || !p.title.trim() || p.title.length > 200) return { error: '予定の名前を入れてください（200字まで）' };
+      if (!isFinite(start) || !isFinite(end) || end <= start || end - start > MAX_EVENT_MS) return { error: '日時が正しくありません' };
+    }
+    if (p.action === 'add') {
+      var cal = CalendarApp.getDefaultCalendar();
+      var ev = p.allDay === true ? cal.createAllDayEvent(p.title.trim(), new Date(start), new Date(end))
+        : cal.createEvent(p.title.trim(), new Date(start), new Date(end));
+      return { ok: true, event: info_(ev, cal) };
+    }
+    var target = p.calendarId ? CalendarApp.getCalendarById(String(p.calendarId)) : CalendarApp.getDefaultCalendar();
+    var found = target && typeof p.id === 'string' ? target.getEventById(p.id) : null;
+    if (!found) return { error: '予定が見つかりません（Google カレンダーで消されたかもしれません）' };
+    if (!editable_(found)) return { error: 'この予定はアプリからは直せません（繰り返しの予定・招待された予定）。Google カレンダーで直してください' };
+    if (p.action === 'remove') {
+      found.deleteEvent();
+      return { ok: true };
+    }
+    found.setTitle(p.title.trim());
+    if (p.allDay === true) found.setAllDayDates(new Date(start), new Date(end)); else found.setTime(new Date(start), new Date(end));
+    return { ok: true, event: info_(found, target) };
+  } catch (err) {
+    return { error: 'カレンダーを変えられませんでした: ' + String(err && err.message || err).slice(0, 200) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// 初めて使うとき・コードを更新したときに、Apps Script の画面でこの関数を選んで「実行」し、カレンダーを使う許可を与える
+// （読むのと足す・直す・消すの許可。D-053, D-054。この関数自体は読むだけで、予定は変えない）
 function checkCalendar() {
   var now = Date.now();
   var r = events_(now, now + 7 * 24 * 3600 * 1000);
   Logger.log(r.error ? r.error : '今日から7日の予定：' + r.events.length + '件');
+  if (false) CalendarApp.getDefaultCalendar().createEvent('', new Date(), new Date()); // 足す許可も一緒に求める（実行はしない）
 }
 
 // ---------- 小道具 ----------

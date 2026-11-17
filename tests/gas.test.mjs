@@ -77,9 +77,9 @@ test('毎日の時刻・タイマー・同期の控えは書き直す', () => {
 });
 
 test('カレンダーの予定を読む（読むだけ。合言葉が必要、範囲は130日まで、CALENDAR_IDS があればそのカレンダー）', () => {
-  const ev = (title, s, e, allDay = false) => ({ getTitle: () => title, getStartTime: () => new Date(s), getEndTime: () => new Date(e), isAllDayEvent: () => allDay });
+  const ev = (title, s, e, allDay = false) => ({ getId: () => title + '@g', getTitle: () => title, getStartTime: () => new Date(s), getEndTime: () => new Date(e), isAllDayEvent: () => allDay, isRecurringEvent: () => false, isOwnedByMe: () => true });
   const asked = [];
-  const cal = (name, list) => ({ getEvents: (from, to) => { asked.push([name, from.getTime(), to.getTime()]); return list; } });
+  const cal = (name, list) => ({ getId: () => name, getEvents: (from, to) => { asked.push([name, from.getTime(), to.getTime()]); return list; } });
   const g = loadGas();
   g.ctx.CalendarApp = {
     getDefaultCalendar: () => cal('default', [ev('歯医者', 1000, 2000), ev('旅行', 0, 86400000, true)]),
@@ -88,7 +88,8 @@ test('カレンダーの予定を読む（読むだけ。合言葉が必要、�
   const day = 86400000;
   const r = g.post({ token: 'sync-secret', action: 'events', from: 0, to: 40 * day });
   assert.deepEqual(JSON.parse(JSON.stringify(r)), { ok: true, events: [
-    { title: '歯医者', start: 1000, end: 2000, allDay: false }, { title: '旅行', start: 0, end: day, allDay: true }] });
+    { id: '歯医者@g', calendarId: 'default', title: '歯医者', start: 1000, end: 2000, allDay: false, editable: true },
+    { id: '旅行@g', calendarId: 'default', title: '旅行', start: 0, end: day, allDay: true, editable: true }] });
   assert.deepEqual(asked, [['default', 0, 40 * day]]);
   assert.deepEqual(g.sheets, {}); // 読むだけ。シートには書かない
   assert.match(g.post({ token: 'wrong', action: 'events', from: 0, to: day }).error, /合言葉/);
@@ -98,4 +99,47 @@ test('カレンダーの予定を読む（読むだけ。合言葉が必要、�
   g2.ctx.PropertiesService = { getScriptProperties: () => ({ getProperty: (k) => ({ SYNC_TOKEN: 'sync-secret', CALENDAR_IDS: 'work@example.com, nothing' }[k] || null) }) };
   g2.ctx.CalendarApp = g.ctx.CalendarApp;
   assert.deepEqual(g2.post({ token: 'sync-secret', action: 'events', from: 0, to: day }).events.map((e) => e.title), ['会議']);
+});
+
+test('予定を足す・直す・消す（既定のカレンダー。繰り返し・招待された予定は変えない）', () => {
+  const store = {};
+  let n = 0;
+  const mk = (title, s, e, allDay, extra = {}) => {
+    const ev = { id: 'ev' + (++n), title, s, e, allDay, recurring: false, mine: true, deleted: false, ...extra };
+    store[ev.id] = ev;
+    return {
+      getId: () => ev.id, getTitle: () => ev.title, getStartTime: () => new Date(ev.s), getEndTime: () => new Date(ev.e),
+      isAllDayEvent: () => ev.allDay, isRecurringEvent: () => ev.recurring, isOwnedByMe: () => ev.mine,
+      setTitle: (t) => { ev.title = t; }, setTime: (a, b) => { ev.s = a.getTime(); ev.e = b.getTime(); ev.allDay = false; },
+      setAllDayDates: (a, b) => { ev.s = a.getTime(); ev.e = b.getTime(); ev.allDay = true; }, deleteEvent: () => { ev.deleted = true; },
+    };
+  };
+  const handles = {};
+  const cal = {
+    getId: () => 'me@example.com',
+    createEvent: (t, a, b) => { const h = mk(t, a.getTime(), b.getTime(), false); handles[h.getId()] = h; return h; },
+    createAllDayEvent: (t, a, b) => { const h = mk(t, a.getTime(), b.getTime(), true); handles[h.getId()] = h; return h; },
+    getEventById: (id) => handles[id] || null,
+  };
+  const g = loadGas();
+  g.ctx.CalendarApp = { getDefaultCalendar: () => cal, getCalendarById: (id) => (id === 'me@example.com' ? cal : null) };
+  const post = (b) => JSON.parse(JSON.stringify(g.post({ token: 'sync-secret', ...b })));
+  const a = post({ action: 'add', title: ' 歯医者 ', start: 1000, end: 2000, allDay: false });
+  assert.deepEqual(a.event, { id: 'ev1', calendarId: 'me@example.com', title: '歯医者', start: 1000, end: 2000, allDay: false, editable: true });
+  const b = post({ action: 'add', title: '旅行', start: 0, end: 2 * 86400000, allDay: true });
+  assert.equal(store[b.event.id].allDay, true);
+  assert.equal(post({ action: 'update', id: 'ev1', calendarId: 'me@example.com', title: '歯医者（変更）', start: 3000, end: 4000 }).event.title, '歯医者（変更）');
+  assert.deepEqual([store.ev1.s, store.ev1.e], [3000, 4000]);
+  assert.equal(post({ action: 'remove', id: 'ev1', calendarId: 'me@example.com' }).ok, true);
+  assert.equal(store.ev1.deleted, true);
+  // 入力の誤り・見つからない・繰り返し・招待
+  assert.match(post({ action: 'add', title: '', start: 1, end: 2 }).error, /名前/);
+  assert.match(post({ action: 'add', title: 'x', start: 2, end: 1 }).error, /日時/);
+  assert.match(post({ action: 'remove', id: 'nothing' }).error, /見つかりません/);
+  const r = cal.createEvent('毎週の会議', new Date(1), new Date(2)); store[r.getId()].recurring = true;
+  assert.match(post({ action: 'remove', id: r.getId() }).error, /直せません/);
+  assert.equal(store[r.getId()].deleted, false);
+  const i = cal.createEvent('招待', new Date(1), new Date(2)); store[i.getId()].mine = false;
+  assert.match(post({ action: 'update', id: i.getId(), title: 'x', start: 1, end: 2 }).error, /直せません/);
+  assert.match(g.post({ token: 'wrong', action: 'add', title: 'x', start: 1, end: 2 }).error, /合言葉/);
 });

@@ -4,6 +4,7 @@
 //   休憩   break:<日付>                 仕事開始（または最後の休憩）から90分後。仕事終わりの予定より前だけ
 //   夜     night:<日付>                 就寝の1時間前。夕食・入浴・歯磨きの残りの数でセリフを変える。残りがなければ送らない
 //   就寝前 sleep:<日付>                 就寝の予定時刻。就寝を記録したら取り消す
+//   予定   event:<日付>:<印>            カレンダーの時刻のある予定の30分前（D-054）。予定の名前を本文に差し込む
 // 通知の種類（tag）はキーの最初の「:」より前（worker.js）。同じ種類は新しい通知で置き換わる。
 // app.js（Records・plannedMinutes・repairPush）、routine.js、dialogue.js、settings.js の後に読み込む。
 
@@ -11,6 +12,7 @@ const Voice = (() => {
   const MEAL_AFTER = 30;   // 分
   const BREAK_AFTER = 90;  // 分
   const NIGHT_BEFORE = 60; // 分
+  const EVENT_BEFORE = 30; // 分
   const MIN_LEAD_MS = 60 * 1000; // これより近い時刻の予約は作らない（届くのが間に合わない）
   const MEALS = [['breakfast', '朝食'], ['lunch', '昼食'], ['dinner', '夕食']];
 
@@ -29,11 +31,18 @@ const Voice = (() => {
     const index = h % lines.length;
     return { text: lines[index], index, trigger };
   }
-  function item(key, at, trigger) {
+  function item(key, at, trigger, vars = null) {
     const line = lineFor(trigger, key);
     if (!line) return null;
-    const url = new URL(`index.html?source=webpush&trigger=${trigger}&line=${line.index}`, location.href).href;
-    return [key, { at, title: 'キィニチ', body: line.text, url }];
+    const extra = vars && vars.title ? `&title=${encodeURIComponent(vars.title)}` : '';
+    const url = new URL(`index.html?source=webpush&trigger=${trigger}&line=${line.index}${extra}`, location.href).href;
+    return [key, { at, title: 'キィニチ', body: fillLine(line.text, vars || {}), url }];
+  }
+  // 予定の印（キーに使える文字だけ。id がなければ名前と時刻から）
+  function mark(ev) {
+    let h = 0;
+    for (const c of `${ev.id}|${ev.title}|${ev.start}`) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return h.toString(36);
   }
 
   // 今日このあと送る通知 { キー: { at, title, body, url } }
@@ -59,6 +68,11 @@ const Voice = (() => {
       const left = ['dinner', 'bath', 'brush'].filter((id) => (id === 'brush' || planned[id] !== null) && st(id) === 'none').length;
       if (left > 0) add(item(`night:${date}`, atOf(now, planned.sleep - NIGHT_BEFORE), left >= 3 ? 'night_check.many_left' : 'night_check.some_left'));
       add(item(`sleep:${date}`, atOf(now, planned.sleep), 'before_sleep.default'));
+    }
+    // カレンダーの時刻のある予定（今日のこのあと。朝4時まで）の30分前（D-054）
+    const dayEnd = atOf(now, (24 + DAY_STARTS_AT) * 60);
+    for (const ev of Calendar.timedBetween(now.getTime(), dayEnd)) {
+      add(item(`event:${date}:${mark(ev)}`, ev.start - EVENT_BEFORE * 60000, 'event_before.default', { title: ev.title.slice(0, 60) }));
     }
     return out;
   }
@@ -102,6 +116,7 @@ const Voice = (() => {
   }
   window.addEventListener('recordschange', soon);
   window.addEventListener('routinechange', soon);
+  window.addEventListener('calendarchange', soon); // 予定が変わったら、予定の前の声掛けを付け替える
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') soon(); });
   dialogueReady.then(() => sync());
   return { plan, sync };

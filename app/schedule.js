@@ -1,4 +1,4 @@
-// 予定画面（D-026 ④, D-030, D-032）。見るだけ。表示は2つで、上のボタンで切り替える（選んだ表示は端末に覚える）。
+// 予定画面（D-026 ④, D-030, D-032）。Google カレンダーをつないでいれば、予定を足す・直す・消す（D-054）。表示は2つで、上のボタンで切り替える（選んだ表示は端末に覚える）。
 //   リスト … 今日から7日先まで（8日分）を日付ごとに区切って時刻順に並べる。過ぎた予定は薄く、次の予定に金の線と「あと何分」
 //   月     … マス目に日付を並べ、その日の予定（kind が event のもの）をタグで出す。マスを押すと下にその日の予定を出す
 // データはどちらも SampleData.eventsOn（フェーズ2で Google カレンダーに置き換える）だけを読む。
@@ -45,6 +45,15 @@ const Schedule = (() => {
       rest.className = 'schedule-rest';
       rest.textContent = `次 ・ ${restText(ev.at - now)}`;
       li.append(rest);
+    }
+    if (ev.ref && ev.ref.editable) { // カレンダーの予定は直せる（繰り返し・招待された予定は除く。D-054）
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'event-edit';
+      edit.setAttribute('aria-label', `「${ev.title}」を直す`);
+      edit.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg>';
+      edit.addEventListener('click', () => openForm(ev.ref));
+      li.append(edit);
     }
     return li;
   }
@@ -165,6 +174,104 @@ const Schedule = (() => {
     try { localStorage.setItem(MODE_KEY, mode); } catch (_) {}
     render(new Date(), true);
   }
+
+  // ---------- 予定を足す・直す・消す（D-054） ----------
+  let editing = null; // 直している予定（Calendar の控えの1件）。足すときは null
+  let allDay = false;
+  function setAllDay(on) {
+    allDay = on;
+    $('event-allday').setAttribute('aria-checked', String(on));
+    $('event-allday').textContent = on ? 'オン' : 'オフ';
+    $('event-times').hidden = on;
+  }
+  function openForm(ref = null) {
+    editing = ref;
+    const now = new Date();
+    $('event-form-title').textContent = ref ? '予定を直す' : '予定を足す';
+    $('event-delete').hidden = !ref;
+    $('event-form-status').textContent = '';
+    $('event-status').textContent = '';
+    if (ref) {
+      const st = new Date(ref.start);
+      const en = new Date(ref.end);
+      $('event-title').value = ref.title;
+      $('event-date').value = dateStr(st);
+      $('event-start').value = ref.allDay ? '' : hm(st);
+      $('event-end').value = ref.allDay ? '' : hm(en);
+      setAllDay(ref.allDay);
+    } else {
+      const day = mode === 'month' && selected ? selected : now;
+      const h = Math.min(22, now.getHours() + 1);
+      $('event-title').value = '';
+      $('event-date').value = dateStr(day);
+      $('event-start').value = `${pad(h)}:00`;
+      $('event-end').value = `${pad(h + 1)}:00`;
+      setAllDay(false);
+    }
+    $('event-add-open').hidden = true;
+    $('event-form').hidden = false;
+    $('event-title').focus();
+    $('event-form').scrollIntoView({ block: 'end' });
+  }
+  function closeForm() {
+    editing = null;
+    $('event-form').hidden = true;
+    $('event-add-open').hidden = false;
+  }
+  // 入力から始まりと終わり（ミリ秒）を作る。終わりが始まり以前なら翌日とみなす。終日は直す前の日数を保つ
+  function formTimes() {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test($('event-date').value)) return null;
+    const day = parseDay($('event-date').value);
+    if (allDay) {
+      const days = editing && editing.allDay ? Math.max(1, Math.round((editing.end - editing.start) / 86400000)) : 1;
+      return { start: day.getTime(), end: addDays(day, days).getTime() };
+    }
+    const [sh, sm] = ($('event-start').value || '').split(':').map(Number);
+    const [eh, em] = ($('event-end').value || '').split(':').map(Number);
+    if (![sh, sm, eh, em].every(Number.isFinite)) return null;
+    const start = new Date(day); start.setHours(sh, sm, 0, 0);
+    const end = new Date(day); end.setHours(eh, em, 0, 0);
+    if (end <= start) end.setDate(end.getDate() + 1);
+    return { start: start.getTime(), end: end.getTime() };
+  }
+  async function submit(action, data, done) {
+    $('event-save').disabled = true;
+    $('event-delete').disabled = true;
+    $('event-form-status').className = 'status';
+    $('event-form-status').textContent = '保存しています…';
+    try {
+      await Calendar.change(action, data);
+      closeForm();
+      $('event-status').textContent = done;
+      render(new Date(), true);
+    } catch (e) {
+      $('event-form-status').className = 'status ng';
+      $('event-form-status').textContent = e.message;
+    } finally {
+      $('event-save').disabled = false;
+      $('event-delete').disabled = false;
+    }
+  }
+  $('event-add-open').addEventListener('click', () => openForm());
+  $('event-cancel').addEventListener('click', closeForm);
+  $('event-allday').addEventListener('click', () => setAllDay(!allDay));
+  $('event-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const title = $('event-title').value.trim();
+    if (!title) { $('event-form-status').textContent = '予定の名前を入れてください'; return; }
+    const t = formTimes();
+    if (!t) { $('event-form-status').textContent = '日付と時刻を入れてください'; return; }
+    const data = { title: title.slice(0, 200), allDay, ...t };
+    if (editing) submit('update', { ...data, id: editing.id, calendarId: editing.calendarId }, `「${data.title}」を直しました`);
+    else submit('add', data, `「${data.title}」を足しました`);
+  });
+  $('event-delete').addEventListener('click', async () => {
+    if (!editing) return;
+    const target = editing;
+    if (!(await confirmDialog(`「${target.title}」を Google カレンダーから消しますか？`))) return;
+    editing = target;
+    submit('remove', { id: target.id, calendarId: target.calendarId }, `「${target.title}」を消しました`);
+  });
 
   $('schedule-mode-list').addEventListener('click', () => setMode('list'));
   $('schedule-mode-month').addEventListener('click', () => setMode('month'));
