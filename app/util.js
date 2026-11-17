@@ -55,7 +55,8 @@ const DB = {
   reports: 'db.reports',         // { 'YYYY-MM-DD': { mood, done, left, tomorrow, savedAt } }
   reportDraft: 'db.reportDraft', // { date, mood, done, left, tomorrow } … 保存前の書きかけ（この端末だけ）
   records: 'db.records',         // { 'YYYY-MM-DD': { wake: { time: '07:12', at: 1794190000000 }, … } } … 日付は朝4時区切り
-  timer: 'db.timer',             // { custom: [ { id, name, minutes } ], running, done, cancelPending }
+  timer: 'db.timer',             // { custom: [ { id, name, minutes } ], builtin, running, done, cancelPending }
+  prefs: 'db.prefs',             // { screenLines: true, … } … 端末ごとの好み（D-047）
 };
 const SCHEMA = 2;
 const MIGRATIONS = {
@@ -94,3 +95,16 @@ function migrateData() {
   return true;
 }
 migrateData();
+
+// ---------- 端末ごとの好み（D-047）。決まっていないものは既定値 ----------
+const PREF_DEFAULTS = { screenLines: true };
+const Prefs = {
+  get(name) {
+    const p = Store.read(DB.prefs, {});
+    return p && typeof p === 'object' && typeof p[name] === typeof PREF_DEFAULTS[name] ? p[name] : PREF_DEFAULTS[name];
+  },
+  set(name, value) {
+    const p = Store.read(DB.prefs, {});
+    return Store.write(DB.prefs, { ...(p && typeof p === 'object' ? p : {}), [name]: value });
+  },
+};

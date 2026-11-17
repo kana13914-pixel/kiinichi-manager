@@ -1809,6 +1809,32 @@ class PwaTest(unittest.TestCase):
             over = page.eval_on_selector_all(".act, #records-more", "els => els.filter(e => e.scrollWidth > e.clientWidth).map(e => e.textContent)")
             self.assertEqual(over, [], (h, m))
 
+    # ---------- キィニチの一言のオン・オフ（D-047） ----------
+    def test_screen_lines_can_be_turned_off(self):
+        page = self.timer_page()
+        self.assertEqual(len(self.visible_says(page, "timer")), 1)
+        page.evaluate("location.hash = '#settings'")
+        self.assertEqual([page.get_attribute("#pref-lines", "aria-checked"), page.text_content("#pref-lines")], ["true", "オン"])
+        page.click("#pref-lines")
+        self.assertEqual([page.get_attribute("#pref-lines", "aria-checked"), page.text_content("#pref-lines")], ["false", "オフ"])
+        page.reload()  # 覚えている
+        page.wait_for_function("dialogue !== null")
+        self.assertEqual(page.get_attribute("#pref-lines", "aria-checked"), "false")
+        for view in ("timer", "tasks", "schedule", "report"):
+            page.evaluate("v => location.hash = '#' + v", view)
+            self.assertEqual(self.visible_says(page, view), [], view)
+        page.evaluate("location.hash = '#report'")
+        page.fill("#report-done", "書いた")
+        page.click("#report-save")
+        page.wait_for_timeout(300)
+        self.assertEqual(self.visible_says(page, "report"), [])  # 保存したときの返事も出さない
+        page.evaluate("location.hash = '#home'")
+        self.assertTrue(page.is_visible("#bubble-text"))  # ホームのセリフはそのまま
+        page.evaluate("location.hash = '#settings'")
+        page.click("#pref-lines")
+        page.evaluate("location.hash = '#timer'")
+        self.assertEqual(len(self.visible_says(page, "timer")), 1)
+
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")
         import re

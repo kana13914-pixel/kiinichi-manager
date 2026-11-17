@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase2-v3';
+const APP_VERSION = 'phase2-v4';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -506,6 +506,24 @@ if ('serviceWorker' in navigator) {
   });
   if (navigator.serviceWorker.startMessages) navigator.serviceWorker.startMessages();
 }
+
+// ---------- 設定：キィニチの一言のオン・オフ（D-047） ----------
+// オフのときは、各機能画面の一言の面（dialogue-mini）を出さない。ホームのセリフと通知はそのまま
+function setSwitch(id, on) {
+  const b = document.getElementById(id);
+  b.setAttribute('aria-checked', String(on));
+  b.textContent = on ? 'オン' : 'オフ';
+}
+function applyScreenLines() {
+  const on = Prefs.get('screenLines');
+  document.body.classList.toggle('no-screen-lines', !on);
+  setSwitch('pref-lines', on);
+}
+document.getElementById('pref-lines').addEventListener('click', () => {
+  Prefs.set('screenLines', !Prefs.get('screenLines'));
+  applyScreenLines();
+});
+applyScreenLines();
 
 // Web Push：ボタン操作 → 通知許可 → 購読 → 送信サーバーに登録
 Settings.bind('app-token', 'appToken');

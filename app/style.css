@@ -361,7 +361,7 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
 .cut-btn.quiet { font-weight: 600; }
 .cut-btn:focus-visible { outline: none; --btn-line: var(--color-accent); } /* CR-S05 */
 .cut-btn.chip { width: auto; min-height: var(--tap); margin-top: 0; padding: 0 var(--space-4); font-size: var(--fs-subhead); }
-.cut-btn.chip[aria-pressed="true"] { --btn-line: var(--color-text); --btn-fill: var(--color-surface-2); font-weight: 700; }
+.cut-btn.chip[aria-pressed="true"], .cut-btn.chip[role="switch"][aria-checked="true"] { --btn-line: var(--color-text); --btn-fill: var(--color-surface-2); font-weight: 700; }
 
 /* 画面の中の小さなセリフ（空の状態など。C1-01） */
 .dialogue.dialogue-mini { margin: var(--space-3) 0; padding-bottom: var(--space-3); }
@@ -532,7 +532,7 @@ input:focus, textarea:focus { border-color: var(--color-accent); }
 /* 控えめなボタン・チップ：最奥の黒をやめ、面 1 段目に。選択中は白い縁＋太字、未選択は文字を一段弱く（CR-F02） */
 .cut-btn.quiet { --btn-fill: var(--color-surface-1); }
 .cut-btn.chip { color: var(--color-text-secondary); font-weight: 500; }
-.cut-btn.chip:not(.mood)[aria-pressed="true"] { color: var(--color-text); } /* 調子は金の文字のまま（D-031 ④） */
+.cut-btn.chip:not(.mood)[aria-pressed="true"], .cut-btn.chip[role="switch"][aria-checked="true"] { color: var(--color-text); } /* 調子は金の文字のまま（D-031 ④） */
 
 /* 表示の切り替え（リスト／月）：2 つのボタンではなく 1 本の切り替え（セグメント。CR-F03） */
 .schedule-modes {
@@ -587,6 +587,12 @@ input:focus, textarea:focus { border-color: var(--color-accent); }
   flex: none; width: var(--tap); min-height: var(--size-record); margin: 0; padding: 0;
   background: transparent; border-radius: 0; font-size: var(--fs-caption); font-weight: 400; color: var(--color-text-secondary);
 }
+
+/* ---------- 設定の切り替え（D-047） ---------- */
+.pref-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.pref-row .cut-btn { flex: none; min-width: calc(var(--tap) * 2); }
+/* キィニチの一言をオフにしたとき：各機能画面の一言の面を出さない（ホームのセリフは出す） */
+body.no-screen-lines .dialogue-mini { display: none; }
 
 /* ---------- ほかの記録（D-046）：画面の下から出る一覧。最奥の黒の面（確認ダイアログと同じ） ---------- */
 .sheet {
