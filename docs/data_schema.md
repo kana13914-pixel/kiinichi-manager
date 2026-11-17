@@ -45,7 +45,8 @@
 | --- | --- |
 | `db.meta` | `{ schema, migratedAt }` 形の版 |
 | `db.reportDraft` | 日報の書きかけ（D-033） |
-| `db.prefs` | 端末ごとの好み。`screenLines`（キィニチの一言を出すか。既定 true。D-047） |
+| `db.prefs` | 端末ごとの好み。`screenLines`（キィニチの一言を出すか。既定 true。D-047）、`voice`（声掛けの通知。既定 true。D-049） |
+| `db.notify` | `{ キー: { at, body } }` 送信サーバーに予約した声掛け（D-049）。変わったものだけ送り直すための控え |
 | `db.timer` の `running`・`done`・`cancelPending` | 動いているタイマー、終わったタイマー、届いていない取り消し（D-028, D-033） |
 | `schedule.view` | 予定画面の表示（リスト／月） |
 | `setup.done` | 初回の設定が済んだ印 |

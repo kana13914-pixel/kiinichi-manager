@@ -295,6 +295,14 @@
         <p id="routine-status" class="status" role="status"></p>
       </section>
       <section class="card">
+        <h2>声掛けの通知</h2>
+        <div class="pref-row">
+          <span id="pref-voice-label">アプリを閉じている間の声掛け</span>
+          <button id="pref-voice" type="button" class="cut-btn quiet chip" role="switch" aria-checked="true" aria-labelledby="pref-voice-label">オン</button>
+        </div>
+        <p class="note">毎日の時刻をもとに、食事の時刻を30分過ぎても記録がないとき、仕事中に休憩なしで90分たったとき、就寝の1時間前に夕食・入浴・歯磨きが残っているとき、就寝の時刻に、通知で声を掛けます。記録するか「今日はなし」にすると取り消します。タイマーの通知はこの設定と別です。</p>
+      </section>
+      <section class="card">
         <h2>キィニチの一言</h2>
         <div class="pref-row">
           <span id="pref-lines-label">タスク・タイマー・予定・日報の一言</span>
@@ -353,6 +361,7 @@
   <script src="sample-data.js"></script>
   <script src="settings.js"></script>
   <script src="app.js"></script>
+  <script src="notify.js"></script>
   <script src="tasks.js"></script>
   <script src="report.js"></script>
   <script src="timer.js"></script>

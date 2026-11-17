@@ -57,7 +57,8 @@ const DB = {
   records: 'db.records',         // { 'YYYY-MM-DD': { wake: { time: '07:12', at: 1794190000000 }, … } } … 日付は朝4時区切り
   timer: 'db.timer',             // { custom: [ { id, name, minutes } ], builtin, running, done, cancelPending }
   routine: 'db.routine',         // { weekday: { wake: '07:00', … }, holiday: { … }, holidays: [0, 6], updatedAt } … 毎日の時刻（D-048）
-  prefs: 'db.prefs',             // { screenLines: true, … } … 端末ごとの好み（D-047）
+  prefs: 'db.prefs',             // { screenLines: true, voice: true } … 端末ごとの好み（D-047, D-049）
+  notify: 'db.notify',           // { 予約したキー: { at, body } } … 送信サーバーに予約した声掛け（D-049。この端末だけ）
 };
 const SCHEMA = 2;
 const MIGRATIONS = {
@@ -98,7 +99,7 @@ function migrateData() {
 migrateData();
 
 // ---------- 端末ごとの好み（D-047）。決まっていないものは既定値 ----------
-const PREF_DEFAULTS = { screenLines: true };
+const PREF_DEFAULTS = { screenLines: true, voice: true };
 const Prefs = {
   get(name) {
     const p = Store.read(DB.prefs, {});

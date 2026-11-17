@@ -70,7 +70,7 @@ const Routine = {
   let mode = 'weekday';
   function changed(message) {
     $('routine-status').textContent = message;
-    window.dispatchEvent(new Event('routinechange')); // ホームの記録ボタン・予定・声掛けを決め直す
+    window.dispatchEvent(new Event('routinechange')); // ホームの記録ボタン・予定・声掛け（notify.js）を決め直す
   }
   function update(fn) {
     const r = Routine.load();

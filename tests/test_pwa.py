@@ -984,6 +984,8 @@ class PwaTest(unittest.TestCase):
     def routed_timer_page(self, calls, status=200, body='{"ok":true}', **kw):
         """送信サーバーを偽物にしてからタイマー画面を開く（読み込み時の呼び出しも受けられるよう、開く前に差し替える）。"""
         init = "localStorage.setItem('phase0.appToken', 'tok-123');"
+        if not kw.get("voice"):  # タイマーの呼び出しだけを数えるため、声掛けの予約（D-049）は止める
+            init += "if (!localStorage.getItem('db.prefs')) localStorage.setItem('db.prefs', JSON.stringify({ voice: false }));"
         if kw.get("state") is not None:
             init += "localStorage.setItem('db.timer', %s);" % json.dumps(json.dumps(kw["state"]))
         ctx = self.browser.new_context(permissions=["notifications"], viewport={"width": 393, "height": 852})
@@ -1890,6 +1892,111 @@ class PwaTest(unittest.TestCase):
     def test_routine_settings_fit_on_small_screen(self):
         page = self.clock_page(10, 0, "#settings", size=(375, 667), safe=(20, 0))
         self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
+
+    # ---------- 声掛けの通知予約（D-049） ----------
+    def voice_page(self, hour, minute=0, day=9, init=""):
+        calls = []
+        def respond(path, method):
+            return (200, {"ok": True, "subscribed": True, "queue": []})
+        def handler(route):
+            req = route.request
+            if req.method == "OPTIONS":
+                route.fulfill(status=204, headers=self.CORS)
+                return
+            path = req.url.split("/api/", 1)[1]
+            if path != "status":
+                calls.append((path, json.loads(req.post_data) if req.post_data else None))
+            route.fulfill(status=200, content_type="application/json", headers=self.CORS, body=json.dumps(respond(path, req.method)[1]))
+        page = self.routed_timer_page(calls, handler=handler, hour=hour, minute=minute, voice=True)
+        return page, calls
+
+    def at_ms(self, day, h, m):
+        return int(datetime(2026, 11, day, h, m).timestamp() * 1000)
+
+    def voice_keys(self, calls, path="schedule"):
+        return sorted(b["key"] for p, b in calls if p == path)
+
+    def test_voice_plan_for_the_rest_of_today(self):
+        page, calls = self.voice_page(10, 0)
+        self.wait_calls(page, calls, 4)
+        sched = {b["key"]: b for p, b in calls if p == "schedule"}
+        self.assertEqual(sorted(sched), ["meal:2026-11-09:dinner", "meal:2026-11-09:lunch", "night:2026-11-09", "sleep:2026-11-09"])  # 朝食は過ぎた
+        self.assertEqual(sched["meal:2026-11-09:lunch"]["at"], self.at_ms(9, 12, 30))
+        self.assertEqual(sched["meal:2026-11-09:lunch"]["body"], "そろそろ飯の時間、過ぎてるぞ。")
+        self.assertIn("trigger=midday_check.meal_overdue&line=0", sched["meal:2026-11-09:lunch"]["url"])
+        self.assertEqual(sched["meal:2026-11-09:dinner"]["at"], self.at_ms(9, 20, 0))
+        self.assertEqual(sched["night:2026-11-09"]["at"], self.at_ms(9, 22, 30))
+        self.assertEqual(sched["night:2026-11-09"]["body"], "結構残ってるな。今日はここまでにするかどうかは、自分で決めろ。")  # 夕食・入浴・歯磨きの3つ
+        self.assertEqual(sched["sleep:2026-11-09"]["at"], self.at_ms(9, 23, 30))
+        self.assertEqual(sched["sleep:2026-11-09"]["title"], "キィニチ")
+        page.reload()  # 変わっていなければ送り直さない
+        page.wait_for_function("dialogue !== null")
+        page.wait_for_timeout(1200)
+        self.assertEqual(len(calls), 4)
+
+    def test_voice_updates_when_recording(self):
+        page, calls = self.voice_page(10, 0)
+        self.wait_calls(page, calls, 4)
+        page.evaluate("location.hash = '#home'")
+        page.click(".act[data-record=work_start]")  # 仕事開始 → 90分後に休憩の声掛け
+        page.clock.run_for(1000)
+        self.wait_calls(page, calls, 5)
+        self.assertEqual(calls[4][1]["key"], "break:2026-11-09")
+        self.assertAlmostEqual(calls[4][1]["at"], self.at_ms(9, 11, 30), delta=5000)
+        self.assertEqual(calls[4][1]["body"], "休憩、挟んだほうがいいんじゃないか。")
+        page.click("#records-more")
+        page.click("#records-list .sheet-row[data-record=lunch] button:text-is('記録')")  # 昼食を記録 → 取り消す
+        page.click("#records-list .sheet-row[data-record=dinner] button:text-is('今日はなし')")  # 夕食はなし → 取り消す・夜の数が減る
+        page.click("#records-list .sheet-row[data-record=break] button:text-is('記録')")  # 休憩 → 時刻を付け替える
+        page.clock.run_for(1000)
+        self.wait_calls(page, calls, 9)
+        later = calls[5:]
+        self.assertEqual(self.voice_keys(later, "cancel"), ["meal:2026-11-09:dinner", "meal:2026-11-09:lunch"])
+        sched = {b["key"]: b for p, b in later if p == "schedule"}
+        self.assertEqual(sched["night:2026-11-09"]["body"], "あと少し残ってるが、無理にやらなくてもいい。")  # 入浴・歯磨きの2つ
+        self.assertAlmostEqual(sched["break:2026-11-09"]["at"], self.at_ms(9, 11, 30), delta=5000)  # 休憩を記録した 10:00 から90分
+        # 声掛けをオフ → 全部取り消す
+        page.click("#records-sheet-close")
+        page.evaluate("location.hash = '#settings'")
+        page.click("#pref-voice")
+        page.clock.run_for(1000)
+        self.wait_calls(page, calls, 12)
+        self.assertEqual(self.voice_keys(calls[9:], "cancel"), ["break:2026-11-09", "night:2026-11-09", "sleep:2026-11-09"])
+
+    def test_voice_retries_after_network_failure(self):
+        calls, down = [], {"on": True}
+        def handler(route):
+            req = route.request
+            if req.method == "OPTIONS":
+                route.fulfill(status=204, headers=self.CORS)
+                return
+            path = req.url.split("/api/", 1)[1]
+            if path == "status":
+                route.fulfill(status=200, content_type="application/json", headers=self.CORS, body='{"subscribed":true,"queue":[]}')
+                return
+            calls.append(path)
+            if down["on"]:
+                route.abort()
+            else:
+                route.fulfill(status=200, content_type="application/json", headers=self.CORS, body='{"ok":true,"subscribed":true}')
+        page = self.routed_timer_page(calls, handler=handler, hour=10, voice=True)
+        self.wait_calls(page, calls, 1)
+        page.wait_for_timeout(300)
+        self.assertEqual(len(calls), 1)  # 1つ目で通信できなければ、そこでやめる
+        self.assertEqual(page.evaluate("localStorage.getItem('db.notify')"), None)
+        down["on"] = False
+        self.hide_and_return(page, 1000)
+        page.clock.run_for(1000)
+        self.wait_calls(page, calls, 5)
+        self.assertEqual(len(json.loads(page.evaluate("localStorage.getItem('db.notify')"))), 4)
+
+    def test_voice_not_sent_without_token_or_after_sleep(self):
+        page = self.clock_page(10, 0)  # 合言葉なし
+        page.wait_for_timeout(1200)
+        self.assertIsNone(page.evaluate("localStorage.getItem('db.notify')"))
+        self.assertEqual(page.evaluate("Object.keys(Voice.plan())").__len__(), 4)
+        page = self.clock_page(23, 50)  # 就寝の予定を過ぎた
+        self.assertEqual(page.evaluate("Object.keys(Voice.plan())"), [])
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")

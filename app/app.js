@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase2-v5';
+const APP_VERSION = 'phase2-v6';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -310,7 +310,9 @@ const Records = {
     const day = { ...(all[key] || {}) };
     change(day);
     if (Object.keys(day).length) all[key] = day; else delete all[key];
-    return Store.write(DB.records, all);
+    const ok = Store.write(DB.records, all);
+    if (ok) window.dispatchEvent(new Event('recordschange')); // 声掛けの予約を決め直す（notify.js）
+    return ok;
   },
   // 記録する。休憩は1回ずつ足す。保存できたら true
   set(kind, now = new Date()) {
@@ -547,6 +549,13 @@ document.getElementById('pref-lines').addEventListener('click', () => {
   applyScreenLines();
 });
 applyScreenLines();
+// 声掛けの通知のオン・オフ（D-049）。オフにすると、予約済みの声掛けも取り消す（タイマーの通知は別）
+document.getElementById('pref-voice').addEventListener('click', () => {
+  Prefs.set('voice', !Prefs.get('voice'));
+  setSwitch('pref-voice', Prefs.get('voice'));
+  window.dispatchEvent(new Event('routinechange'));
+});
+setSwitch('pref-voice', Prefs.get('voice'));
 
 // Web Push：ボタン操作 → 通知許可 → 購読 → 送信サーバーに登録
 Settings.bind('app-token', 'appToken');
@@ -594,11 +603,15 @@ function checkPush() {
     .finally(() => { pushCheck = null; });
   return pushCheck;
 }
-// 登録し直す。できたら true
+// 登録し直す。できたら true。タイマーと声掛けから同時に呼ばれても1回だけ行う
+let repairing = null;
 function repairPush() {
-  return enablePush()
+  if (repairing) return repairing;
+  repairing = enablePush()
     .then(() => { setText('push-status', '有効（送信サーバーに登録し直しました）', 'ok'); return true; })
-    .catch((e) => { setText('push-status', '通知の登録が切れています。「通知を有効にする」を押してください（' + e.message + '）', 'ng'); return false; });
+    .catch((e) => { setText('push-status', '通知の登録が切れています。「通知を有効にする」を押してください（' + e.message + '）', 'ng'); return false; })
+    .finally(() => { repairing = null; });
+  return repairing;
 }
 
 function explainError(e) {
