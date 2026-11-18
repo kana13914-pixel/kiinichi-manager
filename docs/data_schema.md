@@ -48,7 +48,7 @@
 | `db.prefs` | 端末ごとの好み。`screenLines`（キィニチの一言を出すか。既定 true。D-047）、`voice`（声掛けの通知。既定 true。D-049）、`weekly`（週次コメント。既定 true。D-058） |
 | `db.sync` | `{ url, token, lastAt, lastSig, dirty, error }` スプレッドシートへの控えの送り先・合言葉・最後に送った時点・まだ送っていない変更があるか（D-050） |
 | `db.calendar` | `{ fetchedAt, from, to, events: [ { id, calendarId, title, start, end, allDay, editable } ], error }` Google カレンダーの予定の控え（D-053。読むだけ。同期しない）。`db.calendarError` は一度も取れていないときの理由 |
-| `db.weekly` | `{ 週の初め（月曜）の日付: { text, at } }` 週次コメント（D-058）。スプレッドシートにはまだ送らない |
+| `db.weekly` | `{ 週の初め（月曜）の日付: { text, at, firstSeen } }` 週次コメント（D-058）。`firstSeen` は初めて日報画面で見せた日（朝4時区切り）。その日だけ日報の上に出す（R5、CR-G05。ないものはまだ見せていない。R5 の参考実装 `round5_app.patch` を当ててから使われる）。スプレッドシートにはまだ送らない |
 | `db.notify` | `{ キー: { at, body } }` 送信サーバーに予約した声掛け（D-049）。変わったものだけ送り直すための控え |
 | `db.timer` の `running`・`done`・`cancelPending` | 動いているタイマー、終わったタイマー、届いていない取り消し（D-028, D-033） |
 | `schedule.view` | 予定画面の表示（リスト／月） |

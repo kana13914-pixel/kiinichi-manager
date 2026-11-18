@@ -75,6 +75,10 @@
 | `--radius-l` |  | `16px` |
 | `--radius-pill` |  | `999px` |
 | `--tap` |  | `44px` |
+| `--switch-w` | スイッチの溝の幅（CR-F07） | `52px` |
+| `--switch-h` | スイッチの溝の高さ | `30px` |
+| `--switch-knob` | スイッチのつまみ | `22px` |
+| `--switch-gap` | 溝の端とつまみの間 | `4px` |
 | `--size-record` |  | `52px` |
 | `--size-btn-primary` |  | `48px` |
 | `--size-icon` |  | `24px` |

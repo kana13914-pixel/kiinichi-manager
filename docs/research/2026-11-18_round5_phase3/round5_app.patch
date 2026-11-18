@@ -1,0 +1,268 @@
+diff --git a/app/app.js b/app/app.js
+index 21fc07e..704b6de 100644
+--- a/app/app.js
++++ b/app/app.js
+@@ -505,10 +505,10 @@ function renderSheet(now = new Date()) {
+     if (st.state === 'skipped') {
+       acts.append(sheetButton('なしをやめる', sheetAct(() => Records.skip(k.id, false))));
+     } else if (st.state === 'done') {
+-      if (k.repeat) acts.append(sheetButton('もう1回', sheetAct(() => recordNow(k.id))));
++      if (k.repeat) acts.append(sheetButton('もう1回', sheetAct(() => recordNow(k.id)), ' rec'));
+       acts.append(sheetButton(k.repeat ? '1回取り消す' : '取り消す', sheetAct(() => Records.unset(k.id))));
+     } else {
+-      acts.append(sheetButton('今日はなし', sheetAct(() => Records.skip(k.id, true))), sheetButton('記録', sheetAct(() => recordNow(k.id))));
++      acts.append(sheetButton('今日はなし', sheetAct(() => Records.skip(k.id, true)), ' skip'), sheetButton('記録', sheetAct(() => recordNow(k.id)), ' rec'));
+     }
+     li.append(body, acts);
+     return li;
+diff --git a/app/index.html b/app/index.html
+index f1ca318..4b3c0fa 100644
+--- a/app/index.html
++++ b/app/index.html
+@@ -98,7 +98,6 @@
+ 
+       <!-- 予定を足す・直す・消す（D-054）。Google カレンダーをつないでいるときだけ出す。金の塗りは「＋ 予定を足す」（フォームを開いたら「保存」）1つ -->
+       <div id="event-add" class="task-add event-add">
+-        <button id="event-add-open" type="button" class="cut-btn primary">＋ 予定を足す</button>
+         <p id="event-status" class="status ok" role="status"></p>
+         <form id="event-form" class="task-form" hidden>
+           <p id="event-form-title" class="form-title">予定を足す</p>
+@@ -125,9 +124,13 @@
+         </form>
+       </div>
+ 
+-      <div class="schedule-modes" role="group" aria-label="表示の切り替え">
+-        <button id="schedule-mode-list" type="button" class="cut-btn quiet chip" aria-pressed="true">リスト</button>
+-        <button id="schedule-mode-month" type="button" class="cut-btn quiet chip" aria-pressed="false">月</button>
++      <!-- 表示の切り替えと「追加」を 1 行に（CR-F10）。追加はカレンダーをつないでいるときだけ -->
++      <div class="schedule-bar">
++        <div class="schedule-modes" role="group" aria-label="表示の切り替え">
++          <button id="schedule-mode-list" type="button" class="cut-btn quiet chip" aria-pressed="true">リスト</button>
++          <button id="schedule-mode-month" type="button" class="cut-btn quiet chip" aria-pressed="false">月</button>
++        </div>
++        <button id="event-add-open" type="button" class="cut-btn quiet chip" aria-label="予定を足す">＋ 追加</button>
+       </div>
+ 
+       <div id="schedule-list-view">
+@@ -302,6 +305,7 @@
+         <div class="nameplate" aria-hidden="true">キィニチ</div>
+         <p id="weekly-title" class="weekly-title">先週のひとこと</p>
+         <p id="weekly-line" class="line"></p>
++        <p id="weekly-basis" class="weekly-basis"></p>
+       </section>
+       <p id="weekly-status" class="status" role="status"></p>
+ 
+@@ -319,6 +323,7 @@
+     <!-- 設定：フェーズ0の検証情報もここに移した -->
+     <section id="view-settings" class="view">
+       <header class="sub-header"><a href="#home" class="back">‹ ホーム</a><h1><span class="label-en" aria-hidden="true">SETTINGS</span>設定</h1></header>
++      <p id="sync-alert" class="status ng sync-alert" role="status" hidden></p>
+       <section class="card">
+         <h2>毎日の時刻</h2>
+         <p class="note">ホームの記録ボタンを出す時間帯、予定の一覧、声掛けの時刻の基準になります（自動保存）。</p>
+diff --git a/app/report.js b/app/report.js
+index 85ba8fa..e8ed1a5 100644
+--- a/app/report.js
++++ b/app/report.js
+@@ -283,6 +283,22 @@ const Report = (() => {
+     if (on && saved) {
+       $('weekly-title').textContent = `先週のひとこと（${labelShort(week.days[0])}〜${labelShort(week.days[6])}）`;
+       $('weekly-line').textContent = saved.text;
++      // 何から作ったかを添える（CR-G05。人と AI の関わりの指針 G1・G11）
++      const reportsAll = load();
++      const n = week.days.filter((d) => reportsAll[dateStr(d)]).length;
++      $('weekly-basis').textContent = `先週の日報 ${n} 日分と記録から、Claude（AI）が書いています`;
++      // 週が明けて最初に見た日（朝4時区切り）は日報の上に出し、次の日からは「これまで」の上に戻す
++      const today = todayKey(now);
++      if (!saved.firstSeen) {
++        const all = Store.read(DB.weekly, {}) || {};
++        all[week.key] = { ...saved, firstSeen: today };
++        Store.write(DB.weekly, all);
++      }
++      const fresh = !saved.firstSeen || saved.firstSeen === today;
++      const box = $('weekly');
++      box.classList.toggle('fresh', fresh);
++      const anchor = fresh ? $('report-form') : $('weekly-status');
++      if (box.nextElementSibling !== anchor) anchor.parentNode.insertBefore(box, anchor);
+     }
+     if (!on || saved || weeklyTried === week.key) return;
+     const reports = load();
+diff --git a/app/style.css b/app/style.css
+index 22f7155..f72a18e 100644
+--- a/app/style.css
++++ b/app/style.css
+@@ -44,6 +44,11 @@
+ 
+   /* 寸法 */
+   --tap: 44px;
++  /* ---- R5（2026-11-18）：スイッチ・記録の一覧など ---- */
++  --switch-w: 52px;        /* スイッチの溝の幅 */
++  --switch-h: 30px;        /* スイッチの溝の高さ */
++  --switch-knob: 22px;     /* つまみの大きさ */
++  --switch-gap: 4px;       /* 溝の端とつまみの間 */
+   --size-record: 52px;
+   --size-btn-primary: 48px;
+   --size-icon: 24px;
+@@ -669,6 +674,79 @@ body.no-screen-lines .dialogue-mini:not(.weekly-say) { display: none; } /* 週
+ .sheet-acts { flex: none; display: flex; gap: var(--space-2); }
+ .sheet-acts .cut-btn { padding: 0 var(--space-3); }
+ 
++
++/* ========== R5（2026-11-18。docs/visual_rules.md の CR-F07〜F10・CR-G05） ========== */
++/* スイッチ（CR-F07）：role="switch" は溝とつまみで状態を見せる。文字（オン／オフ）は状態の言葉として左に添える。
++   オンはライム（記録済みと同じ「済み・有効」の色）。金の塗りは使わない（CR-C02） */
++.cut-btn.chip[role="switch"] {
++  --btn-line: transparent; --btn-fill: transparent;
++  clip-path: none; background: none; isolation: auto;
++  display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--space-2);
++  min-width: calc(var(--switch-w) + var(--space-6)); padding: 0; font-weight: 500; color: var(--color-text-secondary);
++}
++.cut-btn.chip[role="switch"]::before {
++  content: ""; position: static; inset: auto; z-index: auto; order: 2; flex: none;
++  width: var(--switch-w); height: var(--switch-h);
++  background: var(--color-surface-2); box-shadow: inset 0 0 0 1px var(--color-border);
++  clip-path: polygon(var(--cut-s) 0, 100% 0, 100% calc(100% - var(--cut-s)), calc(100% - var(--cut-s)) 100%, 0 100%, 0 var(--cut-s));
++  transition: background var(--dur-quick);
++}
++.cut-btn.chip[role="switch"]::after {
++  content: ""; position: absolute; z-index: 1; /* 溝（order: 2）より手前に描く */ top: 50%; right: calc(var(--switch-w) - var(--switch-knob) - var(--switch-gap));
++  width: var(--switch-knob); height: var(--switch-knob); transform: translateY(-50%);
++  background: var(--color-text-secondary); transition: right var(--dur-quick);
++  clip-path: polygon(30% 0, 100% 0, 100% 70%, 70% 100%, 0 100%, 0 30%);
++}
++.cut-btn.chip[role="switch"][aria-checked="true"] { --btn-line: transparent; --btn-fill: transparent; color: var(--color-text); font-weight: 700; }
++.cut-btn.chip[role="switch"][aria-checked="true"]::before { background: var(--color-lime); box-shadow: none; }
++.cut-btn.chip[role="switch"][aria-checked="true"]::after { right: var(--switch-gap); background: var(--color-ink); }
++.cut-btn.chip[role="switch"]:focus-visible::before { box-shadow: inset 0 0 0 2px var(--color-accent); }
++
++/* 記録の一覧（CR-F08）：行の主な操作は「記録」。「今日はなし」は文字だけの控えめな操作にして、20 個の同じ箱を並べない */
++.sheet-acts .cut-btn.skip {
++  --btn-line: transparent; --btn-fill: transparent;
++  color: var(--color-text-tertiary); font-weight: 500; padding: 0 var(--space-2);
++  text-decoration: underline; text-underline-offset: 0.25em;
++}
++.sheet-acts .cut-btn.rec { --btn-line: var(--color-text); --btn-fill: var(--color-surface-2); font-weight: 700; }
++.sheet-row.done .sheet-state { color: var(--color-success); }
++.sheet-row.skipped .sheet-name, .sheet-row.skipped .sheet-state { color: var(--color-text-tertiary); }
++
++/* 休日の曜日（CR-F09）：7 つを 1 本の帯に（折り返さない）。各区画は 44px 以上 */
++.routine-days {
++  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0;
++  background: var(--color-surface-1);
++  clip-path: polygon(var(--cut-s) 0, 100% 0, 100% calc(100% - var(--cut-s)), calc(100% - var(--cut-s)) 100%, 0 100%, 0 var(--cut-s));
++}
++.routine-days .cut-btn { --btn-line: var(--color-surface-1); --btn-fill: var(--color-surface-1); width: 100%; min-width: 0; clip-path: none; }
++.routine-days .cut-btn::before { clip-path: none; }
++.routine-days .cut-btn[aria-pressed="true"] { --btn-line: var(--color-text); --btn-fill: var(--color-surface-2); }
++
++/* 予定の「追加」（CR-F10）：見るのが主の画面なので金の全幅ボタンにせず、切り替えの右に小さく */
++.schedule-bar { display: flex; align-items: stretch; gap: var(--space-2); margin-top: var(--space-3); }
++.schedule-bar .schedule-modes { flex: 1; margin: 0; }
++.schedule-bar #event-add-open { flex: none; width: auto; margin: 0; padding: 0 var(--space-4); }
++body:not(.calendar-on) #event-add-open { display: none; }
++.event-add:has(#event-form[hidden]):has(#event-status:empty) { display: none; }
++
++/* 調子の印：記録なしは縁だけで見せる（図として 3:1。CR-G03 の修正） */
++.mood-day:not([data-mood]) i, .mood-legend span:last-child i {
++  background: none; clip-path: none; box-shadow: inset 0 0 0 1.5px var(--color-line);
++}
++
++/* 先週のひとこと（CR-G05）：週が明けて最初に見た日は日報の上に。何から作ったかを小さく添える */
++.weekly-basis { grid-column: 2; margin: var(--space-1) 0 0; font-size: var(--fs-caption); color: var(--color-text-tertiary); }
++.weekly-say.fresh { margin-bottom: var(--space-4); }
++/* その日は一言の面を先週のひとことだけにする（1 画面 1 つ。C10-02） */
++.view.report:has(.weekly-say.fresh:not([hidden])) #report-say { display: none; }
++
++/* 控えの失敗を設定の上に（CR-F11）：失敗したときだけ出す */
++.sync-alert { margin: var(--space-2) 0 0; }
++
++
++/* 記録済みの記録ボタン（R5-08）：「✓ 仕事終わり」が SE の 3 つ並びで幅ぎりぎりなので、字間を詰める */
++.record-dock .act.done { letter-spacing: 0; padding: 0 var(--space-1); }
++
+ /* ---------- 動きを減らす設定（I3-04） ---------- */
+ @media (prefers-reduced-motion: reduce) {
+   *, *::before, *::after { animation: none !important; transition: none !important; }
+diff --git a/app/sync.js b/app/sync.js
+index 672ebf7..65d6a87 100644
+--- a/app/sync.js
++++ b/app/sync.js
+@@ -58,6 +58,12 @@ const Sync = (() => {
+     }
+     $('sync-status').textContent = text;
+     $('sync-status').className = cls;
++    // 失敗は設定のいちばん上にも出す（CR-F11。仕様関連を開かないと気づけないため）
++    const alert = $('sync-alert');
++    if (alert) {
++      alert.hidden = !(c.url && c.token && c.error);
++      alert.textContent = alert.hidden ? '' : `スプレッドシートへの控えが送れていません（${c.error}）。「仕様関連」で確かめられます`;
++    }
+   }
+ 
+   let sending = null;
+diff --git a/tests/test_pwa.py b/tests/test_pwa.py
+index b24dbbe..9724a5b 100644
+--- a/tests/test_pwa.py
++++ b/tests/test_pwa.py
+@@ -646,6 +646,61 @@ class PwaTest(unittest.TestCase):
+         self.assertNotIn("audio", sw)
+         self.assertFalse((APP_DIR / "audio").exists())
+ 
++    # ---------- R5（2026-11-18）：スイッチ・記録の一覧・先週のひとこと・控えの失敗 ----------
++    def test_switch_shows_state_with_track_and_knob(self):
++        """スイッチは溝とつまみで状態を見せ、オンはライム（CR-F07）。文字（オン／オフ）とaria-checkedはそのまま。"""
++        page = self.clock_page(21, 0, "#settings")
++        page.add_style_tag(content="*, *::before, *::after { transition: none !important; }")  # 動きの途中の色を読まない
++        track = lambda: page.evaluate("getComputedStyle(document.getElementById('pref-lines'), '::before').backgroundColor")
++        self.assertEqual(track(), "rgb(185, 227, 95)")
++        page.click("#pref-lines")
++        self.assertEqual(page.get_attribute("#pref-lines", "aria-checked"), "false")
++        self.assertNotEqual(track(), "rgb(185, 227, 95)")
++        size = page.eval_on_selector("#pref-lines", "e => [e.getBoundingClientRect().width, e.getBoundingClientRect().height]")
++        self.assertTrue(size[0] >= 44 and size[1] >= 44, size)
++
++    def test_holiday_days_in_one_row(self):
++        """休日の曜日 7 つは折り返さず 1 本の帯に並び、どれも 44px 以上（CR-F09）。"""
++        page = self.clock_page(21, 0, "#settings", size=(375, 667))
++        boxes = page.eval_on_selector_all("#routine-holidays .cut-btn", "els => els.map(e => { const r = e.getBoundingClientRect(); return [Math.round(r.top), r.width, r.height]; })")
++        self.assertEqual(len({b[0] for b in boxes}), 1, boxes)
++        self.assertTrue(all(w >= 44 and h >= 44 for _, w, h in boxes), boxes)
++
++    def test_records_sheet_skip_is_quiet(self):
++        """記録の一覧の「今日はなし」は文字だけの控えめな操作、「記録」が行の主な操作（CR-F08）。"""
++        page = self.clock_page(8, 0)
++        page.click("#records-more")
++        row = "#records-list li[data-record=breakfast]"
++        self.assertIn("skip", page.get_attribute(row + " button:text-is('今日はなし')", "class"))
++        self.assertIn("rec", page.get_attribute(row + " button:text-is('記録')", "class"))
++
++    def test_weekly_on_top_on_first_day_then_back(self):
++        """先週のひとことは、週が明けて最初に見た日は日報の上、次の日からは「これまで」の上（CR-G05）。何から作ったかを添える。"""
++        page, _ = self.weekly_page(self.WEEK_REPORTS)
++        page.wait_for_selector("#weekly", state="visible", timeout=5_000)
++        order = lambda: page.evaluate("document.getElementById('weekly').compareDocumentPosition(document.getElementById('report-form')) & Node.DOCUMENT_POSITION_FOLLOWING ? 'above' : 'below'")
++        self.assertEqual(order(), "above")
++        self.assertIn("日報 3 日分", page.text_content("#weekly-basis"))
++        self.assertIn("Claude（AI）", page.text_content("#weekly-basis"))
++        self.assertTrue(page.is_hidden("#report-say"))  # その日は一言の面を 1 つに
++        self.assertEqual(page.evaluate("JSON.parse(localStorage.getItem('db.weekly'))['2026-11-09'].firstSeen"), "2026-11-16")
++        # 次の日（同じ週の火曜）：「これまで」の上に戻り、上の一言も戻る
++        saved = page.evaluate("localStorage.getItem('db.weekly')")
++        page2, calls2 = self.weekly_page(self.WEEK_REPORTS, day=17, extra_init="localStorage.setItem('db.weekly', %s);" % json.dumps(saved))
++        page2.wait_for_selector("#weekly", state="visible", timeout=5_000)
++        self.assertEqual(page2.evaluate("document.getElementById('weekly').compareDocumentPosition(document.getElementById('report-form')) & Node.DOCUMENT_POSITION_FOLLOWING ? 'above' : 'below'"), "below")
++        self.assertTrue(page2.is_visible("#report-say"))
++        self.assertEqual(calls2, [])
++
++    def test_sync_error_shown_on_settings(self):
++        """スプレッドシートへの控えが失敗したら、設定のいちばん上に出す（CR-F11）。"""
++        init = "localStorage.setItem('db.sync', JSON.stringify({ url: 'https://example.invalid/exec', token: 't', lastAt: 0, lastSig: '', dirty: true, error: '通信できません' }));"
++        page = self.clock_page(21, 0, "#settings", init_script=init)
++        page.wait_for_selector("#sync-alert", state="visible", timeout=3_000)
++        self.assertIn("送れていません（通信できません）", page.text_content("#sync-alert"))
++        page2 = self.clock_page(21, 0, "#settings")
++        self.assertTrue(page2.is_hidden("#sync-alert"))
++
+     # ---------- 機能画面の決まり（R4。CR-F / CR-G） ----------
+     def test_tabbar_stays_above_sticky_day_header(self):
+         """予定の貼り付く日付の見出しが、タブバーの上に重ならない（R4 の不具合修正）。"""
