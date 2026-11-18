@@ -791,6 +791,9 @@ body[data-state="ready"]:not(:has(#view-home:not([hidden])))::before {
   background: var(--color-bg-top); box-shadow: 0 1px 0 var(--color-gold-faint);
 }
 
+/* 選んでいる入力欄の金は 1 本（縁＋外側 1px で 2px）にまとめる。縁の金と離れた外側の輪が二重に見えて重たかった（CR-F01 の補足、P2-04） */
+input:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--color-accent); }
+
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

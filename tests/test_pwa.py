@@ -928,6 +928,16 @@ class PwaTest(unittest.TestCase):
             self.assertLess(page.eval_on_selector("#task-form", "e => e.getBoundingClientRect().bottom"),
                             page.eval_on_selector("#task-list .task-row", "e => e.getBoundingClientRect().top") + 1, size)
 
+    def test_focused_field_has_single_gold_ring(self):
+        """選んでいる入力欄は金の縁＋外側 1px の 1 本の輪。離れた外側の輪（outline）は重ねない（D-064 ⑤、CR-F01, P2-04）"""
+        page = self.tasks_page()
+        page.click("#task-add-open")
+        page.click("#task-title")
+        st = page.eval_on_selector("#task-title", "e => { const s = getComputedStyle(e); return [s.outlineStyle, s.borderTopColor, s.boxShadow]; }")
+        self.assertEqual(st[0], "none")
+        self.assertEqual(st[1], "rgb(232, 196, 92)")
+        self.assertIn("rgb(232, 196, 92)", st[2])
+
     # ---------- 日報画面（D-026 ②, D-027） ----------
     def report_page(self, hour=21, minute=0, day=9, reports=None, size=(393, 852)):
         init = None
