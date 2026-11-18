@@ -180,14 +180,7 @@
         <p id="tasks-say-line" class="line" role="status">…</p>
       </section>
 
-      <ul id="task-list" class="task-list" aria-label="未完了のタスク"></ul>
-
-      <details id="done-section" class="done-section" hidden>
-        <summary><span>完了したタスク（<span id="done-count">0</span>）</span></summary>
-        <ul id="done-list" class="task-list" aria-label="完了したタスク"></ul>
-        <p class="note">完了から1週間たつと自動で消えます</p>
-      </details>
-
+      <!-- 追加は一言のすぐ下・一覧の上（タスクが増えても最初の画面で見える。D-064 ①） -->
       <div class="task-add">
         <button id="task-add-open" type="button" class="cut-btn primary">＋ タスクを追加</button>
         <form id="task-form" class="task-form" hidden>
@@ -212,6 +205,14 @@
           <p id="task-form-status" class="status ng" role="status"></p>
         </form>
       </div>
+
+      <ul id="task-list" class="task-list" aria-label="未完了のタスク"></ul>
+
+      <details id="done-section" class="done-section" hidden>
+        <summary><span>完了したタスク（<span id="done-count">0</span>）</span></summary>
+        <ul id="done-list" class="task-list" aria-label="完了したタスク"></ul>
+        <p class="note">完了から1週間たつと自動で消えます</p>
+      </details>
 
       <div id="task-toast" class="toast" role="status" hidden></div>
     </section>

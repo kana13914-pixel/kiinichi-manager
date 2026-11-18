@@ -242,7 +242,7 @@ const Tasks = (() => {
     setChip('none');
     setToReport(false);
     $('task-title').focus();
-    $('task-form').scrollIntoView({ block: 'end' }); // フォームの下端（追加ボタン）まで見えるように
+    $('task-form').scrollIntoView({ block: 'nearest' }); // フォームは一覧の上（D-064 ①）。見えていれば動かさない
   }
   function closeForm() {
     $('task-form').hidden = true;

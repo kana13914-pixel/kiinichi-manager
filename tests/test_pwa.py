@@ -913,6 +913,21 @@ class PwaTest(unittest.TestCase):
           const tb = document.querySelector('.tabbar').getBoundingClientRect(); return [b.bottom, tb.top]; }""")
         self.assertLessEqual(r[0], r[1])
 
+    def test_task_add_visible_without_scroll(self):
+        """タスクが増えても「＋ タスクを追加」は一覧の上にあり、最初の画面で見える（D-064 ①、CR-F12）"""
+        tasks = [{"id": k, "title": k, "due": None, "done": False, "createdAt": i} for i, k in enumerate("あいうえおかきく")]
+        for size in ((393, 852), (375, 667)):
+            page = self.tasks_page(tasks=tasks, size=size)
+            r = page.evaluate("""() => { const b = document.getElementById('task-add-open').getBoundingClientRect();
+              const row = document.querySelector('#task-list .task-row').getBoundingClientRect();
+              const tb = document.querySelector('.tabbar').getBoundingClientRect(); return [b.top, b.bottom, row.top, tb.top]; }""")
+            self.assertGreaterEqual(r[0], 0, size)
+            self.assertLessEqual(r[1], r[3], size)  # タブバーに隠れない
+            self.assertLess(r[1], r[2], size)       # 一覧より上
+            page.click("#task-add-open")             # 開いたフォームも一覧の上
+            self.assertLess(page.eval_on_selector("#task-form", "e => e.getBoundingClientRect().bottom"),
+                            page.eval_on_selector("#task-list .task-row", "e => e.getBoundingClientRect().top") + 1, size)
+
     # ---------- 日報画面（D-026 ②, D-027） ----------
     def report_page(self, hour=21, minute=0, day=9, reports=None, size=(393, 852)):
         init = None

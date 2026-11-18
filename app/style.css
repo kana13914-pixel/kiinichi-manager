@@ -773,6 +773,10 @@ body:not(.calendar-on) #event-add-open { display: none; }
 /* 記録済みの記録ボタン（R5-08）：「✓ 仕事終わり」が SE の 3 つ並びで幅ぎりぎりなので、字間を詰める */
 .record-dock .act.done { letter-spacing: 0; padding: 0 var(--space-1); }
 
+/* ========== 画面レビュー R6（2026-11-18。D-064。docs/visual_rules.md の CR-F12〜） ========== */
+/* タスクの追加は一言のすぐ下・一覧の上（CR-F12）。タスクが増えても最初の画面で主ボタンが見える */
+.view.tasks > .task-add { margin: 0 0 var(--space-1); }
+
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
