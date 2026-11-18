@@ -2055,6 +2055,52 @@ class PwaTest(unittest.TestCase):
         page.wait_for_timeout(500)
         self.assertEqual(calls, [])
 
+    def test_weekly_reply_once_rewrite_and_sent_next_week(self):
+        saved = {"2026-11-09": {"text": "疲れた日が多い週だったな。", "at": 1, "firstSeen": "2026-11-16"}}
+        page, calls = self.weekly_page(self.WEEK_REPORTS, extra_init="localStorage.setItem('db.weekly', %s);" % json.dumps(json.dumps(saved)))
+        page.wait_for_selector("#weekly", state="visible", timeout=5_000)
+        self.assertEqual(calls, [])
+        self.assertTrue(page.is_hidden("#weekly-reply-form"))
+        self.assertEqual(page.text_content("#weekly-reply-open"), "返事をする")
+        page.click("#weekly-reply-open")
+        self.assertTrue(page.is_visible("#weekly-reply-form"))
+        self.assertEqual(page.get_attribute("#weekly-reply-input", "maxlength"), "300")
+        page.click("#weekly-reply-send")  # 空では送らない
+        self.assertIn("返事を入れてください", page.text_content("#weekly-reply-status"))
+        page.fill("#weekly-reply-input", "もう少し短く書いてほしい")
+        page.click("#weekly-reply-send")
+        page.wait_for_selector("#weekly-reply-ack", state="visible")
+        self.assertEqual(page.text_content("#weekly-reply-ack"), "受け取った。来週のに活かす。")
+        self.assertIn("もう少し短く書いてほしい", page.text_content("#weekly-reply-text"))
+        stored = json.loads(page.evaluate("localStorage.getItem('db.weekly')"))["2026-11-09"]
+        self.assertEqual(stored["reply"]["text"], "もう少し短く書いてほしい")
+        self.assertEqual(stored["reply"]["edits"], 0)
+        self.assertEqual(stored["text"], "疲れた日が多い週だったな。")  # 作り直さない
+        # 1回だけ書き直せる
+        self.assertEqual(page.text_content("#weekly-reply-open"), "返事を書き直す")
+        page.click("#weekly-reply-open")
+        self.assertEqual(page.input_value("#weekly-reply-input"), "もう少し短く書いてほしい")
+        page.fill("#weekly-reply-input", "短めで、具体的に")
+        page.click("#weekly-reply-send")
+        page.wait_for_function("document.getElementById('weekly-reply-text').textContent.includes('短めで')")
+        self.assertTrue(page.is_hidden("#weekly-reply-open"))
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.weekly')"))["2026-11-09"]["reply"]["edits"], 1)
+        page.evaluate("location.hash = '#tasks'")  # 開き直しても、もう書き直せない（初期化で控えが戻るので再読み込みはしない）
+        page.evaluate("location.hash = '#report'")
+        self.assertTrue(page.is_hidden("#weekly-reply-open"))
+        self.assertIn("短めで、具体的に", page.text_content("#weekly-reply-text"))
+        self.assertEqual(len(calls), 0)
+        # 次の週：前の週のひとことと返事を一緒に送る
+        reports = dict(self.WEEK_REPORTS, **{"2026-11-16": {"mood": "normal", "done": "a", "savedAt": 4}, "2026-11-17": {"mood": "normal", "done": "b", "savedAt": 5},
+                                             "2026-11-18": {"mood": "good", "done": "c", "savedAt": 6}})
+        weekly = page.evaluate("localStorage.getItem('db.weekly')")
+        page2, calls2 = self.weekly_page(reports, day=23, extra_init="localStorage.setItem('db.weekly', %s);" % json.dumps(weekly))
+        page2.wait_for_selector("#weekly", state="visible", timeout=5_000)
+        self.assertEqual(calls2[0]["week"], "2026-11-16")
+        self.assertEqual(calls2[0]["previous"], {"comment": "疲れた日が多い週だったな。", "reply": "短めで、具体的に"})
+        self.assertEqual(page2.text_content("#weekly-reply-open"), "返事をする")  # 新しい週は新しく書ける
+        self.assertTrue(page2.is_hidden("#weekly-reply-text"))
+
     def at_ms(self, day, h, m):
         return int(datetime(2026, 11, day, h, m).timestamp() * 1000)
 

@@ -44,6 +44,9 @@ async function weeklyComment(env, p) {
   const week = typeof p.week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.week) ? p.week : null;
   if (!week) return { status: 400, body: { error: 'week（週の初めの日付）の形式が正しくありません' } };
   const input = typeof p.summary === 'string' ? p.summary.trim() : '';
+  // 前の週のひとことと、それへの利用者の返事（D-060 ⑪）。言い回しの好み・不満を今回に反映してもらう
+  const prev = p.previous && typeof p.previous.reply === 'string' && p.previous.reply.trim()
+    ? { comment: String(p.previous.comment || '').slice(0, 600), reply: p.previous.reply.trim().slice(0, 300) } : null;
   if (!input) return { status: 400, body: { error: 'summary（1週間のまとめ）がありません' } };
   if (input.length > WEEKLY_MAX_INPUT) return { status: 400, body: { error: 'summary が長すぎます' } };
   const saved = await env.PUSH_KV.get('weekly:' + week, 'json');
@@ -67,7 +70,8 @@ async function weeklyComment(env, p) {
       output_config: { effort: 'medium' },
       fallbacks: 'default',
       system: WEEKLY_SYSTEM,
-      messages: [{ role: 'user', content: `${week} から始まる1週間の記録です。これを読んで、振り返りのコメントを書いてください。\n\n${input}` }],
+      messages: [{ role: 'user', content: `${week} から始まる1週間の記録です。これを読んで、振り返りのコメントを書いてください。\n\n${input}`
+        + (prev ? `\n\n前の週にあなたが書いたひとこと：${prev.comment}\nそれへの利用者の返事：${prev.reply}\n（返事に言い回しの好みや不満があれば、今回のコメントの書き方に反映すること。返事そのものには触れなくてよい）` : '') }],
     }),
   });
   const data = await res.json().catch(() => ({}));

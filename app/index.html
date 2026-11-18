@@ -323,6 +323,21 @@
         <p id="weekly-title" class="weekly-title">先週のひとこと</p>
         <p id="weekly-line" class="line"></p>
         <p id="weekly-basis" class="weekly-basis"></p>
+        <!-- 返事をする（D-060 ⑪）。返事は次の週のひとことを作るときに使う。1回だけ書き直せる -->
+        <div id="weekly-reply" class="weekly-reply">
+          <p id="weekly-reply-text" class="weekly-reply-text" hidden></p>
+          <p id="weekly-reply-ack" class="line weekly-reply-ack" hidden></p>
+          <button id="weekly-reply-open" type="button" class="cut-btn quiet chip" hidden>返事をする</button>
+          <form id="weekly-reply-form" class="task-form" hidden>
+            <label for="weekly-reply-input">キィニチへの返事（来週のひとことに活かします）</label>
+            <textarea id="weekly-reply-input" rows="3" maxlength="300"></textarea>
+            <div class="form-actions">
+              <button id="weekly-reply-cancel" type="button" class="cut-btn quiet">やめる</button>
+              <button id="weekly-reply-send" type="submit" class="cut-btn quiet">送る</button>
+            </div>
+            <p id="weekly-reply-status" class="status ng" role="status"></p>
+          </form>
+        </div>
       </section>
       <p id="weekly-status" class="status" role="status"></p>
 

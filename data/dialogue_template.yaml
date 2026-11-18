@@ -137,6 +137,14 @@ pattern_check:
       lines:
         - "ここ3日、夜の記録がない。食べているなら押しておけ。"
 
+weekly_reply:
+  description: "先週のひとことへの返事を送った直後の短い受け答え。LLM は使わない（仮案。ユーザー確認待ち。D-060 ⑪、H-022 ④）"
+  conditions:
+    - id: thanks
+      when: "返事を送った"
+      lines:
+        - "受け取った。来週のに活かす。"
+
 midday_check:
   description: "食事・休憩の予定時刻を一定時間過ぎても未記録のときのみ発火。基本は干渉しない"
   conditions:

@@ -651,6 +651,12 @@ body:not(.calendar-on) #event-add { display: none; }
 /* 夕方の提案中の取り消しの表示：セリフの面の中、選択肢の下に置く（NEXT を隠さない。D-060 ⑫） */
 .dialogue .toast.in-dialogue { position: static; margin-top: var(--space-2); }
 
+/* 先週のひとことへの返事（D-060 ⑪）。「送る」も控えめ（日報の画面の金の塗りは「保存する」1つ） */
+.weekly-reply { margin-top: var(--space-2); }
+.weekly-reply .cut-btn.chip { margin-top: 0; }
+.weekly-reply-text { margin: 0 0 var(--space-1); font-size: var(--fs-footnote); color: var(--color-text-secondary); white-space: pre-wrap; overflow-wrap: anywhere; }
+.weekly-reply-ack { margin-bottom: var(--space-2); }
+
 /* 毎日の時刻（予定の画面。D-060 ⑭） */
 .routine-open { margin-top: var(--space-2); }
 #routine-msg:empty { display: none; }

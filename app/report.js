@@ -275,6 +275,54 @@ const Report = (() => {
     lines.push(...Stats.weekLines(week.days)); // 声掛けの数・記録が無かった分・使わなかった日（数だけ。D-060 ⑩）
     return lines.join('\n');
   }
+  // ---------- 先週のひとことへの返事（D-060 ⑪） ----------
+  const REPLY_MAX = 300;
+  const REPLY_EDITS = 1; // 書いたあと書き直せる回数
+  let replyWeek = null;
+  function renderReply(weekKey, reply) {
+    if (replyWeek !== weekKey) { $('weekly-reply-ack').hidden = true; $('weekly-reply-form').hidden = true; }
+    replyWeek = weekKey;
+    const has = Boolean(reply && reply.text);
+    $('weekly-reply-text').hidden = !has;
+    if (has) $('weekly-reply-text').textContent = `あなたの返事：${reply.text}`;
+    const canEdit = !has || (reply.edits || 0) < REPLY_EDITS;
+    $('weekly-reply-open').hidden = !canEdit || !$('weekly-reply-form').hidden;
+    $('weekly-reply-open').textContent = has ? '返事を書き直す' : '返事をする';
+  }
+  $('weekly-reply-open').addEventListener('click', () => {
+    const w = (Store.read(DB.weekly, {}) || {})[replyWeek] || {};
+    $('weekly-reply-input').value = w.reply ? w.reply.text : '';
+    $('weekly-reply-status').textContent = '';
+    $('weekly-reply-form').hidden = false;
+    $('weekly-reply-open').hidden = true;
+    $('weekly-reply-input').focus();
+  });
+  $('weekly-reply-cancel').addEventListener('click', () => {
+    $('weekly-reply-form').hidden = true;
+    renderReply(replyWeek, ((Store.read(DB.weekly, {}) || {})[replyWeek] || {}).reply);
+  });
+  $('weekly-reply-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = $('weekly-reply-input').value.trim().slice(0, REPLY_MAX);
+    if (!text) { $('weekly-reply-status').textContent = '返事を入れてください'; return; }
+    const all = Store.read(DB.weekly, {}) || {};
+    const w = all[replyWeek];
+    if (!w) return;
+    const edits = w.reply ? (w.reply.edits || 0) + 1 : 0;
+    if (w.reply && (w.reply.edits || 0) >= REPLY_EDITS) return;
+    all[replyWeek] = { ...w, reply: { text, at: Date.now(), edits } };
+    if (!Store.write(DB.weekly, all)) { $('weekly-reply-status').textContent = SAVE_FAILED; return; }
+    $('weekly-reply-form').hidden = true;
+    renderReply(replyWeek, all[replyWeek].reply);
+    // 定型の短い受け答え（LLM は使わない）
+    dialogueReady.then(() => {
+      const picked = pickLine('weekly_reply.thanks');
+      if (!picked) return;
+      $('weekly-reply-ack').textContent = picked.text;
+      $('weekly-reply-ack').hidden = false;
+    });
+  });
+
   let weeklyTried = null; // この画面を開いている間に作ろうとした週（失敗しても続けて呼ばない）
   function renderWeekly(now = new Date()) {
     const week = lastWeek(now);
@@ -300,6 +348,7 @@ const Report = (() => {
       box.classList.toggle('fresh', fresh);
       const anchor = fresh ? $('report-form') : $('weekly-status');
       if (box.nextElementSibling !== anchor) anchor.parentNode.insertBefore(box, anchor);
+      renderReply(week.key, saved.reply);
     }
     if (!on || saved || weeklyTried === week.key) return;
     const reports = load();
@@ -308,7 +357,10 @@ const Report = (() => {
     weeklyTried = week.key;
     $('weekly-status').className = 'status';
     $('weekly-status').textContent = '先週のひとことを書いてもらっています…';
-    Settings.api('/api/weekly', { method: 'POST', body: { week: week.key, summary: weekSummary(week) } })
+    // 前の週のひとことに返事があれば、一緒に送る（言い回しの好み・不満を反映してもらう。D-060 ⑪）
+    const prev = (Store.read(DB.weekly, {}) || {})[dateStr(addDays(week.days[0], -7))];
+    const previous = prev && prev.reply && prev.reply.text ? { comment: String(prev.text || '').slice(0, 600), reply: prev.reply.text.slice(0, REPLY_MAX) } : undefined;
+    Settings.api('/api/weekly', { method: 'POST', body: { week: week.key, summary: weekSummary(week), previous } })
       .then((r) => {
         const all = Store.read(DB.weekly, {}) || {};
         all[week.key] = { text: r.text, at: Date.now() };

@@ -386,6 +386,21 @@ test('週次コメント：鍵はサーバーのシークレットから送り�
   assert.equal(calls.length, 1); // 2回目は呼ばない
 });
 
+test('週次コメント：前の週のひとことへの返事があれば、プロンプトに添える（長さは切り詰める）', async () => {
+  const { calls, post } = weeklySetup();
+  await post({ week: '2026-11-16', summary: 'x', previous: { comment: '先週のコメント', reply: '  もう少し短く書いてほしい  ' } });
+  const content = calls[0].body.messages[0].content;
+  assert.match(content, /前の週にあなたが書いたひとこと：先週のコメント/);
+  assert.match(content, /それへの利用者の返事：もう少し短く書いてほしい\n/);
+  await post({ week: '2026-11-23', summary: 'x', previous: { comment: 'c'.repeat(700), reply: 'r'.repeat(400) } });
+  const long = calls[1].body.messages[0].content;
+  assert.ok(long.includes('c'.repeat(600)) && !long.includes('c'.repeat(601)));
+  assert.ok(long.includes('r'.repeat(300)) && !long.includes('r'.repeat(301)));
+  await post({ week: '2026-11-30', summary: 'x', previous: { comment: 'c', reply: '   ' } }); // 空の返事は添えない
+  await post({ week: '2026-12-07', summary: 'x' });
+  assert.ok(!/前の週/.test(calls[2].body.messages[0].content) && !/前の週/.test(calls[3].body.messages[0].content));
+});
+
 test('週次コメント：合言葉・鍵なし・入力の誤り・断られた・月の上限', async () => {
   let s = weeklySetup();
   assert.equal((await s.post({ week: '2026-11-09', summary: 'x' }, 'wrong')).status, 401);
