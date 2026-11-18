@@ -272,6 +272,7 @@ const Report = (() => {
     const to = addDays(week.days[6], 1).getTime();
     const doneTasks = (Store.read(DB.tasks, []) || []).filter((t) => t && t.done && t.doneAt >= from && t.doneAt < to).length;
     lines.push(`この週に完了したタスク：${doneTasks}件`);
+    lines.push(...Stats.weekLines(week.days)); // 声掛けの数・記録が無かった分・使わなかった日（数だけ。D-060 ⑩）
     return lines.join('\n');
   }
   let weeklyTried = null; // この画面を開いている間に作ろうとした週（失敗しても続けて呼ばない）

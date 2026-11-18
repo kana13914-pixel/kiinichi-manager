@@ -17,7 +17,7 @@
 | 項目 | 状態 | 詳しくは |
 | --- | --- | --- |
 | フェーズ | **フェーズ1（画面設計）完了（D-038）。次はフェーズ2（データ設計）の最初から** | `docs/roadmap.md` の「フェーズ2」 |
-| 公開中の版 | `phase3-v5`（版の名前はフェーズ3から `phase3-vN`。版の名前はフェーズ2から `phase2-vN`。`app/app.js` の `APP_VERSION`） | 公開 URL は `NEEDS_HUMAN.md` の H-010 |
+| 公開中の版 | `phase3-v6`（版の名前はフェーズ3から `phase3-vN`。版の名前はフェーズ2から `phase2-vN`。`app/app.js` の `APP_VERSION`） | 公開 URL は `NEEDS_HUMAN.md` の H-010 |
 | ホーム | 完了・実機確認済み | `docs/decisions.md` D-019〜D-025 |
 | タスク画面 | 完了・実機確認済み（phase1-v9） | roadmap「タスク画面」、D-026 ① |
 | 日報画面 | 完了・実機確認済み（phase1-v10） | roadmap「日報画面」、D-026 ②、D-027 |
@@ -37,7 +37,7 @@
 | らしさ・夕方の提案・完了タスクを日報へ | **実装済み・実機確認待ち**（phase3-v2。D-059） | roadmap「らしさ・夕方の提案・完了タスクを日報へ」、D-059 |
 | 次の作業 | 週次コメントと phase3-v2 の実機確認 → 問題なければフェーズ4の各機能・らしさ・夕方の提案を完了にする。残るのは立ち絵（H-013）と月表示の続き（必要なら）。どれも着手前に決めることを利用者に聞く（roadmap に書いてある） | roadmap「フェーズ2」、下の「3」 |
 | 人間待ち | H-013（立ち絵。受け入れ準備は済み）。H-015・H-017〜H-020 は完了 | `NEEDS_HUMAN.md` |
-| 利用者の確認待ちのセリフ（仮案） | `idle_greeting`、`screen_empty.*`（`schedule` を含む）、`report_saved.*`、`tasks_status.*`、`record_done.*`（D-046）、`event_before.*`・`calendar_today.*`（D-054）、`work_end_check.*`・`task_done.*`・`timer_start.*`（D-059）、`timer_status.*`、`schedule_status.*`、`report_status.*`（この3つは 2026-11-16 に「いったん修正なしで OK」。仮案のまま）（`timer_done.*` は確定済み。D-029） | `data/dialogue_template.yaml` の description に「仮案」と書いてある項目 |
+| 利用者の確認待ちのセリフ（仮案） | `idle_greeting`、`screen_empty.*`（`schedule` を含む）、`report_saved.*`、`tasks_status.*`、`record_done.*`（D-046）、`event_before.*`・`calendar_today.*`（D-054）、`work_end_check.*`・`task_done.*`・`timer_start.*`（D-059）、`pattern_check.*`（D-062）、`timer_status.*`、`schedule_status.*`、`report_status.*`（この3つは 2026-11-16 に「いったん修正なしで OK」。仮案のまま）（`timer_done.*` は確定済み。D-029） | `data/dialogue_template.yaml` の description に「仮案」と書いてある項目 |
 
 ## 3. 次の作業の要点（フェーズ2：データ設計）
 

@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase3-v5';
+const APP_VERSION = 'phase3-v6';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -204,6 +204,9 @@ function showLine(key, { index, vars, extra } = {}) {
 
 // 通知や記録の反応がないときの時間帯の一言（D-019 Q4 = 出す）。出せなければ「…」（沈黙）
 function showIdle(now = new Date()) {
+  // 記録のくせに合わせたセリフ（同じ食事の記録なしが3日続いた など。D-060 ⑩）。その日1回だけ、時間帯の一言の代わりに
+  const pattern = typeof Stats !== 'undefined' ? Stats.patternLine(now) : null;
+  if (pattern && showLine(pattern)) { Stats.markShown(pattern, now); return; }
   if (showLine('idle_greeting.' + periodOf(now))) return;
   document.getElementById('bubble-text').textContent = '…';
 }

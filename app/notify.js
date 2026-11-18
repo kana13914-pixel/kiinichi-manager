@@ -103,6 +103,7 @@ const Voice = (() => {
         if (have[key].at > Date.now()) {
           try { await Settings.api('/api/cancel', { method: 'POST', body: { key } }); } catch (_) { return; }
         }
+        else Stats.countNotified(key); // 取り消されないまま時刻を過ぎた＝送った（内部の記録。D-060 ⑩）
         delete have[key]; // 過ぎたものは取り消さずに忘れる
         Store.write(DB.notify, have);
       }

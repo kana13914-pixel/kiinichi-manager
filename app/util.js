@@ -66,6 +66,7 @@ const DB = {
   calendar: 'db.calendar',       // { fetchedAt, from, to, events: [ { title, start, end, allDay } ], error } … カレンダーの予定の控え（D-053。この端末だけ）
   calendarError: 'db.calendarError', // 一度も取れていないときの理由
   weekly: 'db.weekly',           // { 週の初めの日付: { text, at } } … 週次コメント（D-058）
+  stats: 'db.stats',             // { days: { 日付: { notified, missed, skipped, unused } }, closedThrough, lineShown } … 内部の記録（D-060 ⑩。この端末だけ・見せない）
   notify: 'db.notify',           // { 予約したキー: { at, body } } … 送信サーバーに予約した声掛け（D-049。この端末だけ）
 };
 const SCHEMA = 2;

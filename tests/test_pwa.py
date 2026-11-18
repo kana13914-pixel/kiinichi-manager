@@ -2017,7 +2017,9 @@ class PwaTest(unittest.TestCase):
         self.assertIn("11/9(月) ／ 調子：疲れた ／ できたこと：資料作り ／ 記録：起きた07:40、休憩1回、夕食なし", summary)
         self.assertIn("11/10(火) ／ 日報なし ／ 記録：なし", summary)
         self.assertIn("この週に完了したタスク：0件", summary)
-        self.assertEqual(summary.count("\n"), 7)  # 7日＋タスクの行
+        self.assertEqual(summary.count("\n"), 10)  # 7日＋タスク＋内部の記録の3行（D-060 ⑩）
+        self.assertIn("この週の声掛けの通知：", summary)
+        self.assertIn("アプリを使わなかった日：", summary)
         self.assertIn("先週のひとこと（11/9(月)〜11/15(日)）", page.text_content("#weekly-title"))
         self.assertEqual(page.text_content("#weekly-line"), "疲れた日が多い週だったな。来週は早めに切り上げる日を1つ作ってみろ。")
         page.reload()
@@ -2608,6 +2610,49 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(plan["meal:2026-11-09:lunch"]["at"], int(datetime(2026, 11, 9, 13, 30).timestamp() * 1000))
         self.assertNotIn("meal:2026-11-09:dinner", plan)  # この日はなし
         self.assertEqual(list(json.loads(page.evaluate("localStorage.getItem('db.routineOverrides')"))), ["2026-11-09"])  # 60日より前は消す
+
+    # ---------- 内部の記録（D-060 ⑩） ----------
+    def test_stats_counts_missed_skipped_unused_and_notified(self):
+        rec = {"2026-11-06": {"wake": {"time": "07:00", "at": 1}, "breakfast": {"skipped": True, "at": 1}},
+               "2026-11-07": {}, "2026-11-08": {"lunch": {"time": "12:10", "at": 1}}}
+        notify = {"meal:2026-11-09:lunch": {"at": int(datetime(2026, 11, 9, 12, 30).timestamp() * 1000), "body": "x"},
+                  "sleep:2026-11-09": {"at": int(datetime(2026, 11, 9, 23, 30).timestamp() * 1000), "body": "y"}}
+        init = ("localStorage.setItem('db.records', %s); localStorage.setItem('db.notify', %s);"
+                % (json.dumps(json.dumps(rec)), json.dumps(json.dumps(notify))))
+        page = self.clock_page(13, 0, init_script=init)
+        st = json.loads(page.evaluate("localStorage.getItem('db.stats')"))
+        self.assertEqual(st["closedThrough"], "2026-11-08")
+        d6 = st["days"]["2026-11-06"]
+        self.assertEqual(d6["skipped"], {"breakfast": 1})
+        self.assertNotIn("wake", d6["missed"])
+        self.assertIn("lunch", d6["missed"])
+        self.assertTrue(st["days"]["2026-11-07"]["unused"])  # 記録が1つも無い日は「使わなかった日」
+        self.assertNotIn("missed", st["days"]["2026-11-07"])
+        self.assertNotIn("lunch", st["days"]["2026-11-08"]["missed"])
+        self.assertNotIn("break", st["days"]["2026-11-08"]["missed"])  # 休憩は数えない
+        # 声掛けの数：取り消されないまま時刻を過ぎた分（すり合わせのときに数える）
+        page.evaluate("localStorage.setItem('phase0.appToken', 'tok')")
+        page.route(self.WORKER + "/**", lambda r: r.fulfill(status=200, content_type="application/json", headers=self.CORS, body='{"ok":true,"subscribed":true}') if r.request.method != "OPTIONS" else r.fulfill(status=204, headers=self.CORS))
+        page.evaluate("Voice.sync()")
+        page.wait_for_function("JSON.parse(localStorage.getItem('db.stats')).days['2026-11-09']", timeout=3_000)
+        st = json.loads(page.evaluate("localStorage.getItem('db.stats')"))
+        self.assertEqual(st["days"]["2026-11-09"]["notified"], {"meal": 1})  # 就寝前はまだ先
+        lines = page.evaluate("Stats.weekLines([parseDay('2026-11-06'), parseDay('2026-11-07'), parseDay('2026-11-08'), parseDay('2026-11-09')])")
+        self.assertEqual(lines[0], "この週の声掛けの通知：食事1回")
+        self.assertIn("昼食1日", lines[1])
+        self.assertEqual(lines[2], "アプリを使わなかった日：1日")
+        self.assertIsNone(page.query_selector("text=声掛けの通知：食事"))  # 利用者には見せない
+
+    def test_home_line_when_same_meal_missed_three_days(self):
+        rec = {d: {"wake": {"time": "07:00", "at": 1}} for d in ("2026-11-06", "2026-11-07", "2026-11-08")}
+        init = "if (!localStorage.getItem('db.records')) localStorage.setItem('db.records', %s);" % json.dumps(json.dumps(rec))
+        page = self.clock_page(13, 0, init_script=init)
+        self.assertEqual(page.text_content("#bubble-text"), "ここ3日、朝の記録がない。食べているなら押しておけ。")  # 最初に当てはまる朝食
+        page.reload()
+        page.wait_for_function("dialogue !== null")
+        self.assertEqual(page.text_content("#bubble-text"), "ここ3日、昼の記録がない。食べているなら押しておけ。")  # 朝食はその日もう出した
+        page = self.clock_page(13, 0)  # 3日続いていなければ時間帯の一言
+        self.assertIn(page.text_content("#bubble-text"), self.idle_lines("day"))
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")
