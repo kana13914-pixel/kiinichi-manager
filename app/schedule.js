@@ -34,6 +34,13 @@ const Schedule = (() => {
     title.className = 'schedule-title';
     title.textContent = ev.title;
     li.append(time, title);
+    if (ev.kind === 'routine' && ev.overridden) { // その日だけ変えた生活の時刻（D-060 ⑭）
+      const tag = document.createElement('small');
+      tag.className = 'tag routine-tag';
+      tag.textContent = 'この日だけ';
+      title.append(tag);
+    }
+    if (ev.kind === 'routine' && ev.day) routineRow(li, ev);
     if (past) { // 色だけで伝えない（V3-07）
       const done = document.createElement('span');
       done.className = 'sr-only';
@@ -57,6 +64,40 @@ const Schedule = (() => {
     }
     return li;
   }
+  // 生活の時刻の行は、押すとその日だけ変えられる（D-060 ⑭）。鉛筆は押せることを示す印（行のどこを押してもよい）
+  function routineRow(li, ev) {
+    li.classList.add('routine-row-item');
+    li.tabIndex = 0;
+    li.setAttribute('role', 'button');
+    li.setAttribute('aria-label', `${ev.title}${ev.skipped ? '（この日はなし）' : ` ${hm(ev.at)}`}。この日だけ変える`);
+    const mark = document.createElement('span');
+    mark.className = 'routine-edit';
+    mark.setAttribute('aria-hidden', 'true');
+    mark.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg>';
+    li.append(mark);
+    const go = () => RoutineDay.open(ev);
+    li.addEventListener('click', go);
+    li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  }
+  // この日だけ「なし」にした生活の時刻の行（押すと元に戻せる）
+  function skippedRow(s) {
+    const li = document.createElement('li');
+    li.className = 'schedule-row past routine-skipped';
+    const time = document.createElement('span');
+    time.className = 'schedule-time allday';
+    time.textContent = 'なし';
+    const title = document.createElement('span');
+    title.className = 'schedule-title';
+    title.textContent = s.title;
+    const tag = document.createElement('small');
+    tag.className = 'tag routine-tag';
+    tag.textContent = 'この日だけ';
+    title.append(tag);
+    li.append(time, title);
+    routineRow(li, { ...s, skipped: true });
+    return li;
+  }
+
   function noneRow() {
     const li = document.createElement('li');
     li.className = 'schedule-row none';
@@ -84,6 +125,7 @@ const Schedule = (() => {
     for (let i = 0; i < LIST_DAYS; i++) {
       const date = dayAt(now, i);
       const events = SampleData.eventsOn(date);
+      const skipped = Routine.skippedFor(date);
       const sec = document.createElement('section');
       sec.className = 'schedule-day';
       sec.dataset.date = dateStr(date);
@@ -92,7 +134,7 @@ const Schedule = (() => {
       h.textContent = (i === 0 ? '今日 ' : i === 1 ? '明日 ' : '') + dayLabel(date);
       const ul = document.createElement('ul');
       ul.className = 'schedule-list';
-      ul.append(...(events.length ? events.map((e) => row(e, now, next)) : [noneRow()]));
+      ul.append(...(events.length ? events.map((e) => row(e, now, next)) : [noneRow()]), ...skipped.map(skippedRow));
       sec.append(h, ul);
       days.push(sec);
     }
@@ -281,7 +323,8 @@ const Schedule = (() => {
 
   onShow('schedule', () => render());
   setInterval(() => { if (location.hash === '#schedule') render(); }, 1000);
-  window.addEventListener('routinechange', () => render(new Date(), true)); // 毎日の時刻を変えたら描き直す // 「あと何分」と過ぎた予定を、分が変わったら直す
+  window.addEventListener('routinechange', () => render(new Date(), true)); // 毎日の時刻を変えたら描き直す
+  window.addEventListener('routineday', (e) => { $('routine-msg').textContent = e.detail; }); // その日だけ変えた知らせ // 「あと何分」と過ぎた予定を、分が変わったら直す
   render();
 
   return { render, refresh: () => render(new Date(), true) };

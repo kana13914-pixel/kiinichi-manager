@@ -59,6 +59,7 @@ const DB = {
   reportDraft: 'db.reportDraft', // { date, mood, done, left, tomorrow } … 保存前の書きかけ（この端末だけ）
   records: 'db.records',         // { 'YYYY-MM-DD': { wake: { time: '07:12', at: 1794190000000 }, … } } … 日付は朝4時区切り
   timer: 'db.timer',             // { custom: [ { id, name, minutes } ], builtin, running, done, cancelPending }
+  routineOverrides: 'db.routineOverrides', // { 'YYYY-MM-DD': { 項目: 'HH:MM' か null } } … 毎日の時刻をその日だけ変えたもの（D-060 ⑭）
   routine: 'db.routine',         // { weekday: { wake: '07:00', … }, holiday: { … }, holidays: [0, 6], updatedAt } … 毎日の時刻（D-048）
   prefs: 'db.prefs',             // { screenLines: true, voice: true } … 端末ごとの好み（D-047, D-049）
   sync: 'db.sync',               // { url, token, lastAt, lastSig, dirty, error } … スプレッドシートへの控えの送り先と状態（D-050。この端末だけ）
@@ -69,7 +70,7 @@ const DB = {
 };
 const SCHEMA = 2;
 // スプレッドシートに控えるデータ（D-050）
-const SYNCED = [DB.tasks, DB.reports, DB.records, DB.routine, DB.timer];
+const SYNCED = [DB.tasks, DB.reports, DB.records, DB.routine, DB.routineOverrides, DB.timer];
 const MIGRATIONS = {
   // 1（フェーズ1の仮の保存先）→ 2：キーを db.* に移す。記録は当日分だけだったものを、日付ごとの履歴にする
   2() {

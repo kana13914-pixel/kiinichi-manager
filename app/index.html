@@ -134,6 +134,22 @@
         <button id="event-add-open" type="button" class="cut-btn quiet chip" aria-label="予定を足す">＋ 追加</button>
       </div>
 
+      <!-- 毎日の時刻（D-060 ⑭。D-048 の設定を設定画面から移した）。ふだんは閉じていて、ボタンで開く -->
+      <button id="routine-open" type="button" class="cut-btn quiet chip routine-open" aria-expanded="false" aria-controls="routine-panel">毎日の時刻<span aria-hidden="true"> ▾</span></button>
+      <p id="routine-msg" class="status ok" role="status"></p>
+      <section id="routine-panel" class="card routine-panel" aria-labelledby="routine-panel-title" hidden>
+        <h2 id="routine-panel-title">毎日の時刻</h2>
+        <p class="note">ホームの記録ボタンを出す時間帯、予定の一覧、声掛けの時刻の基準になります（自動保存）。</p>
+        <div class="schedule-modes" role="group" aria-label="平日と休日">
+          <button id="routine-mode-weekday" type="button" class="cut-btn quiet chip" aria-pressed="true">平日</button>
+          <button id="routine-mode-holiday" type="button" class="cut-btn quiet chip" aria-pressed="false">休日</button>
+        </div>
+        <ul id="routine-list" class="routine-list"></ul>
+        <span class="form-label" id="routine-holidays-label">休日にする曜日</span>
+        <div id="routine-holidays" class="due-chips routine-days" role="group" aria-labelledby="routine-holidays-label"></div>
+        <p id="routine-status" class="status" role="status"></p>
+      </section>
+
       <div id="schedule-list-view">
         <div id="schedule-days"></div>
       </div>
@@ -325,18 +341,7 @@
     <section id="view-settings" class="view">
       <header class="sub-header"><a href="#home" class="back">‹ ホーム</a><h1><span class="label-en" aria-hidden="true">SETTINGS</span>設定</h1></header>
       <p id="sync-alert" class="status ng sync-alert" role="status" hidden></p>
-      <section class="card">
-        <h2>毎日の時刻</h2>
-        <p class="note">ホームの記録ボタンを出す時間帯、予定の一覧、声掛けの時刻の基準になります（自動保存）。</p>
-        <div class="schedule-modes" role="group" aria-label="平日と休日">
-          <button id="routine-mode-weekday" type="button" class="cut-btn quiet chip" aria-pressed="true">平日</button>
-          <button id="routine-mode-holiday" type="button" class="cut-btn quiet chip" aria-pressed="false">休日</button>
-        </div>
-        <ul id="routine-list" class="routine-list"></ul>
-        <span class="form-label" id="routine-holidays-label">休日にする曜日</span>
-        <div id="routine-holidays" class="due-chips routine-days" role="group" aria-labelledby="routine-holidays-label"></div>
-        <p id="routine-status" class="status" role="status"></p>
-      </section>
+      <p class="note moved-note">毎日の時刻は予定の画面に移りました（予定 →「毎日の時刻」）。</p>
       <section class="card">
         <h2>声掛けの通知</h2>
         <div class="pref-row">
@@ -426,6 +431,23 @@
         <button id="confirm-ok" type="submit" value="ok" class="cut-btn quiet danger">削除する</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- 毎日の時刻をその日だけ変える（D-060 ⑭）。予定のリストの生活の時刻の行から開く -->
+  <dialog id="routine-day" class="sheet" aria-labelledby="routine-day-title">
+    <div class="sheet-head">
+      <h2 id="routine-day-title">-</h2>
+      <button id="routine-day-close" type="button" class="cut-btn quiet chip">やめる</button>
+    </div>
+    <p id="routine-day-base" class="note">-</p>
+    <label for="routine-day-time">この日だけの時刻</label>
+    <input id="routine-day-time" type="time">
+    <div class="form-actions">
+      <button id="routine-day-none" type="button" class="cut-btn quiet">この日はなし</button>
+      <button id="routine-day-save" type="button" class="cut-btn primary">保存</button>
+    </div>
+    <button id="routine-day-reset" type="button" class="cut-btn quiet" hidden>元に戻す</button>
+    <p id="routine-day-status" class="status ng" role="status"></p>
   </dialog>
 
   <!-- ほかの記録（D-046）。ホームの「…」から開く。全部の記録の今日の状態と、記録・取り消し・今日はなし -->

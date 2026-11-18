@@ -661,7 +661,8 @@ class PwaTest(unittest.TestCase):
 
     def test_holiday_days_in_one_row(self):
         """休日の曜日 7 つは折り返さず 1 本の帯に並び、どれも 44px 以上（CR-F09）。"""
-        page = self.clock_page(21, 0, "#settings", size=(375, 667))
+        page = self.clock_page(21, 0, "#schedule", size=(375, 667))
+        page.click("#routine-open")  # 毎日の時刻は予定の画面に移した（D-060 ⑭）
         boxes = page.eval_on_selector_all("#routine-holidays .cut-btn", "els => els.map(e => { const r = e.getBoundingClientRect(); return [Math.round(r.top), r.width, r.height]; })")
         self.assertEqual(len({b[0] for b in boxes}), 1, boxes)
         self.assertTrue(all(w >= 44 and h >= 44 for _, w, h in boxes), boxes)
@@ -1904,7 +1905,10 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(len(page.query_selector_all("#records-list .sheet-row[data-record=work_start]")), 1)  # 一覧からは記録できる
 
     def test_routine_settings_change_and_persist(self):
-        page = self.clock_page(12, 30, "#settings")
+        page = self.clock_page(12, 30, "#schedule")
+        self.assertTrue(page.is_hidden("#routine-panel"))  # ふだんは閉じている（D-060 ⑭）
+        page.click("#routine-open")
+        self.assertEqual(page.get_attribute("#routine-open", "aria-expanded"), "true")
         self.assertEqual(page.input_value("#routine-lunch"), "12:00")
         self.assertEqual(page.get_attribute("#routine-mode-weekday", "aria-pressed"), "true")
         page.fill("#routine-lunch", "13:30")
@@ -1916,7 +1920,7 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.text_content(".next-title"), "昼食")
         self.assertEqual(page.text_content(".next-time"), "13:30")
         # 休日：「なし」と曜日
-        page.evaluate("location.hash = '#settings'")
+        page.evaluate("location.hash = '#schedule'")
         page.click("#routine-mode-holiday")
         self.assertEqual(page.input_value("#routine-work_start"), "")
         self.assertEqual(page.get_attribute("#routine-list li:nth-child(3) .cut-btn", "aria-pressed"), "true")
@@ -1931,8 +1935,9 @@ class PwaTest(unittest.TestCase):
         self.assertEqual([r["holidays"], r["holiday"]["breakfast"], r["weekday"]["lunch"]], [[0, 1, 6], None, "13:30"])
         page.evaluate("location.hash = '#home'")
         self.assertNotIn("work_start", self.docked(page))  # 11/9 は月曜＝休日になった
-        page.evaluate("location.hash = '#settings'")
-        page.wait_for_selector("#view-settings", state="visible")
+        page.evaluate("location.hash = '#schedule'")
+        page.click("#routine-open")
+        page.wait_for_selector("#routine-panel", state="visible")
         sizes = page.eval_on_selector_all("#routine-list button, #routine-holidays button",
                                           "els => els.map((b) => { const r = b.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; })")
         self.assertTrue(all(w >= 44 and h >= 44 for w, h in sizes), sizes)
@@ -1945,7 +1950,8 @@ class PwaTest(unittest.TestCase):
                 self.assertIn(page.text_content("#bubble-text"), self.lines_of("morning_wake", cond))
 
     def test_routine_settings_fit_on_small_screen(self):
-        page = self.clock_page(10, 0, "#settings", size=(375, 667), safe=(20, 0))
+        page = self.clock_page(10, 0, "#schedule", size=(375, 667), safe=(20, 0))
+        page.click("#routine-open")
         self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
 
     # ---------- 声掛けの通知予約（D-049） ----------
@@ -2268,8 +2274,8 @@ class PwaTest(unittest.TestCase):
     def test_settings_daily_items_then_system_screen(self):
         page = self.clock_page(10, 0, "#settings")
         cards = page.eval_on_selector_all("#view-settings .card h2", "els => els.map(e => e.textContent)")
-        self.assertEqual(cards, ["毎日の時刻", "声掛けの通知", "週次コメント", "キィニチの一言"])  # 日常の設定だけ
-        self.assertIn("（自動保存）", page.text_content("#view-settings .card .note"))
+        self.assertEqual(cards, ["声掛けの通知", "週次コメント", "キィニチの一言"])  # 日常の設定だけ（毎日の時刻は予定の画面へ。D-060 ⑭）
+        self.assertIn("予定の画面に移りました", page.text_content("#view-settings .moved-note"))
         link = page.eval_on_selector("#view-settings .sub-link", "e => [e.textContent, e.getBoundingClientRect().top > document.querySelector('#view-settings .card:last-of-type').getBoundingClientRect().bottom]")
         self.assertEqual(link, ["仕様関連›", True])  # いちばん下
         page.click("#view-settings .sub-link")
@@ -2551,6 +2557,57 @@ class PwaTest(unittest.TestCase):
         self.assertTrue(all(h <= line * 2 + 2 for h in page.eval_on_selector_all("#view-settings .card > p.note", "els => els.map(e => e.getBoundingClientRect().height)")))  # 2行以内
         page.evaluate("location.hash = '#system'")
         self.assertIn("アプリを消すと記録は戻せません", page.text_content("#view-system"))
+
+    # ---------- 毎日の時刻をその日だけ変える（D-060 ⑭） ----------
+    def routine_row(self, page, date, title):
+        return "#schedule-days .schedule-day[data-date='%s'] .routine-row-item:has-text('%s')" % (date, title)
+
+    def test_routine_override_for_one_day(self):
+        page = self.clock_page(6, 0, "#schedule")
+        page.click(self.routine_row(page, "2026-11-09", "起床"))
+        self.assertTrue(page.is_visible("#routine-day"))
+        self.assertEqual(page.text_content("#routine-day-title"), "11/9(月)の起床")
+        self.assertIn("平日の時刻：07:00", page.text_content("#routine-day-base"))
+        self.assertEqual(page.input_value("#routine-day-time"), "07:00")
+        self.assertTrue(page.is_hidden("#routine-day-reset"))
+        page.fill("#routine-day-time", "08:30")
+        page.click("#routine-day-save")
+        self.assertFalse(page.is_visible("#routine-day"))
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.routineOverrides')")), {"2026-11-09": {"wake": "08:30"}})
+        self.assertIn("11/9(月)の起床を08:30にしました", page.text_content("#routine-msg"))
+        rows = [r[:2] for r in self.schedule_rows(page, "2026-11-09")]
+        self.assertIn(["08:30", "起床この日だけ"], rows)
+        self.assertEqual([r[:2] for r in self.schedule_rows(page, "2026-11-10")][0], ["07:00", "起床"])  # ほかの日はそのまま
+        # ホーム：次の予定と記録ボタンの時間帯も、その日だけの時刻を使う
+        page.evaluate("location.hash = '#home'")
+        self.assertEqual([page.text_content(".next-time"), page.text_content(".next-title")], ["07:30", "朝食"])
+        self.assertEqual(self.docked(page), ["wake", "breakfast"])  # 起床の時間帯が 5:30〜 になった（6:00 は入る）
+        # この日はなし → 元に戻す
+        page.evaluate("location.hash = '#schedule'")
+        page.click(self.routine_row(page, "2026-11-09", "朝食"))
+        page.click("#routine-day-none")
+        skipped = page.eval_on_selector_all("#schedule-days .schedule-day[data-date='2026-11-09'] .routine-skipped", "els => els.map(e => e.textContent)")
+        self.assertEqual(skipped, ["なし朝食この日だけ"])
+        page.evaluate("location.hash = '#home'")
+        self.assertNotIn("breakfast", self.docked(page))
+        page.evaluate("location.hash = '#schedule'")
+        page.click("#schedule-days .schedule-day[data-date='2026-11-09'] .routine-skipped")
+        self.assertTrue(page.is_visible("#routine-day-reset"))
+        page.click("#routine-day-reset")
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.routineOverrides')")), {"2026-11-09": {"wake": "08:30"}})
+        # 平日の時刻と同じにしたら、上書きを消す
+        page.click(self.routine_row(page, "2026-11-09", "起床"))
+        page.fill("#routine-day-time", "07:00")
+        page.click("#routine-day-save")
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.routineOverrides')")), {})
+
+    def test_routine_override_changes_voice_plan_and_prunes_old(self):
+        init = "localStorage.setItem('db.routineOverrides', JSON.stringify({ '2026-11-09': { lunch: '13:00', dinner: null }, '2026-08-01': { wake: '09:00' } }))"
+        page = self.clock_page(10, 0, init_script=init)
+        plan = page.evaluate("Voice.plan()")
+        self.assertEqual(plan["meal:2026-11-09:lunch"]["at"], int(datetime(2026, 11, 9, 13, 30).timestamp() * 1000))
+        self.assertNotIn("meal:2026-11-09:dinner", plan)  # この日はなし
+        self.assertEqual(list(json.loads(page.evaluate("localStorage.getItem('db.routineOverrides')"))), ["2026-11-09"])  # 60日より前は消す
 
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")

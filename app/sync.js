@@ -38,6 +38,11 @@ const Sync = (() => {
     const r = Routine.load();
     const row = (name, times) => [name, ...ROUTINE_ITEMS.map(([id]) => times[id] || 'なし')];
     const routine = [row('平日', r.weekday), row('休日', r.holiday), ['休日の曜日', r.holidays.map((n) => WEEK_LABELS[n]).join('・')]];
+    // その日だけ変えた時刻（今日以降。D-060 ⑭）。変えていない項目は空
+    const today = todayKey();
+    for (const [date, o] of Object.entries(Routine.overrides()).filter(([d]) => d >= today).sort()) {
+      routine.push([`${date} だけ`, ...ROUTINE_ITEMS.map(([id]) => (id in o ? o[id] || 'なし' : ''))]);
+    }
     const timer = Timer.load();
     const timers = [
       ...Timer.builtins(timer).map((t) => [t.name, t.minutes, t.minutes === t.base ? '用途別' : `用途別（初めは${t.base}分）`]),

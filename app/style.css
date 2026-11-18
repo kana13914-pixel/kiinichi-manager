@@ -651,6 +651,17 @@ body:not(.calendar-on) #event-add { display: none; }
 /* 夕方の提案中の取り消しの表示：セリフの面の中、選択肢の下に置く（NEXT を隠さない。D-060 ⑫） */
 .dialogue .toast.in-dialogue { position: static; margin-top: var(--space-2); }
 
+/* 毎日の時刻（予定の画面。D-060 ⑭） */
+.routine-open { margin-top: var(--space-2); }
+#routine-msg:empty { display: none; }
+.routine-panel { margin-top: var(--space-2); }
+.routine-row-item { cursor: pointer; }
+.routine-edit { flex: none; display: inline-flex; color: var(--color-text-tertiary); }
+.routine-edit svg { width: var(--size-icon-s); height: var(--size-icon-s); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.routine-tag { margin-left: var(--space-2); }
+.moved-note { margin: var(--space-2) 0 0; }
+#routine-day label { margin-top: var(--space-3); }
+
 /* タスクの「完了したら日報に入れる」（D-059） */
 .task-report-row { margin-top: var(--space-2); }
 

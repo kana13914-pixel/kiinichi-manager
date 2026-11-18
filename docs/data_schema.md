@@ -19,6 +19,7 @@
 | `db.reports` | `{ 日付: { mood, done, left, tomorrow, savedAt } }` | 日報。1日1件。`mood` は `good`／`normal`／`tired`／`null` |
 | `db.records` | `{ 日付: { 種類: 値 } }` | 毎日の記録。値はふつう `{ time, at }`（`time` は押した時刻、`at` はその時点）、休憩は `[ { time, at }, … ]`（押した回数だけ）、「今日はなし」は `{ skipped: true, at }`（D-046）。種類は下の表 |
 | `db.routine` | `{ weekday: { 項目: 'HH:MM' か null }, holiday: { … }, holidays: [曜日の番号], updatedAt }` | 毎日の時刻（D-048）。項目は `wake`・`breakfast`・`work_start`・`lunch`・`work_end`・`dinner`・`bath`・`sleep`。曜日は 0＝日〜6＝土 |
+| `db.routineOverrides` | `{ 'YYYY-MM-DD': { 項目: 'HH:MM' か null } }` | 毎日の時刻をその日だけ変えたもの（D-060 ⑭, D-061）。null は「この日はなし」。60日より前は消す。スプレッドシートには「毎日の時刻」のシートに今日以降の分を1日1行で送る |
 | `db.timer` の `custom` | `[ { id, name, minutes } ]` | 利用者が作ったタイマー |
 | `db.timer` の `builtin` | `{ 用途別の id: 分数 }` | 用途別のタイマー（`work`・`break`・`bath`・`brush`）のうち、利用者が時間を変えたものだけ（D-044）。ないものは初めの時間 |
 
@@ -60,7 +61,7 @@
 
 迷う点は `NEEDS_HUMAN.md` の H-022 で利用者に確かめる。答えが出るまでは、ここに書いた「仮の答え」で作る。
 
-### `db.routineOverrides`（D-060 ⑭。同期の対象）
+### `db.routineOverrides`（D-060 ⑭。同期の対象。**実装済み**：上の表に移した）
 
 ```
 { 'YYYY-MM-DD': { wake: '08:30', breakfast: null } }
