@@ -975,6 +975,17 @@ class PwaTest(unittest.TestCase):
         for sel in ("#app-token", "#sync-url", "#sync-token"):
             self.assertEqual(page.eval_on_selector(sel, "e => getComputedStyle(e).backgroundColor"), want, sel)
 
+    def test_settings_more_toggle_is_44px(self):
+        """設定の「詳しく」は幅も高さも 44px 以上（D-064 ⑦、CR-A02）"""
+        for size in ((393, 852), (375, 667)):
+            page = self.clock_page(10, 0, "#settings", size=size)
+            page.wait_for_selector("#view-settings", state="visible")
+            boxes = page.eval_on_selector_all("#view-settings .more summary", "els => els.map(e => [e.getBoundingClientRect().width, e.getBoundingClientRect().height])")
+            self.assertTrue(boxes)
+            for w, h in boxes:
+                self.assertGreaterEqual(w, 44, size)
+                self.assertGreaterEqual(h, 44, size)
+
     # ---------- 日報画面（D-026 ②, D-027） ----------
     def report_page(self, hour=21, minute=0, day=9, reports=None, size=(393, 852)):
         init = None

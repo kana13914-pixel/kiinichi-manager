@@ -642,8 +642,8 @@ body:not(.calendar-on) #event-add { display: none; }
 .bubble-choices { display: flex; gap: var(--space-2); margin-top: var(--space-2); }
 .bubble-choices .cut-btn { flex: 1; }
 
-/* 設定の「詳しく」（D-060 ⑬）。説明文は2行以内にして、細かい条件はここに入れる */
-.more summary { display: inline-flex; align-items: center; min-height: var(--tap); cursor: pointer; font-size: var(--fs-footnote); color: var(--color-text-secondary); text-decoration: underline; }
+/* 設定の「詳しく」（D-060 ⑬）。説明文は2行以内にして、細かい条件はここに入れる。押せる範囲は 44px 四方以上（CR-A02。D-064 ⑦） */
+.more summary { display: inline-flex; align-items: center; min-width: var(--tap); min-height: var(--tap); cursor: pointer; font-size: var(--fs-footnote); color: var(--color-text-secondary); text-decoration: underline; }
 .more summary::-webkit-details-marker { display: none; }
 .more[open] summary { color: var(--color-text); }
 .more .note { margin-top: 0; }
