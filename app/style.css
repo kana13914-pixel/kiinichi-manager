@@ -666,7 +666,6 @@ body:not(.calendar-on) #event-add { display: none; }
 .routine-edit { flex: none; display: inline-flex; color: var(--color-text-tertiary); }
 .routine-edit svg { width: var(--size-icon-s); height: var(--size-icon-s); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .routine-tag { margin-left: var(--space-2); }
-.moved-note { margin: var(--space-2) 0 0; }
 #routine-day label { margin-top: var(--space-3); }
 
 /* タスクの「完了したら日報に入れる」（D-059） */
