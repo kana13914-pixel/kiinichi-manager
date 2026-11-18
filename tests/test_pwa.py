@@ -2513,6 +2513,45 @@ class PwaTest(unittest.TestCase):
         self.assertIn("mini-emblem.svg", bg[0])
         self.assertEqual(bg[1], "40px")
 
+    # ---------- R5 の利用者の決定（D-060 ⑫⑬⑮） ----------
+    def test_undo_toast_moves_into_dialogue_during_proposal(self):
+        tasks = [{"id": "a", "title": "見積もり", "due": "2026-11-09", "done": False, "createdAt": 1}]
+        page = self.clock_page(18, 40, init_script="localStorage.setItem('db.tasks', %s)" % json.dumps(json.dumps(tasks)))
+        page.click(".act[data-record=work_end]")
+        self.assertTrue(page.is_visible("#bubble-choices"))
+        self.assertTrue(page.is_visible("#toast"))
+        self.assertTrue(page.evaluate("document.querySelector('.dialogue').contains(document.getElementById('toast'))"))
+        overlap = page.evaluate("""() => { const t = document.getElementById('toast').getBoundingClientRect(); const n = document.querySelector('.next-strip').getBoundingClientRect();
+          return t.bottom > n.top && t.top < n.bottom; }""")
+        self.assertFalse(overlap)  # NEXT を隠さない
+        page.click("#toast .undo")  # 取り消しは効く
+        self.assertNotIn("done", page.get_attribute(".act[data-record=work_end]", "class") or "")
+        page.click(".act[data-record=work_end]")
+        page.click("#choice-keep")  # 選んだら、取り消しの表示はふだんの場所に戻る
+        self.assertFalse(page.evaluate("document.querySelector('.dialogue').contains(document.getElementById('toast'))"))
+        page.click(".act[data-record=dinner]")
+        self.assertTrue(page.is_visible("#toast"))
+        self.assertFalse(page.evaluate("document.getElementById('toast').classList.contains('in-dialogue')"))
+
+    def test_settings_texts_are_short_with_details_and_caution(self):
+        page = self.clock_page(10, 0, "#settings")
+        notes = page.eval_on_selector_all("#view-settings .card > p.note", "els => els.map(e => [e.textContent, Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight || 20))])")
+        texts = [t for t, _ in notes]
+        self.assertIn("週が明けたら、先週の日報からキィニチが短く振り返ります。", texts)
+        self.assertIn("食事・休憩・夜・就寝前・予定の前に、アプリを閉じていても声を掛けます。記録すれば取り消します。", texts)
+        self.assertIn("オフにすると、タスク・タイマー・予定・日報の一言を出しません。", texts)
+        for sel in ("#view-settings .card .more",):
+            self.assertGreaterEqual(len(page.query_selector_all(sel)), 3)
+        self.assertTrue(page.is_hidden("#view-settings .more .note >> nth=0"))  # 「詳しく」は閉じている
+        page.click("#view-settings .more summary >> nth=0")
+        self.assertTrue(page.is_visible("#view-settings .more .note >> nth=0"))
+        heights = page.eval_on_selector_all("#view-settings .card > p.note", "els => els.map(e => e.getBoundingClientRect().height)")
+        line = page.eval_on_selector("#view-settings .card > p.note", "e => parseFloat(getComputedStyle(e).fontSize) * 1.5")
+        page.set_viewport_size({"width": 393, "height": 852})
+        self.assertTrue(all(h <= line * 2 + 2 for h in page.eval_on_selector_all("#view-settings .card > p.note", "els => els.map(e => e.getBoundingClientRect().height)")))  # 2行以内
+        page.evaluate("location.hash = '#system'")
+        self.assertIn("アプリを消すと記録は戻せません", page.text_content("#view-system"))
+
     def test_sw_assets_all_exist_and_cover_app_files(self):
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")
         import re

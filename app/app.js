@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase3-v3';
+const APP_VERSION = 'phase3-v4';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -197,6 +197,7 @@ function showLine(key, { index, vars, extra } = {}) {
   const bubble = document.getElementById('bubble-text');
   bubble.textContent = fillLine(picked.text, vars) + (extra || '');
   document.getElementById('bubble-choices').hidden = true; // 選択肢は、それを出したセリフのときだけ
+  if (typeof placeToast === 'function' && document.getElementById('toast').classList.contains('in-dialogue')) { homeToast.hide(); placeToast(); }
   bubble.classList.remove('line-enter'); void bubble.offsetWidth; bubble.classList.add('line-enter'); // CR-M01：入りの動きをやり直す
   return true;
 }
@@ -416,7 +417,21 @@ function applyRecords(now = new Date()) { renderDock(now, true); if (sheet.open)
 // 取り消しの表示（5秒）
 const homeToast = makeToast(document.getElementById('toast'));
 // info = { kind, prevLine, reactionLine } … prevLine は押した直後のときだけ
+// 取り消しの表示の置き場所：夕方の提案の選択肢が出ているあいだは、セリフの面の中（選択肢の下）。ふだんは記録ボタンの上（D-060 ⑫）
+const toastHome = { parent: document.getElementById('toast').parentNode, next: document.getElementById('toast').nextSibling };
+function placeToast() {
+  const el = document.getElementById('toast');
+  const choices = document.getElementById('bubble-choices');
+  if (!choices.hidden) {
+    el.classList.add('in-dialogue');
+    choices.after(el);
+  } else if (el.classList.contains('in-dialogue')) {
+    el.classList.remove('in-dialogue');
+    toastHome.parent.insertBefore(el, toastHome.next);
+  }
+}
 function showRecordToast(info) {
+  placeToast();
   const k = kindOf(info.kind);
   const st = Records.status(info.kind, Records.day());
   const nth = k.repeat && st.count > 1 ? `（${st.count}回目）` : '';

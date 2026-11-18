@@ -17,7 +17,7 @@
 | 項目 | 状態 | 詳しくは |
 | --- | --- | --- |
 | フェーズ | **フェーズ1（画面設計）完了（D-038）。次はフェーズ2（データ設計）の最初から** | `docs/roadmap.md` の「フェーズ2」 |
-| 公開中の版 | `phase3-v3`（版の名前はフェーズ3から `phase3-vN`。版の名前はフェーズ2から `phase2-vN`。`app/app.js` の `APP_VERSION`） | 公開 URL は `NEEDS_HUMAN.md` の H-010 |
+| 公開中の版 | `phase3-v4`（版の名前はフェーズ3から `phase3-vN`。版の名前はフェーズ2から `phase2-vN`。`app/app.js` の `APP_VERSION`） | 公開 URL は `NEEDS_HUMAN.md` の H-010 |
 | ホーム | 完了・実機確認済み | `docs/decisions.md` D-019〜D-025 |
 | タスク画面 | 完了・実機確認済み（phase1-v9） | roadmap「タスク画面」、D-026 ① |
 | 日報画面 | 完了・実機確認済み（phase1-v10） | roadmap「日報画面」、D-026 ②、D-027 |

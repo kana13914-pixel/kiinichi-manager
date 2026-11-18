@@ -82,6 +82,7 @@
         <button id="records-more" type="button" class="cut-btn quiet act-more" aria-label="ほかの記録" aria-haspopup="dialog">…</button>
       </section>
 
+      <!-- 取り消しの表示。夕方の提案の選択肢が出ているあいだは、セリフの面の中（選択肢の下）に移す（D-060 ⑫, C12-03） -->
       <div id="toast" class="toast" role="status" hidden></div>
     </section>
 
@@ -342,7 +343,8 @@
           <span id="pref-voice-label">アプリを閉じている間の声掛け</span>
           <button id="pref-voice" type="button" class="cut-btn quiet chip" role="switch" aria-checked="true" aria-labelledby="pref-voice-label">オン</button>
         </div>
-        <p class="note">毎日の時刻をもとに、食事の時刻を30分過ぎても記録がないとき、仕事中に休憩なしで90分たったとき、就寝の1時間前に夕食・入浴・歯磨きが残っているとき、就寝の時刻に、通知で声を掛けます。記録するか「今日はなし」にすると取り消します。タイマーの通知はこの設定と別です。</p>
+        <p class="note">食事・休憩・夜・就寝前・予定の前に、アプリを閉じていても声を掛けます。記録すれば取り消します。</p>
+        <details class="more"><summary>詳しく</summary><p class="note">毎日の時刻をもとに、食事の時刻を30分過ぎても記録がないとき、仕事中に休憩なしで90分たったとき、就寝の1時間前に夕食・入浴・歯磨きが残っているとき、就寝の時刻、Google カレンダーの時刻のある予定の30分前に送ります。「今日はなし」にしても取り消します。タイマーの通知はこの設定と別です。</p></details>
       </section>
       <section class="card">
         <h2>週次コメント</h2>
@@ -350,7 +352,8 @@
           <span id="pref-weekly-label">先週の日報へのひとこと</span>
           <button id="pref-weekly" type="button" class="cut-btn quiet chip" role="switch" aria-checked="true" aria-labelledby="pref-weekly-label">オン</button>
         </div>
-        <p class="note">週が明けて日報を開いたとき、先週の日報（3日分以上あるとき）と記録をもとに、キィニチが短く振り返ります。作るときに、先週の日報の中身と記録が送信サーバーを通して Anthropic の Claude に送られます。1週に1回だけ作ります。</p>
+        <p class="note">週が明けたら、先週の日報からキィニチが短く振り返ります。</p>
+        <details class="more"><summary>詳しく</summary><p class="note">先週の日報が3日分以上あるとき、週が明けて日報を開いたときに作ります。作るときに、先週の日報の中身と記録（声掛けや記録の数を含む）、先週のひとことへの返事が、送信サーバーを通して Anthropic の Claude（AI）に送られます。1週に1回だけ作ります。</p></details>
       </section>
       <section class="card">
         <h2>キィニチの一言</h2>
@@ -358,7 +361,8 @@
           <span id="pref-lines-label">タスク・タイマー・予定・日報の一言</span>
           <button id="pref-lines" type="button" class="cut-btn quiet chip" role="switch" aria-checked="true" aria-labelledby="pref-lines-label">オン</button>
         </div>
-        <p class="note">オフにすると、各画面の上の一言と、日報を保存したとき・タイマーが終わったときの一言を出しません。ホームのセリフと通知はそのままです。</p>
+        <p class="note">オフにすると、タスク・タイマー・予定・日報の一言を出しません。</p>
+        <details class="more"><summary>詳しく</summary><p class="note">画面の上の一言、日報を保存したとき・タイマーが終わったときの一言、操作への短い反応を出しません。ホームのセリフと通知はそのままです。先週のひとことは「週次コメント」で切り替えます。</p></details>
       </section>
       <!-- 仕様関連はふだん開かないので、日常の設定の下にまとめて別の画面へ（2026-11-17 利用者の修正依頼。D-051） -->
       <a href="#system" class="cut-btn quiet sub-link" data-view="system">仕様関連<span aria-hidden="true">›</span></a>
@@ -390,6 +394,7 @@
       </section>
       <section class="card">
         <h2>スプレッドシートへの控え</h2>
+        <p class="status ng sync-caution">アプリを消すと記録は戻せません（スプレッドシートには控えがあります）。</p>
         <p class="note">記録・日報・タスク・毎日の時刻・タイマーを、Google スプレッドシートに控えとして送ります（送るだけで、スプレッドシートの変更はアプリに戻りません）。同じ送り先から Google カレンダーの予定を読み、予定画面に出します（読むだけ）。用意のしかたは手順書にあります。</p>
         <label for="sync-url" class="note">送り先の URL（https://script.google.com/…）</label>
         <input id="sync-url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" class="field">
