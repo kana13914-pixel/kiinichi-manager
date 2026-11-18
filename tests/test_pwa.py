@@ -2693,6 +2693,20 @@ class PwaTest(unittest.TestCase):
         self.assertTrue(page.is_visible("#toast"))
         self.assertFalse(page.evaluate("document.getElementById('toast').classList.contains('in-dialogue')"))
 
+    def test_undo_toast_in_dialogue_is_not_cut_off(self):
+        """夕方の提案中、セリフの面の中の取り消しの表示は文を途中で切らない（13px、入らなければ折り返す）。ホームははみ出さない（D-064 ⑧、I3-02）"""
+        tasks = [{"id": "a", "title": "見積もり", "due": "2026-11-09", "done": False, "createdAt": 1}]
+        for size, safe in (((393, 852), (59, 34)), ((375, 667), (20, 0))):
+            page = self.clock_page(18, 40, size=size, safe=safe, init_script="localStorage.setItem('db.tasks', %s)" % json.dumps(json.dumps(tasks)))
+            page.click(".act[data-record=work_end]")
+            self.assertTrue(page.evaluate("document.getElementById('toast').classList.contains('in-dialogue')"))
+            span = page.eval_on_selector("#toast > span", "e => [e.textContent, e.scrollWidth <= e.clientWidth, getComputedStyle(e).fontSize]")
+            self.assertIn("仕事終わり", span[0])
+            self.assertTrue(span[1], size)          # 「…」で切れていない
+            self.assertEqual(span[2], "13px", size)
+            self.assertGreaterEqual(page.eval_on_selector("#toast .undo", "e => e.getBoundingClientRect().height"), 44)
+            self.assertLessEqual(page.evaluate("document.documentElement.scrollHeight"), page.evaluate("innerHeight"), size)  # V4-02
+
     def test_settings_texts_are_short_with_details_and_caution(self):
         page = self.clock_page(10, 0, "#settings")
         notes = page.eval_on_selector_all("#view-settings .card > p.note", "els => els.map(e => [e.textContent, Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight || 20))])")

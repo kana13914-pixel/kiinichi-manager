@@ -649,7 +649,8 @@ body:not(.calendar-on) #event-add { display: none; }
 .more .note { margin-top: 0; }
 .sync-caution { margin: 0 0 var(--space-2); }
 /* 夕方の提案中の取り消しの表示：セリフの面の中、選択肢の下に置く（NEXT を隠さない。D-060 ⑫） */
-.dialogue .toast.in-dialogue { position: static; margin-top: var(--space-2); }
+.dialogue .toast.in-dialogue { position: static; margin-top: var(--space-2); font-size: var(--fs-footnote); }
+.dialogue .toast.in-dialogue > span { white-space: normal; } /* セリフの面の中は狭いので、文を途中で切らず、字を一段小さくして入れる（D-064 ⑧） */
 
 /* 先週のひとことへの返事（D-060 ⑪）。「送る」も控えめ（日報の画面の金の塗りは「保存する」1つ） */
 .weekly-reply { margin-top: var(--space-2); }
