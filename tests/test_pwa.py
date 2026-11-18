@@ -1323,6 +1323,20 @@ class PwaTest(unittest.TestCase):
         self.assertGreaterEqual(min(r[6] for r in rows), 52)  # 行の高さは変えない（詰めない）
         self.assertIsNotNone(allday)
 
+    def test_status_bar_band_on_scrolling_screens_only(self):
+        """ホーム以外は、上のセーフエリアに地の上端の色の帯を固定し、スクロールした中身を時計・電池の表示の下に通さない。ホームには出さない（D-064 ③、CR-B04）"""
+        page = self.clock_page(10, 0, size=(393, 852), safe=(59, 34))
+        band = "() => { const s = getComputedStyle(document.body, '::before'); return [s.content, s.position, s.height, s.backgroundColor, s.zIndex]; }"
+        self.assertEqual(page.evaluate(band)[0], "none")  # ホームは変えない
+        top = page.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--color-bg-top').trim()")
+        for view in ("schedule", "tasks", "timer", "report", "settings", "system"):
+            page.evaluate(f"location.hash = '#{view}'")
+            page.wait_for_selector(f"#view-{view}", state="visible")
+            content, position, height, bg, z = page.evaluate(band)
+            self.assertEqual((content, position, height), ('""', "fixed", "59px"), view)
+            self.assertEqual(bg, page.evaluate("(c) => { const d = document.createElement('i'); d.style.color = c; document.body.append(d); const v = getComputedStyle(d).color; d.remove(); return v; }", top), view)
+            self.assertGreater(int(z), 1, view)  # 予定の貼り付く日付の見出し（z-index 1）より手前
+
     def test_schedule_list_shows_eight_days_with_day_headers(self):
         page = self.schedule_page()
         self.assertTrue(page.is_visible("#schedule-list-view"))

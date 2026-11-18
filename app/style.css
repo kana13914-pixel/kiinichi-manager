@@ -784,6 +784,13 @@ body:not(.calendar-on) #event-add-open { display: none; }
 .schedule-row.routine-row-item .schedule-title { font-size: var(--fs-subhead); color: var(--color-text-secondary); }
 .schedule-row.routine-row-item.past .schedule-time, .schedule-row.routine-row-item.past .schedule-title { color: var(--color-text-tertiary); }
 
+/* スクロールした中身を、時計・電池の表示（ステータスバー）の下に通さない（CR-B04。Apple HIG「Status bars」）。
+   上のセーフエリアの高さだけ地の上端の色の帯を固定する。ホームはスクロールしないので出さない（見た目を変えない） */
+body[data-state="ready"]:not(:has(#view-home:not([hidden])))::before {
+  content: ""; position: fixed; top: 0; left: 0; right: 0; height: var(--safe-top); z-index: var(--z-tabbar); pointer-events: none;
+  background: var(--color-bg-top); box-shadow: 0 1px 0 var(--color-gold-faint);
+}
+
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
