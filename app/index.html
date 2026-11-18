@@ -33,7 +33,7 @@
     <p>声を掛けるために通知を使います。合言葉を入れて、ボタンを押してください。続けて出る確認で「許可」を選びます。</p>
     <label for="setup-token">合言葉</label>
     <input id="setup-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
-    <button id="setup-start" type="button">通知を有効にして始める</button>
+    <button id="setup-start" type="button" class="cut-btn primary">通知を有効にして始める</button>
     <p id="setup-status" class="status"></p>
   </section>
 
@@ -408,7 +408,7 @@
         <p class="note">通知が届かなくなったときや、合言葉を変えたときに使います。</p>
         <label for="app-token" class="note">合言葉</label>
         <input id="app-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" class="field">
-        <button id="enable-push" type="button">通知を有効にする</button>
+        <button id="enable-push" type="button" class="cut-btn primary">通知を有効にする</button>
         <dl>
           <dt>状態</dt><dd id="push-status">未設定</dd>
         </dl>

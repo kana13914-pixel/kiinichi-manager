@@ -4,6 +4,7 @@ iOS固有の挙動（ホーム画面追加・通知許可）はここでは確�
 import functools
 from datetime import datetime
 import json
+import re
 import threading
 import unittest
 from http.server import HTTPServer, SimpleHTTPRequestHandler
@@ -948,6 +949,22 @@ class PwaTest(unittest.TestCase):
               return h ? getComputedStyle(h, '::after').backgroundImage : getComputedStyle(sub).backgroundImage; }}""")
             self.assertIn("linear-gradient", line, view)
             self.assertIn("rgba(232, 196, 92, 0.55)", line, view)
+
+    def test_no_rounded_buttons_anywhere(self):
+        """角丸のボタンを残さない。はじめにの「通知を有効にして始める」と仕様関連の「通知を有効にする」も斜めの角の主ボタン（D-064 ⑦、CR-S01, CR-S03）"""
+        html = (APP_DIR / "index.html").read_text(encoding="utf-8")
+        self.assertEqual(re.findall(r"<button(?![^>]*class=)[^>]*>", html), [])  # 部品の形の付いていない素のボタンがない
+        page = self.new_page(permissions=["notifications"])
+        page.goto(self.base + "index.html?mode=standalone")  # 未設定：はじめに
+        page.wait_for_selector("#setup-start", state="visible")
+        st = page.eval_on_selector("#setup-start", "e => [getComputedStyle(e).borderRadius, getComputedStyle(e).clipPath]")
+        self.assertEqual(st[0], "0px")
+        self.assertIn("polygon", st[1])
+        page = self.clock_page(10, 0, "#system")
+        page.wait_for_selector("#view-system", state="visible")
+        st = page.eval_on_selector("#enable-push", "e => [getComputedStyle(e).borderRadius, getComputedStyle(e).clipPath]")
+        self.assertEqual(st[0], "0px")
+        self.assertIn("polygon", st[1])
 
     # ---------- 日報画面（D-026 ②, D-027） ----------
     def report_page(self, hour=21, minute=0, day=9, reports=None, size=(393, 852)):
