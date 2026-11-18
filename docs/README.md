@@ -44,6 +44,7 @@
 | `docs/gas_setup.md` | スプレッドシートへの控え（Google Apps Script）の設定手順（D-050） | 控えの仕組みを変えるとき、利用者に設定を頼むとき |
 | `docs/feedback/README.md` | 利用者の感想の原文（1 件 1 行） | 見た目・使い心地の対応をするとき |
 | `docs/research/2026-11-08_home_review/` | ホーム改訂（D-019）の元資料：`01_knowledge_map.md`（知識領域マップ）、`03_home_instructions.md`（指示書）。知識ベース本体は `docs/ui_knowledge.md` | D-019 の経緯を確かめるとき |
+| `docs/research/2026-11-18_round6_review/` | 全画面の見た目のレビュー（D-064。phase3-v7 → v8）の元資料：`README.md`（問題点・対応・直していないものと理由）、`images/`（改善前と後の比べ画像、見送った案。1 倍の JPEG） | R6 の経緯、CR-F12・CR-G06・CR-B04 の理由を確かめるとき |
 | `docs/research/2026-11-18_round5_phase3/` | フェーズ3（phase3-v2）までのレビュー（CR-F07〜F11・CR-G05、知識ベース改訂4）の元資料：`README.md`、`01_knowledge_map_v3.md`（知識領域マップ改訂3）、`round5_review_for_ai.md`（問題点と指示）、`round5_app.patch`（参考実装・未適用）、`images/`（今と改善案の画面。半分の大きさの JPEG） | スイッチ・設定・通知・週次コメントを直すとき、R5 の経緯を確かめるとき |
 | `docs/research/2026-11-16_round4_functions/` | 機能画面の見た目（CR-F・CR-G、知識ベース改訂3）の元資料：`README.md`、`01_knowledge_map_v2.md`（知識領域マップ改訂）、`round4_function_screens_for_ai.md`（診断と指示）、`round4_app.patch`（参考実装・未適用）、`images/`（v16 と改善案の画面。半分の大きさの JPEG） | 機能画面を直すとき、R4 の経緯を確かめるとき |
 | `docs/research/2026-11-08_round3_visual/` | 見た目 v7（D-021）の元資料：`README.md`、`kinich_design_research_for_ai.md`（R3-Q1 事実）、`first_impression_response_flow_for_ai.md`（R3-Q2 手順）、`visual_rules_v7_instructions_for_ai.md`（R3-Q3 指示）、`phase1-v7_canopy.patch`（参考実装）、`images/`（v6・v7 の画面。容量を抑えるため半分の大きさの JPEG） | D-021 の経緯、キャラクターの事実を確かめるとき |
