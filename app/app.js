@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase3-v2';
+const APP_VERSION = 'phase3-v3';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -505,10 +505,10 @@ function renderSheet(now = new Date()) {
     if (st.state === 'skipped') {
       acts.append(sheetButton('なしをやめる', sheetAct(() => Records.skip(k.id, false))));
     } else if (st.state === 'done') {
-      if (k.repeat) acts.append(sheetButton('もう1回', sheetAct(() => recordNow(k.id))));
+      if (k.repeat) acts.append(sheetButton('もう1回', sheetAct(() => recordNow(k.id)), ' rec'));
       acts.append(sheetButton(k.repeat ? '1回取り消す' : '取り消す', sheetAct(() => Records.unset(k.id))));
     } else {
-      acts.append(sheetButton('今日はなし', sheetAct(() => Records.skip(k.id, true))), sheetButton('記録', sheetAct(() => recordNow(k.id))));
+      acts.append(sheetButton('今日はなし', sheetAct(() => Records.skip(k.id, true)), ' skip'), sheetButton('記録', sheetAct(() => recordNow(k.id)), ' rec'));
     }
     li.append(body, acts);
     return li;

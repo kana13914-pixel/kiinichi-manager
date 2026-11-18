@@ -646,6 +646,61 @@ class PwaTest(unittest.TestCase):
         self.assertNotIn("audio", sw)
         self.assertFalse((APP_DIR / "audio").exists())
 
+    # ---------- R5（2026-11-18）：スイッチ・記録の一覧・先週のひとこと・控えの失敗 ----------
+    def test_switch_shows_state_with_track_and_knob(self):
+        """スイッチは溝とつまみで状態を見せ、オンはライム（CR-F07）。文字（オン／オフ）とaria-checkedはそのまま。"""
+        page = self.clock_page(21, 0, "#settings")
+        page.add_style_tag(content="*, *::before, *::after { transition: none !important; }")  # 動きの途中の色を読まない
+        track = lambda: page.evaluate("getComputedStyle(document.getElementById('pref-lines'), '::before').backgroundColor")
+        self.assertEqual(track(), "rgb(185, 227, 95)")
+        page.click("#pref-lines")
+        self.assertEqual(page.get_attribute("#pref-lines", "aria-checked"), "false")
+        self.assertNotEqual(track(), "rgb(185, 227, 95)")
+        size = page.eval_on_selector("#pref-lines", "e => [e.getBoundingClientRect().width, e.getBoundingClientRect().height]")
+        self.assertTrue(size[0] >= 44 and size[1] >= 44, size)
+
+    def test_holiday_days_in_one_row(self):
+        """休日の曜日 7 つは折り返さず 1 本の帯に並び、どれも 44px 以上（CR-F09）。"""
+        page = self.clock_page(21, 0, "#settings", size=(375, 667))
+        boxes = page.eval_on_selector_all("#routine-holidays .cut-btn", "els => els.map(e => { const r = e.getBoundingClientRect(); return [Math.round(r.top), r.width, r.height]; })")
+        self.assertEqual(len({b[0] for b in boxes}), 1, boxes)
+        self.assertTrue(all(w >= 44 and h >= 44 for _, w, h in boxes), boxes)
+
+    def test_records_sheet_skip_is_quiet(self):
+        """記録の一覧の「今日はなし」は文字だけの控えめな操作、「記録」が行の主な操作（CR-F08）。"""
+        page = self.clock_page(8, 0)
+        page.click("#records-more")
+        row = "#records-list li[data-record=breakfast]"
+        self.assertIn("skip", page.get_attribute(row + " button:text-is('今日はなし')", "class"))
+        self.assertIn("rec", page.get_attribute(row + " button:text-is('記録')", "class"))
+
+    def test_weekly_on_top_on_first_day_then_back(self):
+        """先週のひとことは、週が明けて最初に見た日は日報の上、次の日からは「これまで」の上（CR-G05）。何から作ったかを添える。"""
+        page, _ = self.weekly_page(self.WEEK_REPORTS)
+        page.wait_for_selector("#weekly", state="visible", timeout=5_000)
+        order = lambda: page.evaluate("document.getElementById('weekly').compareDocumentPosition(document.getElementById('report-form')) & Node.DOCUMENT_POSITION_FOLLOWING ? 'above' : 'below'")
+        self.assertEqual(order(), "above")
+        self.assertIn("日報 3 日分", page.text_content("#weekly-basis"))
+        self.assertIn("Claude（AI）", page.text_content("#weekly-basis"))
+        self.assertTrue(page.is_hidden("#report-say"))  # その日は一言の面を 1 つに
+        self.assertEqual(page.evaluate("JSON.parse(localStorage.getItem('db.weekly'))['2026-11-09'].firstSeen"), "2026-11-16")
+        # 次の日（同じ週の火曜）：「これまで」の上に戻り、上の一言も戻る
+        saved = page.evaluate("localStorage.getItem('db.weekly')")
+        page2, calls2 = self.weekly_page(self.WEEK_REPORTS, day=17, extra_init="localStorage.setItem('db.weekly', %s);" % json.dumps(saved))
+        page2.wait_for_selector("#weekly", state="visible", timeout=5_000)
+        self.assertEqual(page2.evaluate("document.getElementById('weekly').compareDocumentPosition(document.getElementById('report-form')) & Node.DOCUMENT_POSITION_FOLLOWING ? 'above' : 'below'"), "below")
+        self.assertTrue(page2.is_visible("#report-say"))
+        self.assertEqual(calls2, [])
+
+    def test_sync_error_shown_on_settings(self):
+        """スプレッドシートへの控えが失敗したら、設定のいちばん上に出す（CR-F11）。"""
+        init = "localStorage.setItem('db.sync', JSON.stringify({ url: 'https://example.invalid/exec', token: 't', lastAt: 0, lastSig: '', dirty: true, error: '通信できません' }));"
+        page = self.clock_page(21, 0, "#settings", init_script=init)
+        page.wait_for_selector("#sync-alert", state="visible", timeout=3_000)
+        self.assertIn("送れていません（通信できません）", page.text_content("#sync-alert"))
+        page2 = self.clock_page(21, 0, "#settings")
+        self.assertTrue(page2.is_hidden("#sync-alert"))
+
     # ---------- 機能画面の決まり（R4。CR-F / CR-G） ----------
     def test_tabbar_stays_above_sticky_day_header(self):
         """予定の貼り付く日付の見出しが、タブバーの上に重ならない（R4 の不具合修正）。"""

@@ -98,7 +98,6 @@
 
       <!-- 予定を足す・直す・消す（D-054）。Google カレンダーをつないでいるときだけ出す。金の塗りは「＋ 予定を足す」（フォームを開いたら「保存」）1つ -->
       <div id="event-add" class="task-add event-add">
-        <button id="event-add-open" type="button" class="cut-btn primary">＋ 予定を足す</button>
         <p id="event-status" class="status ok" role="status"></p>
         <form id="event-form" class="task-form" hidden>
           <p id="event-form-title" class="form-title">予定を足す</p>
@@ -125,9 +124,13 @@
         </form>
       </div>
 
-      <div class="schedule-modes" role="group" aria-label="表示の切り替え">
-        <button id="schedule-mode-list" type="button" class="cut-btn quiet chip" aria-pressed="true">リスト</button>
-        <button id="schedule-mode-month" type="button" class="cut-btn quiet chip" aria-pressed="false">月</button>
+      <!-- 表示の切り替えと「追加」を 1 行に（CR-F10）。追加はカレンダーをつないでいるときだけ -->
+      <div class="schedule-bar">
+        <div class="schedule-modes" role="group" aria-label="表示の切り替え">
+          <button id="schedule-mode-list" type="button" class="cut-btn quiet chip" aria-pressed="true">リスト</button>
+          <button id="schedule-mode-month" type="button" class="cut-btn quiet chip" aria-pressed="false">月</button>
+        </div>
+        <button id="event-add-open" type="button" class="cut-btn quiet chip" aria-label="予定を足す">＋ 追加</button>
       </div>
 
       <div id="schedule-list-view">
@@ -302,6 +305,7 @@
         <div class="nameplate" aria-hidden="true">キィニチ</div>
         <p id="weekly-title" class="weekly-title">先週のひとこと</p>
         <p id="weekly-line" class="line"></p>
+        <p id="weekly-basis" class="weekly-basis"></p>
       </section>
       <p id="weekly-status" class="status" role="status"></p>
 
@@ -319,6 +323,7 @@
     <!-- 設定：フェーズ0の検証情報もここに移した -->
     <section id="view-settings" class="view">
       <header class="sub-header"><a href="#home" class="back">‹ ホーム</a><h1><span class="label-en" aria-hidden="true">SETTINGS</span>設定</h1></header>
+      <p id="sync-alert" class="status ng sync-alert" role="status" hidden></p>
       <section class="card">
         <h2>毎日の時刻</h2>
         <p class="note">ホームの記録ボタンを出す時間帯、予定の一覧、声掛けの時刻の基準になります（自動保存）。</p>

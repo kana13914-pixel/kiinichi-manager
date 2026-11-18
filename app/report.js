@@ -283,6 +283,22 @@ const Report = (() => {
     if (on && saved) {
       $('weekly-title').textContent = `先週のひとこと（${labelShort(week.days[0])}〜${labelShort(week.days[6])}）`;
       $('weekly-line').textContent = saved.text;
+      // 何から作ったかを添える（CR-G05。人と AI の関わりの指針 G1・G11）
+      const reportsAll = load();
+      const n = week.days.filter((d) => reportsAll[dateStr(d)]).length;
+      $('weekly-basis').textContent = `先週の日報 ${n} 日分と記録から、Claude（AI）が書いています`;
+      // 週が明けて最初に見た日（朝4時区切り）は日報の上に出し、次の日からは「これまで」の上に戻す
+      const today = todayKey(now);
+      if (!saved.firstSeen) {
+        const all = Store.read(DB.weekly, {}) || {};
+        all[week.key] = { ...saved, firstSeen: today };
+        Store.write(DB.weekly, all);
+      }
+      const fresh = !saved.firstSeen || saved.firstSeen === today;
+      const box = $('weekly');
+      box.classList.toggle('fresh', fresh);
+      const anchor = fresh ? $('report-form') : $('weekly-status');
+      if (box.nextElementSibling !== anchor) anchor.parentNode.insertBefore(box, anchor);
     }
     if (!on || saved || weeklyTried === week.key) return;
     const reports = load();

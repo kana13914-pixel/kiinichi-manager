@@ -44,6 +44,11 @@
 
   /* 寸法 */
   --tap: 44px;
+  /* ---- R5（2026-11-18）：スイッチ・記録の一覧など ---- */
+  --switch-w: 52px;        /* スイッチの溝の幅 */
+  --switch-h: 30px;        /* スイッチの溝の高さ */
+  --switch-knob: 22px;     /* つまみの大きさ */
+  --switch-gap: 4px;       /* 溝の端とつまみの間 */
   --size-record: 52px;
   --size-btn-primary: 48px;
   --size-icon: 24px;
@@ -668,6 +673,79 @@ body.no-screen-lines .dialogue-mini:not(.weekly-say) { display: none; } /* 週�
 .sheet-row.skipped .sheet-name { color: var(--color-text-tertiary); }
 .sheet-acts { flex: none; display: flex; gap: var(--space-2); }
 .sheet-acts .cut-btn { padding: 0 var(--space-3); }
+
+
+/* ========== R5（2026-11-18。docs/visual_rules.md の CR-F07〜F10・CR-G05） ========== */
+/* スイッチ（CR-F07）：role="switch" は溝とつまみで状態を見せる。文字（オン／オフ）は状態の言葉として左に添える。
+   オンはライム（記録済みと同じ「済み・有効」の色）。金の塗りは使わない（CR-C02） */
+.cut-btn.chip[role="switch"] {
+  --btn-line: transparent; --btn-fill: transparent;
+  clip-path: none; background: none; isolation: auto;
+  display: inline-flex; align-items: center; justify-content: flex-end; gap: var(--space-2);
+  min-width: calc(var(--switch-w) + var(--space-6)); padding: 0; font-weight: 500; color: var(--color-text-secondary);
+}
+.cut-btn.chip[role="switch"]::before {
+  content: ""; position: static; inset: auto; z-index: auto; order: 2; flex: none;
+  width: var(--switch-w); height: var(--switch-h);
+  background: var(--color-surface-2); box-shadow: inset 0 0 0 1px var(--color-border);
+  clip-path: polygon(var(--cut-s) 0, 100% 0, 100% calc(100% - var(--cut-s)), calc(100% - var(--cut-s)) 100%, 0 100%, 0 var(--cut-s));
+  transition: background var(--dur-quick);
+}
+.cut-btn.chip[role="switch"]::after {
+  content: ""; position: absolute; z-index: 1; /* 溝（order: 2）より手前に描く */ top: 50%; right: calc(var(--switch-w) - var(--switch-knob) - var(--switch-gap));
+  width: var(--switch-knob); height: var(--switch-knob); transform: translateY(-50%);
+  background: var(--color-text-secondary); transition: right var(--dur-quick);
+  clip-path: polygon(30% 0, 100% 0, 100% 70%, 70% 100%, 0 100%, 0 30%);
+}
+.cut-btn.chip[role="switch"][aria-checked="true"] { --btn-line: transparent; --btn-fill: transparent; color: var(--color-text); font-weight: 700; }
+.cut-btn.chip[role="switch"][aria-checked="true"]::before { background: var(--color-lime); box-shadow: none; }
+.cut-btn.chip[role="switch"][aria-checked="true"]::after { right: var(--switch-gap); background: var(--color-ink); }
+.cut-btn.chip[role="switch"]:focus-visible::before { box-shadow: inset 0 0 0 2px var(--color-accent); }
+
+/* 記録の一覧（CR-F08）：行の主な操作は「記録」。「今日はなし」は文字だけの控えめな操作にして、20 個の同じ箱を並べない */
+.sheet-acts .cut-btn.skip {
+  --btn-line: transparent; --btn-fill: transparent;
+  color: var(--color-text-tertiary); font-weight: 500; padding: 0 var(--space-2);
+  text-decoration: underline; text-underline-offset: 0.25em;
+}
+.sheet-acts .cut-btn.rec { --btn-line: var(--color-text); --btn-fill: var(--color-surface-2); font-weight: 700; }
+.sheet-row.done .sheet-state { color: var(--color-success); }
+.sheet-row.skipped .sheet-name, .sheet-row.skipped .sheet-state { color: var(--color-text-tertiary); }
+
+/* 休日の曜日（CR-F09）：7 つを 1 本の帯に（折り返さない）。各区画は 44px 以上 */
+.routine-days {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0;
+  background: var(--color-surface-1);
+  clip-path: polygon(var(--cut-s) 0, 100% 0, 100% calc(100% - var(--cut-s)), calc(100% - var(--cut-s)) 100%, 0 100%, 0 var(--cut-s));
+}
+.routine-days .cut-btn { --btn-line: var(--color-surface-1); --btn-fill: var(--color-surface-1); width: 100%; min-width: 0; clip-path: none; }
+.routine-days .cut-btn::before { clip-path: none; }
+.routine-days .cut-btn[aria-pressed="true"] { --btn-line: var(--color-text); --btn-fill: var(--color-surface-2); }
+
+/* 予定の「追加」（CR-F10）：見るのが主の画面なので金の全幅ボタンにせず、切り替えの右に小さく */
+.schedule-bar { display: flex; align-items: stretch; gap: var(--space-2); margin-top: var(--space-3); }
+.schedule-bar .schedule-modes { flex: 1; margin: 0; }
+.schedule-bar #event-add-open { flex: none; width: auto; margin: 0; padding: 0 var(--space-4); }
+body:not(.calendar-on) #event-add-open { display: none; }
+.event-add:has(#event-form[hidden]):has(#event-status:empty) { display: none; }
+
+/* 調子の印：記録なしは縁だけで見せる（図として 3:1。CR-G03 の修正） */
+.mood-day:not([data-mood]) i, .mood-legend span:last-child i {
+  background: none; clip-path: none; box-shadow: inset 0 0 0 1.5px var(--color-line);
+}
+
+/* 先週のひとこと（CR-G05）：週が明けて最初に見た日は日報の上に。何から作ったかを小さく添える */
+.weekly-basis { grid-column: 2; margin: var(--space-1) 0 0; font-size: var(--fs-caption); color: var(--color-text-tertiary); }
+.weekly-say.fresh { margin-bottom: var(--space-4); }
+/* その日は一言の面を先週のひとことだけにする（1 画面 1 つ。C10-02） */
+.view.report:has(.weekly-say.fresh:not([hidden])) #report-say { display: none; }
+
+/* 控えの失敗を設定の上に（CR-F11）：失敗したときだけ出す */
+.sync-alert { margin: var(--space-2) 0 0; }
+
+
+/* 記録済みの記録ボタン（R5-08）：「✓ 仕事終わり」が SE の 3 つ並びで幅ぎりぎりなので、字間を詰める */
+.record-dock .act.done { letter-spacing: 0; padding: 0 var(--space-1); }
 
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {

@@ -58,6 +58,12 @@ const Sync = (() => {
     }
     $('sync-status').textContent = text;
     $('sync-status').className = cls;
+    // 失敗は設定のいちばん上にも出す（CR-F11。仕様関連を開かないと気づけないため）
+    const alert = $('sync-alert');
+    if (alert) {
+      alert.hidden = !(c.url && c.token && c.error);
+      alert.textContent = alert.hidden ? '' : `スプレッドシートへの控えが送れていません（${c.error}）。「仕様関連」で確かめられます`;
+    }
   }
 
   let sending = null;
