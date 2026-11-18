@@ -794,6 +794,12 @@ body[data-state="ready"]:not(:has(#view-home:not([hidden])))::before {
 /* 選んでいる入力欄の金は 1 本（縁＋外側 1px で 2px）にまとめる。縁の金と離れた外側の輪が二重に見えて重たかった（CR-F01 の補足、P2-04） */
 input:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 1px var(--color-accent); }
 
+/* 設定・仕様関連の見出しの下にも、ほかの画面と同じ「右へ消える金の線」（CR-F05）。「‹ ホーム」と見出しの下端はそろえたまま（D-022 ⑥） */
+.view > .sub-header {
+  padding-bottom: var(--space-2);
+  background: linear-gradient(90deg, var(--color-gold-line), transparent) left bottom / 100% 1px no-repeat;
+}
+
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

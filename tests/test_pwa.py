@@ -938,6 +938,17 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(st[1], "rgb(232, 196, 92)")
         self.assertIn("rgb(232, 196, 92)", st[2])
 
+    def test_every_screen_heading_has_gold_line(self):
+        """設定・仕様関連の見出しの下にも、ほかの画面と同じ金の線（D-064 ⑥、CR-F05）"""
+        page = self.clock_page(10, 0)
+        for view in ("schedule", "tasks", "timer", "report", "settings", "system"):
+            page.evaluate(f"location.hash = '#{view}'")
+            page.wait_for_selector(f"#view-{view}", state="visible")
+            line = page.evaluate(f"""() => {{ const h = document.querySelector('#view-{view} > h1'); const sub = document.querySelector('#view-{view} > .sub-header');
+              return h ? getComputedStyle(h, '::after').backgroundImage : getComputedStyle(sub).backgroundImage; }}""")
+            self.assertIn("linear-gradient", line, view)
+            self.assertIn("rgba(232, 196, 92, 0.55)", line, view)
+
     # ---------- 日報画面（D-026 ②, D-027） ----------
     def report_page(self, hour=21, minute=0, day=9, reports=None, size=(393, 852)):
         init = None
