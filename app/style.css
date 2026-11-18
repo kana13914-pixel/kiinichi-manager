@@ -777,6 +777,13 @@ body:not(.calendar-on) #event-add-open { display: none; }
 /* タスクの追加は一言のすぐ下・一覧の上（CR-F12）。タスクが増えても最初の画面で主ボタンが見える */
 .view.tasks > .task-add { margin: 0 0 var(--space-1); }
 
+/* 予定のリストの毎日の時刻（起床・食事など）の行は控えめに（CR-G06）。カレンダーの予定と太さ・大きさ・色を変えて、予定を埋もれさせない。
+   行の数と高さは変えない（R5 Q-R5-6「詰めない」）。時刻の列の幅は文字の大きさによらずそろえ、名前の頭をそろえる */
+.schedule-time { min-width: calc(var(--fs-title3) * 3.2); }
+.schedule-row.routine-row-item .schedule-time:not(.allday) { font-size: var(--fs-body); font-weight: 400; color: var(--color-text-secondary); }
+.schedule-row.routine-row-item .schedule-title { font-size: var(--fs-subhead); color: var(--color-text-secondary); }
+.schedule-row.routine-row-item.past .schedule-time, .schedule-row.routine-row-item.past .schedule-title { color: var(--color-text-tertiary); }
+
 /* ---------- 動きを減らす設定（I3-04） ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

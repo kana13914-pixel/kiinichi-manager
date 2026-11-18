@@ -1304,6 +1304,25 @@ class PwaTest(unittest.TestCase):
     def schedule_rows(self, page, date):
         return page.eval_on_selector_all(f"#schedule-days .schedule-day[data-date='{date}'] .schedule-row", self.ROWS)
 
+    def test_schedule_routine_rows_are_quieter_than_events(self):
+        """毎日の時刻の行は細く小さく一段弱い色、カレンダーの予定は太く大きく。名前の頭はそろい、行の高さは変えない（D-064 ②、CR-G06）"""
+        page = self.schedule_page()
+        rows = page.eval_on_selector_all("#schedule-days .schedule-day[data-date='2026-11-14'] .schedule-row", """els => els.map(e => {
+          const t = getComputedStyle(e.querySelector('.schedule-time'));
+          return [e.querySelector('.schedule-title').firstChild.textContent, e.classList.contains('routine-row-item'), t.fontWeight, parseFloat(t.fontSize), t.color,
+            Math.round(e.querySelector('.schedule-title').getBoundingClientRect().left), e.getBoundingClientRect().height]; })""")
+        by = {r[0]: r for r in rows}
+        routine, event, allday = by["朝食"], by["買い出し"], by["部屋の片づけ"]
+        self.assertTrue(routine[1])
+        self.assertFalse(event[1])
+        self.assertEqual(routine[2], "400")
+        self.assertEqual(event[2], "700")
+        self.assertLess(routine[3], event[3])
+        self.assertNotEqual(routine[4], event[4])  # 色も変える（太さ・大きさだけに頼らない）
+        self.assertEqual({r[5] for r in rows}, {routine[5]})  # 名前の頭がそろう（終日の行も）
+        self.assertGreaterEqual(min(r[6] for r in rows), 52)  # 行の高さは変えない（詰めない）
+        self.assertIsNotNone(allday)
+
     def test_schedule_list_shows_eight_days_with_day_headers(self):
         page = self.schedule_page()
         self.assertTrue(page.is_visible("#schedule-list-view"))
