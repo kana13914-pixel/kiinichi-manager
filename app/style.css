@@ -545,7 +545,7 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
 }
 
 /* 入力欄：黒い穴ではなく、地より少し明るい面＋見える縁。選んでいる欄は金の縁（CR-F01） */
-input, textarea { background: var(--color-field); } /* 縁は --color-border のまま（入力欄の上で 3:1 以上） */
+input, textarea, .field { background: var(--color-field); } /* 縁は --color-border のまま（入力欄の上で 3:1 以上）。.field（仕様関連の欄）も同じ（D-064 ⑦） */
 input:focus, textarea:focus { border-color: var(--color-accent); }
 
 /* 控えめなボタン・チップ：最奥の黒をやめ、面 1 段目に。選択中は白い縁＋太字、未選択は文字を一段弱く（CR-F02） */

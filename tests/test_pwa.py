@@ -966,6 +966,15 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(st[0], "0px")
         self.assertIn("polygon", st[1])
 
+    def test_system_fields_are_not_black_holes(self):
+        """仕様関連の入力欄も、ほかの画面と同じ「地より少し明るい面」。最奥の黒にしない（D-064 ⑦、CR-F01）"""
+        page = self.clock_page(10, 0, "#system")
+        page.wait_for_selector("#view-system", state="visible")
+        want = page.eval_on_selector("#sync-url", "e => { const i = document.createElement('input'); e.after(i); const v = getComputedStyle(i).backgroundColor; i.remove(); return v; }")
+        self.assertEqual(want, "rgba(244, 241, 232, 0.05)")
+        for sel in ("#app-token", "#sync-url", "#sync-token"):
+            self.assertEqual(page.eval_on_selector(sel, "e => getComputedStyle(e).backgroundColor"), want, sel)
+
     # ---------- 日報画面（D-026 ②, D-027） ----------
     def report_page(self, hour=21, minute=0, day=9, reports=None, size=(393, 852)):
         init = None
