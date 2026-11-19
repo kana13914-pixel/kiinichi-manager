@@ -247,6 +247,20 @@ body.has-photo .next-strip {
   background: linear-gradient(90deg, color-mix(in srgb, var(--color-strip-from) calc((1 - var(--ui-clear, 0)) * 100%), transparent),
     color-mix(in srgb, var(--color-strip-to) calc((1 - var(--ui-clear, 0)) * 100%), transparent));
 }
+/* 記録のボタン（「…」を含む）も透かす（D-067 ⑤を改める、2026-11-19 利用者の修正依頼）。
+   ふだんは外側を縁の色で塗り、内側を重ねる作りなので、内側だけ透かすと縁の色が透けて見える。
+   写真があるときは外側を塗らず、縁は 1px の輪（evenodd で内側をくり抜いた多角形）として ::after に描く。文字は透かさない */
+body.has-photo #view-home .record-dock :is(.act, .cut-btn) { background: transparent; }
+body.has-photo #view-home .record-dock :is(.act, .cut-btn)::before {
+  background: color-mix(in srgb, var(--btn-fill) calc((1 - var(--ui-clear, 0)) * 100%), transparent);
+}
+body.has-photo #view-home .record-dock :is(.act, .cut-btn)::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--btn-line);
+  clip-path: polygon(evenodd,
+    var(--btn-cut) 0, 100% 0, 100% calc(100% - var(--btn-cut)), calc(100% - var(--btn-cut)) 100%, 0 100%, 0 var(--btn-cut),
+    1px calc(var(--btn-cut) + var(--cut-fix)), 1px calc(100% - 1px), calc(100% - var(--btn-cut) - var(--cut-fix)) calc(100% - 1px),
+    calc(100% - 1px) calc(100% - var(--btn-cut) - var(--cut-fix)), calc(100% - 1px) 1px, calc(var(--btn-cut) + var(--cut-fix)) 1px);
+}
 body.has-photo:has(#view-home:not([hidden])) .tabbar { background: color-mix(in srgb, var(--color-ink) calc((1 - var(--ui-clear, 0)) * 100%), transparent); }
 /* ホームの画面の上で合わせる（D-067）。画面全体を触って絵を動かし、下の板で大きさ・透け具合。部品は押せない */
 .portrait-editor { position: fixed; inset: 0; z-index: var(--z-edit); }

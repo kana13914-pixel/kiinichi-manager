@@ -2249,6 +2249,12 @@ class PwaTest(unittest.TestCase):
             self.assertIn("left: 60%", self.photo_style(page))
             self.assertEqual(page.evaluate("document.body.style.getPropertyValue('--ui-clear')"), "0.4")
             self.assertTrue(page.is_hidden("#view-home .stage-mark"))
+            # 記録のボタン（「…」も）の地も透ける。縁は輪として残る（D-068）
+            for sel in ("#record-acts .act", "#records-more"):
+                fill = page.evaluate("(s) => getComputedStyle(document.querySelector(s), '::before').backgroundColor", sel)
+                self.assertRegex(fill, r"(rgba\(|color\(srgb).* 0\.[0-9]+\)$", sel)  # 透けている（不透明度が 1 未満）
+                self.assertEqual(page.evaluate("(s) => getComputedStyle(document.querySelector(s)).backgroundColor", sel), "rgba(0, 0, 0, 0)")
+                self.assertIn("evenodd", page.evaluate("(s) => getComputedStyle(document.querySelector(s), '::after').clipPath", sel))
             # 部品は押せる（合わせていないとき）
             self.assertEqual(page.evaluate("getComputedStyle(document.getElementById('portrait-layer')).pointerEvents"), "none")
         # 位置と大きさをあとから直す。「やめる」なら変わらず設定に戻る
