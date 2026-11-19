@@ -1,6 +1,6 @@
 // Service Worker。オフラインでも画面が開けるよう静的ファイルをキャッシュし、通知の表示とタップを受け持つ。
 // ファイルを更新したら CACHE_VERSION を上げること（古いキャッシュが残るのを防ぐ）。
-const CACHE_VERSION = 'phase3-v9';
+const CACHE_VERSION = 'phase3-v10';
 const ASSETS = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const ASSETS = [
   './timer.js',
   './schedule.js',
   './sync.js',
+  './portrait.js',
   './style.css',
   './img/canopy-emblem.svg',
   './img/canopy-vines.svg',

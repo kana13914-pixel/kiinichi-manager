@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase3-v9';
+const APP_VERSION = 'phase3-v10';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -97,24 +97,7 @@ function showView() {
 window.addEventListener('hashchange', showView);
 showView();
 
-// ---------- 立ち絵（D-022 ④, CR-P04） ----------
-// app/img/portrait.webp（なければ portrait.png）を置くだけで表示する。読み込めなければ紋章のまま
-const PORTRAIT_SOURCES = ['img/portrait.webp', 'img/portrait.png'];
-function loadPortrait(sources = PORTRAIT_SOURCES) {
-  const el = document.getElementById('portrait');
-  if (!sources.length || !el) return;
-  const img = new Image();
-  img.onload = () => {
-    el.style.setProperty('--portrait-art', `url("${sources[0]}")`);
-    el.dataset.art = 'ready';
-    el.setAttribute('role', 'img');
-    el.setAttribute('aria-label', 'キィニチの立ち絵');
-    el.removeAttribute('aria-hidden');
-  };
-  img.onerror = () => loadPortrait(sources.slice(1));
-  img.src = sources[0];
-}
-loadPortrait();
+// 立ち絵は portrait.js（D-022 ④、D-066）
 
 // ---------- 時計 ----------
 function renderClock(now = new Date()) {

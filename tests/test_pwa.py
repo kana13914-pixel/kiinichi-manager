@@ -5,7 +5,9 @@ import functools
 from datetime import datetime
 import json
 import re
+import struct
 import threading
+import zlib
 import unittest
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
@@ -31,6 +33,14 @@ PushManager.prototype.subscribe = async () => ({
   toJSON: () => ({ endpoint: 'https://web.push.apple.com/fake', keys: { p256dh: 'BBBB', auth: 'AAAA' } }),
 });
 """
+
+
+def make_png(w, h, rgba):
+    """単色の PNG を作る（立ち絵の写真のテスト用）。rgba は (r, g, b, a)"""
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    raw = b"".join(b"\x00" + bytes(rgba) * w for _ in range(h))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
@@ -2161,6 +2171,101 @@ class PwaTest(unittest.TestCase):
         page.wait_for_timeout(500)
         self.assertEqual(calls, [])
 
+    # ---------- 立ち絵を写真から選ぶ（D-066） ----------
+    def portrait_page(self):
+        ctx = self.browser.new_context(permissions=["notifications"], viewport={"width": 393, "height": 852})
+        self.addCleanup(ctx.close)
+        ctx.add_init_script(READY)
+        ctx.add_init_script(VISIBILITY)
+        page = ctx.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.addCleanup(lambda: self.assertEqual(errors, [], "JSエラーが出ている"))
+        page.goto(self.base + "index.html?mode=standalone")
+        page.wait_for_function("dialogue !== null", timeout=3_000)
+        page.evaluate("location.hash = '#settings'")
+        page.wait_for_selector("#view-settings", state="visible")
+        return page
+
+    def choose_photo(self, page, png):
+        page.set_input_files("#portrait-file", files=[{"name": "photo.png", "mimeType": "image/png", "buffer": png}])
+        page.wait_for_selector("#portrait-sheet[open]", timeout=5_000)
+
+    def test_portrait_from_photo_adjust_and_back_to_emblem(self):
+        page = self.portrait_page()
+        self.assertIn("紋章を出しています", page.text_content("#portrait-state"))
+        self.assertTrue(page.is_hidden("#portrait-adjust"))
+        self.assertTrue(page.is_hidden("#portrait-reset"))
+        # 背景のある横長の画像（2000×1000）→ 長い辺を 1200 に縮め、角を斜めに落とした枠に入れる
+        self.choose_photo(page, make_png(2000, 1000, (40, 120, 90, 255)))
+        self.assertIn("framed", page.get_attribute("#portrait-preview", "class"))
+        self.assertEqual(page.input_value("#portrait-scale"), "100")
+        page.fill("#portrait-scale", "150")
+        page.dispatch_event("#portrait-scale", "input")
+        self.assertEqual(page.text_content("#portrait-scale-value"), "150%")
+        # 指で動かす：見本の幅の 1/10 右へ → 位置が +10%
+        box = page.locator("#portrait-preview").bounding_box()
+        cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+        page.mouse.move(cx, cy)
+        page.mouse.down()
+        page.mouse.move(cx + box["width"] / 10, cy, steps=4)
+        page.mouse.up()
+        page.click("#portrait-save")
+        page.wait_for_selector("#portrait-sheet:not([open])", state="attached")
+        conf = json.loads(page.evaluate("localStorage.getItem('db.portrait')"))
+        self.assertEqual([conf["w"], conf["h"], conf["alpha"], conf["scale"], conf["y"]], [1200, 600, False, 1.5, 0])
+        self.assertAlmostEqual(conf["x"], 10, delta=0.5)
+        self.assertIn("写真から選んだ画像", page.text_content("#portrait-state"))
+        # ホーム：紋章の代わりに、保存した位置と大きさで出る。読み込み直しても残る
+        for reload in (False, True):
+            if reload:
+                page.reload()
+            page.evaluate("location.hash = '#home'")
+            page.wait_for_selector("#portrait[data-art='photo'] .portrait-frame.framed img", state="attached", timeout=5_000)
+            self.assertEqual(page.get_attribute("#portrait", "role"), "img")
+            style = page.get_attribute("#portrait .portrait-img", "style")
+            self.assertIn("scale(1.5)", style)
+            self.assertIn("left: 60%", style)
+            self.assertIn("width: 266.6", style)  # 横長は枠の高さに合わせる：(2/1)/(3/4)=266.7%
+            fb = page.locator("#portrait .portrait-frame").bounding_box()
+            self.assertAlmostEqual(fb["width"] / fb["height"], 0.75, delta=0.01)
+        # 位置と大きさをあとから直す。「やめる」なら変わらない
+        page.evaluate("location.hash = '#settings'")
+        page.click("#portrait-adjust")
+        page.wait_for_selector("#portrait-sheet[open]")
+        self.assertEqual(page.input_value("#portrait-scale"), "150")
+        page.click("#portrait-center")
+        self.assertEqual(page.input_value("#portrait-scale"), "100")
+        page.click("#portrait-cancel")
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.portrait')"))["scale"], 1.5)
+        # 紋章に戻す（確認のあと）
+        page.click("#portrait-reset")
+        page.click("#confirm-ok")
+        page.wait_for_function("document.getElementById('portrait').dataset.art === 'none'")
+        self.assertIsNone(page.evaluate("localStorage.getItem('db.portrait')"))
+        self.assertEqual(page.evaluate("document.querySelectorAll('#portrait .portrait-frame').length"), 0)
+        self.assertEqual(page.get_attribute("#portrait", "aria-hidden"), "true")
+        self.assertTrue(page.is_hidden("#portrait-reset"))
+
+    def test_portrait_transparent_photo_has_no_frame_and_sits_on_bottom(self):
+        page = self.portrait_page()
+        self.choose_photo(page, make_png(300, 600, (200, 50, 50, 0)))  # 透過の縦長（1:2）
+        self.assertNotIn("framed", page.get_attribute("#portrait-preview", "class"))
+        page.click("#portrait-save")
+        page.wait_for_selector("#portrait-sheet:not([open])", state="attached")
+        conf = json.loads(page.evaluate("localStorage.getItem('db.portrait')"))
+        self.assertTrue(conf["alpha"])
+        # 枠に収める：高さ 100%・幅 (1/2)/(3/4)=66.7%。足元は下にそろうので位置は真ん中のまま（y=0）
+        self.assertEqual(conf["y"], 0)
+        page.evaluate("location.hash = '#home'")
+        page.wait_for_selector("#portrait[data-art='photo'] img", state="attached", timeout=5_000)
+        self.assertEqual(page.evaluate("document.querySelectorAll('#portrait .framed').length"), 0)
+        self.assertIn("height: 100%", page.get_attribute("#portrait .portrait-img", "style"))
+        # 読めないファイルは理由を出す
+        page.evaluate("location.hash = '#settings'")
+        page.set_input_files("#portrait-file", files=[{"name": "x.png", "mimeType": "image/png", "buffer": b"not an image"}])
+        page.wait_for_function("document.getElementById('portrait-status').textContent.includes('読み込めませんでした')")
+
     def test_weekly_reply_once_rewrite_and_sent_next_week(self):
         saved = {"2026-11-09": {"text": "疲れた日が多い週だったな。", "at": 1, "firstSeen": "2026-11-16"}}
         page, calls = self.weekly_page(self.WEEK_REPORTS, extra_init="localStorage.setItem('db.weekly', %s);" % json.dumps(json.dumps(saved)))
@@ -2428,7 +2533,7 @@ class PwaTest(unittest.TestCase):
     def test_settings_daily_items_then_system_screen(self):
         page = self.clock_page(10, 0, "#settings")
         cards = page.eval_on_selector_all("#view-settings .card h2", "els => els.map(e => e.textContent)")
-        self.assertEqual(cards, ["声掛けの通知", "週次コメント", "キィニチの一言"])  # 日常の設定だけ（毎日の時刻は予定の画面へ。D-060 ⑭）
+        self.assertEqual(cards, ["声掛けの通知", "週次コメント", "キィニチの一言", "立ち絵"])  # 日常の設定だけ（毎日の時刻は予定の画面へ。D-060 ⑭。立ち絵は D-066）
         self.assertNotIn("移りました", page.text_content("#view-settings"))  # 移したときのお知らせは消した（D-064 ⑨）
         link = page.eval_on_selector("#view-settings .sub-link", "e => [e.textContent, e.getBoundingClientRect().top > document.querySelector('#view-settings .card:last-of-type').getBoundingClientRect().bottom]")
         self.assertEqual(link, ["仕様関連›", True])  # いちばん下

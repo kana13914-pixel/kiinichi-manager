@@ -53,7 +53,7 @@
 
       <div class="stage">
         <!-- 公式素材は使わない（CLAUDE.md 禁止事項）。立ち絵が入るまでは紋章と吊り線で気配を出す（D-021 CR-P01）。
-             立ち絵は app/img/portrait.webp（または .png）を置くだけで app.js が表示し、role・aria-label を付ける（D-022 ④） -->
+             立ち絵は設定で写真から選ぶか、app/img/portrait.webp（または .png）を置くと portrait.js が表示し、role・aria-label を付ける（D-022 ④、D-066） -->
         <div id="portrait" class="portrait" data-art="none" aria-hidden="true"></div>
         <span class="stage-mark" aria-hidden="true">KINICH</span>
       </div>
@@ -384,6 +384,19 @@
         <p class="note">オフにすると、タスク・タイマー・予定・日報の一言を出しません。</p>
         <details class="more"><summary>詳しく</summary><p class="note">画面の上の一言、日報を保存したとき・タイマーが終わったときの一言、操作への短い反応を出しません。ホームのセリフと通知はそのままです。先週のひとことは「週次コメント」で切り替えます。</p></details>
       </section>
+      <section class="card">
+        <h2>立ち絵</h2>
+        <p id="portrait-state" class="note">-</p>
+        <div class="portrait-acts">
+          <!-- iPhone では写真ライブラリ・カメラ・ファイルから選べる。画像はこの端末の中だけに置く（D-066） -->
+          <label class="cut-btn quiet file-btn" for="portrait-file">写真から選ぶ</label>
+          <input id="portrait-file" class="sr-only" type="file" accept="image/*">
+          <button id="portrait-adjust" type="button" class="cut-btn quiet" hidden>位置と大きさ</button>
+        </div>
+        <button id="portrait-reset" type="button" class="cut-btn quiet" hidden>紋章に戻す</button>
+        <p id="portrait-status" class="status ng portrait-status" role="status"></p>
+        <details class="more"><summary>詳しく</summary><p class="note">選んだ画像は、この端末の中だけに置きます（送信サーバー・スプレッドシートには送りません）。背景のある画像は角を斜めに落とした枠に入れ、背景のない画像（透過 PNG）は枠なしで出します。原神の公式の立ち絵や、それをなぞった絵は使わないでください。</p></details>
+      </section>
       <!-- 仕様関連はふだん開かないので、日常の設定の下にまとめて別の画面へ（2026-11-17 利用者の修正依頼。D-051） -->
       <a href="#system" class="cut-btn quiet sub-link" data-view="system">仕様関連<span aria-hidden="true">›</span></a>
     </section>
@@ -465,6 +478,25 @@
     <p id="routine-day-status" class="status ng" role="status"></p>
   </dialog>
 
+  <!-- 立ち絵の位置と大きさ（D-066）。見本はホームの枠と同じ縦横比。指で動かして位置、つまみで大きさ -->
+  <dialog id="portrait-sheet" class="sheet" aria-labelledby="portrait-sheet-title">
+    <div class="sheet-head">
+      <h2 id="portrait-sheet-title">立ち絵の位置と大きさ</h2>
+      <button id="portrait-cancel" type="button" class="cut-btn quiet chip">やめる</button>
+    </div>
+    <p class="note">絵を指で動かして位置を合わせます。</p>
+    <div class="portrait-preview-wrap">
+      <div id="portrait-preview" class="portrait-frame portrait-preview"><div class="portrait-inner"><img id="portrait-preview-img" class="portrait-img" alt="選んだ画像の見本"></div></div>
+    </div>
+    <label for="portrait-scale">大きさ <span id="portrait-scale-value">100%</span></label>
+    <input id="portrait-scale" class="range" type="range" min="50" max="300" step="5" value="100">
+    <div class="form-actions">
+      <button id="portrait-center" type="button" class="cut-btn quiet">最初の位置</button>
+      <button id="portrait-save" type="button" class="cut-btn primary">保存</button>
+    </div>
+    <p id="portrait-sheet-status" class="status ng" role="status"></p>
+  </dialog>
+
   <!-- ほかの記録（D-046）。ホームの「…」から開く。全部の記録の今日の状態と、記録・取り消し・今日はなし -->
   <dialog id="records-sheet" class="sheet" aria-labelledby="records-sheet-title">
     <div class="sheet-head">
@@ -490,5 +522,6 @@
   <script src="timer.js"></script>
   <script src="schedule.js"></script>
   <script src="sync.js"></script>
+  <script src="portrait.js"></script>
 </body>
 </html>

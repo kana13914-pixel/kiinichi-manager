@@ -51,6 +51,7 @@
 | `db.calendar` | `{ fetchedAt, from, to, events: [ { id, calendarId, title, start, end, allDay, editable } ], error }` Google カレンダーの予定の控え（D-053。読むだけ。同期しない）。`db.calendarError` は一度も取れていないときの理由 |
 | `db.weekly` | `{ 週の初め（月曜）の日付: { text, at, firstSeen, reply } }` 週次コメント（D-058）。`reply` は利用者の返事 `{ text, at, edits }`（300字まで。`edits` が 1 になったら書き直せない。D-063。下の節）。`firstSeen` は初めて日報画面で見せた日（朝4時区切り）。その日だけ日報の上に出す（R5、CR-G05。ないものはまだ見せていない。R5 の参考実装 `round5_app.patch` を当ててから使われる）。スプレッドシートにはまだ送らない |
 | `db.stats` | `{ days: { 日付: { notified, missed, skipped, unused } }, closedThrough, lineShown }` 内部の記録（D-060 ⑩, D-062）。利用者には見せない。詳しくは下の「R5 の利用者の決定で足すもの」 |
+| `db.portrait` | `{ w, h, alpha, scale, x, y, at }` 写真から選んだ立ち絵の置き方（D-066）。`w`・`h` は保存した画像の大きさ（長い辺 1,200px まで）、`alpha` は透過があるか（あれば枠なし）、`scale` は 0.5〜3、`x`・`y` は枠の幅・高さに対する %（−100〜100）。**画像そのものは IndexedDB**（データベース `kiinichi`、置き場所 `images`、キー `portrait`。背景のある絵は JPEG、透過の絵は PNG）。送信サーバー・スプレッドシートには送らない |
 | `db.notify` | `{ キー: { at, body } }` 送信サーバーに予約した声掛け（D-049）。変わったものだけ送り直すための控え |
 | `db.timer` の `running`・`done`・`cancelPending` | 動いているタイマー、終わったタイマー、届いていない取り消し（D-028, D-033） |
 | `schedule.view` | 予定画面の表示（リスト／月） |
