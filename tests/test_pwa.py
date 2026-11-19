@@ -2702,6 +2702,16 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(len(posts), 2)
         self.assertEqual([r["kind"] for r in posts[1][1]["records"]["2026-11-09"]], ["wake", "breakfast"])
 
+    def test_sync_payload_has_priority_and_subtasks(self):
+        """スプレッドシートへ：タスクに優先度、ミニタスクは親の id と名前を添えて別に送る（D-070）"""
+        tasks = [{"id": "a", "title": "旅行", "due": None, "priority": "high", "done": False, "createdAt": 1,
+                  "subtasks": [{"id": "s1", "title": "宿", "done": True, "doneAt": int(datetime(2026, 11, 9, 9, 30).timestamp() * 1000)}]},
+                 {"id": "b", "title": "古い形", "due": None, "done": False, "createdAt": 2}]
+        page = self.tasks_page(tasks=tasks)
+        body = page.evaluate("Sync.payload()")
+        self.assertEqual([t["priority"] for t in body["tasks"]], ["高", "なし"])
+        self.assertEqual(body["subtasks"], [{"parentId": "a", "parentTitle": "旅行", "id": "s1", "title": "宿", "state": "済み", "doneAt": "2026-11-09 09:30"}])
+
     def test_sync_retries_after_failure_and_send_now(self):
         fail = {"on": True}
         page, posts = self.sync_page(fail=fail)

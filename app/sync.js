@@ -8,6 +8,7 @@ const Sync = (() => {
   const MIN_GAP_MS = 60 * 1000;
   const $ = (id) => document.getElementById(id);
   const MOODS = { good: '元気', normal: 'ふつう', tired: '疲れた' };
+  const PRIORITY_LABELS = { high: '高', mid: '中', low: '低' }; // タスクの優先度（D-070）。ないものは「なし」
 
   function conf() { const c = Store.read(DB.sync, {}); return c && typeof c === 'object' ? c : {}; }
   function setConf(change) { const c = { ...conf(), ...change }; Store.write(DB.sync, c); return c; }
@@ -31,10 +32,16 @@ const Sync = (() => {
       const r = reportsAll[date] || {};
       return { date, mood: MOODS[r.mood] || '', done: r.done || '', left: r.left || '', tomorrow: r.tomorrow || '', savedAt: stamp(r.savedAt) };
     });
-    const tasks = (Store.read(DB.tasks, []) || []).filter((t) => t && t.id).map((t) => ({
+    const taskList = (Store.read(DB.tasks, []) || []).filter((t) => t && t.id);
+    const tasks = taskList.map((t) => ({
       id: t.id, title: t.title, due: t.due || '', state: t.done ? '完了' : '未完了',
       doneAt: stamp(t.doneAt), createdAt: stamp(t.createdAt), updatedAt: stamp(t.updatedAt),
+      priority: PRIORITY_LABELS[t.priority] || 'なし', // D-070
     }));
+    // ミニタスクは別のシート（D-070）。親の id と名前を添える
+    const subtasks = taskList.flatMap((t) => (Array.isArray(t.subtasks) ? t.subtasks : []).filter((x) => x && x.id).map((x) => ({
+      parentId: t.id, parentTitle: t.title, id: x.id, title: x.title, state: x.done ? '済み' : '未完了', doneAt: stamp(x.doneAt),
+    })));
     const r = Routine.load();
     const row = (name, times) => [name, ...ROUTINE_ITEMS.map(([id]) => times[id] || 'なし')];
     const routine = [row('平日', r.weekday), row('休日', r.holiday), ['休日の曜日', r.holidays.map((n) => WEEK_LABELS[n]).join('・')]];
@@ -48,7 +55,7 @@ const Sync = (() => {
       ...Timer.builtins(timer).map((t) => [t.name, t.minutes, t.minutes === t.base ? '用途別' : `用途別（初めは${t.base}分）`]),
       ...timer.custom.map((t) => [t.name, t.minutes, '自分で作った']),
     ];
-    return { app: APP_VERSION, records, reports, tasks, routine, timers };
+    return { app: APP_VERSION, records, reports, tasks, subtasks, routine, timers };
   }
 
   function show() {

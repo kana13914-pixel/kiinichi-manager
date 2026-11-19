@@ -68,6 +68,21 @@ test('日報は日付ごとに上書き、タスクは id ごとに上書きし�
   assert.equal(g.rows('タスク')[1][7], '2026-11-18 09:00');
 });
 
+test('タスクの優先度は最後の列、ミニタスクは別のシートに書き直す（D-070）', () => {
+  const g = loadGas();
+  const t = { id: 'a', title: '旅行', due: '', state: '未完了', doneAt: '', createdAt: '', updatedAt: '', priority: '高' };
+  const sub = (id, title, state = '未完了') => ({ parentId: 'a', parentTitle: '旅行', id, title, state, doneAt: '' });
+  g.post(base({ tasks: [t], subtasks: [sub('s1', '宿', '済み'), sub('s2', '切符')] }));
+  assert.equal(g.sheets['タスク'].cells()[0][8], '優先度');
+  assert.equal(g.rows('タスク')[0][8], '高');
+  assert.deepEqual(JSON.parse(JSON.stringify(g.sheets['ミニタスク'].cells()[0])), ['親のid', '親のやること', 'id', '名前', '状態', '済みにした日時']);
+  assert.deepEqual(JSON.parse(JSON.stringify(g.rows('ミニタスク').map((x) => [x[0], x[3], x[4]]))), [['a', '宿', '済み'], ['a', '切符', '未完了']]);
+  g.post(base({ tasks: [t], subtasks: [sub('s2', '切符')] })); // 消したミニタスクは残さない
+  assert.deepEqual(JSON.parse(JSON.stringify(g.rows('ミニタスク').map((x) => x[2]))), ['s2']);
+  g.post(base({ tasks: [t] })); // 古いアプリ（ミニタスクを送らない）からは書き換えない
+  assert.equal(g.rows('ミニタスク').length, 1);
+});
+
 test('毎日の時刻・タイマー・同期の控えは書き直す', () => {
   const g = loadGas();
   g.post(base({ routine: [['平日', '07:00', '07:30', '09:00', '12:00', '18:30', '19:30', '22:30', '23:30']], timers: [['作業', 50, '用途別（初めは25分）']] }));

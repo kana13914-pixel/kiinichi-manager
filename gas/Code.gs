@@ -9,11 +9,14 @@
 //   スクリプト プロパティ CALENDAR_IDS（任意）… 読むカレンダーの ID をカンマ区切り。なければ既定のカレンダー
 // ・アプリ（app/sync.js）が端末のデータを送ってくる。ここでは書き込むだけで、アプリへは返さない（端末が正本。D-004）
 //   消えないように：記録は届いた日付の分だけ入れ替える／日報は日付ごとに上書き／タスクは id ごとに上書きし、端末から消えたものは行を残して日時を付ける
+//   ミニタスク（D-070）は「ミニタスク」シートを端末の今の中身で書き直す（親の id と名前を添える）。優先度はタスクのシートの最後の列
 
 var SHEET = {
   records: ['記録', ['日付', '種類', '名前', '時刻', '回目', '状態', '記録した日時']],
   reports: ['日報', ['日付', '調子', 'できたこと', 'やり残したこと', '明日いちばんにやること', '保存した日時']],
-  tasks: ['タスク', ['id', 'やること', '期限', '状態', '完了した日時', '作った日時', '最後に変えた日時', '端末から消えた日時']],
+  // 優先度は前からある列の位置を変えないよう、最後に足す（D-070）
+  tasks: ['タスク', ['id', 'やること', '期限', '状態', '完了した日時', '作った日時', '最後に変えた日時', '端末から消えた日時', '優先度']],
+  subtasks: ['ミニタスク', ['親のid', '親のやること', 'id', '名前', '状態', '済みにした日時']],
   routine: ['毎日の時刻', ['区分', '起床', '朝食', '仕事開始', '昼食', '仕事終わり', '夕食', '入浴', '就寝']],
   timers: ['タイマー', ['名前', '分', '種類']],
   meta: ['同期', ['項目', '値']],
@@ -38,6 +41,7 @@ function doPost(e) {
     writeRecords_(ss, p.records || {});
     writeReports_(ss, p.reports || []);
     writeTasks_(ss, p.tasks || [], p.sentAt || '');
+    if (p.subtasks) replace_(ss, SHEET.subtasks, p.subtasks.map(function (x) { return [x.parentId, x.parentTitle, x.id, x.title, x.state, x.doneAt]; }));
     if (p.routine) replace_(ss, SHEET.routine, p.routine);
     if (p.timers) replace_(ss, SHEET.timers, p.timers);
     replace_(ss, SHEET.meta, [['最後に受け取った日時', p.sentAt || ''], ['アプリの版', p.app || '']]);
@@ -79,7 +83,7 @@ function writeTasks_(ss, tasks, sentAt) {
   tasks.forEach(function (t) { if (!seen[t.id]) rows.push(taskRow_(t)); });
   replace_(ss, SHEET.tasks, rows);
 }
-function taskRow_(t) { return [t.id, t.title, t.due, t.state, t.doneAt, t.createdAt, t.updatedAt, '']; }
+function taskRow_(t) { return [t.id, t.title, t.due, t.state, t.doneAt, t.createdAt, t.updatedAt, '', t.priority || '']; }
 
 // カレンダーの予定を読む（読むだけ）。範囲は最大 130 日
 var MAX_RANGE_MS = 130 * 24 * 3600 * 1000;
