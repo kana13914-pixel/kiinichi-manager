@@ -84,10 +84,20 @@ self.addEventListener('fetch', (event) => {
 // ---- Web Push ----
 // 送信サーバー（worker/worker.js）から {title, body, url, tag} が届く。
 // tag は通知の種類。同じ種類は新しい通知で置き換わり、違う種類は並んで残る（D-033）
+// 押して開く先は、このアプリの中（scope の下）だけにする。外のサイトの URL が届いたら、アプリのホームを開く
+// （合言葉が漏れて偽の通知を送られても、通知から別のサイトへ誘導されないように。D-075）
+function appUrl(raw) {
+  const home = new URL('index.html?source=webpush', self.registration.scope).href;
+  if (typeof raw !== 'string' || !raw) return home;
+  try {
+    const u = new URL(raw, self.registration.scope);
+    return u.href.startsWith(self.registration.scope) ? u.href : home;
+  } catch (_) { return home; }
+}
 self.addEventListener('push', (event) => {
   let msg = {};
   try { msg = event.data ? event.data.json() : {}; } catch (_) { msg = { body: event.data && event.data.text() }; }
-  const url = msg.url || new URL('index.html?source=webpush', self.registration.scope).href;
+  const url = appUrl(msg.url);
   event.waitUntil(
     self.registration.showNotification(msg.title || 'キィニチくん', {
       body: msg.body || '',
@@ -101,7 +111,7 @@ self.addEventListener('push', (event) => {
 // 通知タップ：開いている画面があれば前面に出して移動、なければホーム画面のアプリとして開く
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || new URL('index.html?source=webpush', self.registration.scope).href;
+  const url = appUrl(event.notification.data && event.notification.data.url);
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of all) {

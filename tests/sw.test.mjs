@@ -145,6 +145,40 @@ test('通信できないときはキャッシュを返す', async () => {
   assert.equal(await responded, 'CACHED');
 });
 
+test('アプリの外の URL が届いても、通知はアプリのホームを開く設定になる（D-075）', async () => {
+  const { handlers, shown } = loadSw();
+  const outside = [
+    'https://evil.example/login',
+    'https://kana13914-pixel.github.io/other-repo/index.html',
+    SCOPE + '../../other/index.html',
+    'javascript:alert(1)',
+    'http://kana13914-pixel.github.io/x/app/index.html',
+  ];
+  for (const url of outside) await fire(handlers.push, { data: { json: () => ({ title: 't', body: 'b', url }) } });
+  assert.deepEqual(shown.map((x) => x.opts.data.url), outside.map(() => SCOPE + 'index.html?source=webpush'));
+});
+
+test('アプリの中の URL は、そのまま開く（相対の書き方も scope の下として読む）', async () => {
+  const { handlers, shown } = loadSw();
+  await fire(handlers.push, { data: { json: () => ({ title: 't', url: SCOPE + 'index.html?source=webpush&trigger=timer_done.work&line=0#timer' }) } });
+  await fire(handlers.push, { data: { json: () => ({ title: 't', url: 'index.html?source=webpush#timer' }) } });
+  assert.deepEqual(shown.map((x) => x.opts.data.url), [
+    SCOPE + 'index.html?source=webpush&trigger=timer_done.work&line=0#timer',
+    SCOPE + 'index.html?source=webpush#timer',
+  ]);
+});
+
+test('通知タップ：通知に残っている URL がアプリの外なら、アプリのホームを開く（D-075）', async () => {
+  const { handlers, opened } = loadSw();
+  await fire(handlers.notificationclick, { notification: { close() {}, data: { url: 'https://evil.example/' } } });
+  const calls = [];
+  const win = { focus: async () => {}, navigate: async (u) => { calls.push(u); return {}; } };
+  const second = loadSw({ windows: [win] });
+  await fire(second.handlers.notificationclick, { notification: { close() {}, data: { url: 'https://evil.example/' } } });
+  assert.deepEqual(opened, [SCOPE + 'index.html?source=webpush']);
+  assert.deepEqual(calls, [SCOPE + 'index.html?source=webpush']);
+});
+
 test('通知の種類（tag）：届いた種類を使い、なければ共通の名前（D-033）', async () => {
   const { handlers, shown } = loadSw();
   await fire(handlers.push, { data: { json: () => ({ title: 't', body: 'b', tag: 'timer' }) } });
