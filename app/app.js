@@ -239,7 +239,12 @@ function clearOpenParams() {
 }
 
 applyPeriod();
-dialogueReady.then(() => {
+// 開いたときの一言は、セリフ集と、このあとに読み込むスクリプト（stats.js・tasks.js など）の両方がそろってから選ぶ。
+// セリフ集が先に届くと、夕方の提案（D-073）や記録のくせの一言（D-060 ⑩）を見ないまま、時間帯の一言になってしまうため
+const scriptsReady = document.readyState === 'loading'
+  ? new Promise((resolve) => document.addEventListener('DOMContentLoaded', resolve, { once: true }))
+  : Promise.resolve();
+Promise.all([dialogueReady, scriptsReady]).then(() => {
   applyOpenParams(new URLSearchParams(location.search));
   clearOpenParams();
 });
