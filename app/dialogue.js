@@ -18,13 +18,25 @@ function fillLine(text, vars = {}) {
   return text.replace(/\{(\w+)\}/g, (m, k) => (vars[k] === undefined ? '' : String(vars[k])));
 }
 
-function pickLine(key, { index } = {}) {
+// セリフの文の短い印。通知の URL に番号と一緒に添える（h=）。セリフ集の並びが変わっても、通知と同じ文を探せるように（D-081）
+function lineHash(text) {
+  let h = 0;
+  for (const c of String(text)) h = (h * 31 + c.codePointAt(0)) >>> 0;
+  return h.toString(36);
+}
+
+// hash があれば（通知から開いたとき）：番号の文の印が合えばそれ、合わなければ同じ印の文を探す。見つからなければ選び直す
+function pickLine(key, { index, hash } = {}) {
   const lines = candidates(key);
   if (!lines) return null;
   let i;
-  if (Number.isInteger(index) && index >= 0 && index < lines.length) {
+  if (hash) {
+    if (Number.isInteger(index) && index >= 0 && index < lines.length && lineHash(lines[index]) === hash) i = index;
+    else { const k = lines.findIndex((t) => lineHash(t) === hash); if (k >= 0) i = k; }
+  } else if (Number.isInteger(index) && index >= 0 && index < lines.length) {
     i = index;
-  } else {
+  }
+  if (i === undefined) {
     const pool = lines.map((_, k) => k).filter((k) => lines.length < 2 || k !== lastLineIndex[key]);
     i = pool[Math.floor(Math.random() * pool.length)];
   }

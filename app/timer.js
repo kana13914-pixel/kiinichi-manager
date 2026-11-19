@@ -70,7 +70,7 @@ const Timer = (() => {
     render();
   }
   function reserve(run) {
-    const query = run.line === null ? '' : `&trigger=timer_done.${run.kind}&line=${run.line}`;
+    const query = run.line === null ? '' : `&trigger=timer_done.${run.kind}&line=${run.line}&h=${lineHash(run.text)}`; // h は文の印（D-081）
     const body = {
       key: NOTIFY_KEY, at: run.endAt, notBefore: true, // 終わる前には届けない
       title: 'キィニチ', body: run.text,

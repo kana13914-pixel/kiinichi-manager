@@ -174,8 +174,8 @@ function applyPeriod(now = new Date()) {
 
 // ---------- セリフ（選び方は dialogue.js） ----------
 // セリフを表示する（声の再生は見送り。D-023）
-function showLine(key, { index, vars, extra } = {}) {
-  const picked = pickLine(key, { index });
+function showLine(key, { index, hash, vars, extra } = {}) {
+  const picked = pickLine(key, { index, hash });
   if (!picked) return false;
   const bubble = document.getElementById('bubble-text');
   bubble.textContent = fillLine(picked.text, vars) + (extra || '');
@@ -214,9 +214,10 @@ function endNotificationState() {
 function applyOpenParams(params, now = new Date()) {
   const trigger = params.get('trigger');
   const index = params.has('line') ? Number(params.get('line')) : undefined; // Number(null) は 0 になるため has を確かめる
+  const hash = params.get('h') || undefined; // 通知の文の印（D-081）。古い通知にはない
   const fromPush = params.get('source') === 'webpush';
   const vars = { title: params.get('title') || '' }; // 予定の前の声掛けは予定の名前を差し込む（D-054）
-  if (trigger && showLine(trigger, { index, vars })) {
+  if (trigger && showLine(trigger, { index, hash, vars })) {
     if (fromPush) startNotificationState(); else markPrimary(now);
     return;
   }
@@ -232,6 +233,7 @@ function clearOpenParams() {
   if (!params.has('trigger') && !params.has('line') && !params.has('title') && params.get('source') !== 'webpush') return;
   params.delete('trigger');
   params.delete('line');
+  params.delete('h');
   params.delete('title');
   if (params.get('source') === 'webpush') params.delete('source');
   const query = params.toString();

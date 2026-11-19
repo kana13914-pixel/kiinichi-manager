@@ -507,6 +507,29 @@ class PwaTest(unittest.TestCase):
         self.assertIn(page.text_content("#bubble-text"),
                       ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"])
 
+    def test_notification_finds_same_line_when_order_changed(self):
+        """通知の URL の h（文の印）で、セリフ集の並びが変わっても通知と同じ文を出す。見つからなければ選び直す（D-081）"""
+        lines = ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"]
+        page = self.clock_page(9, 3)
+        h1 = page.evaluate("lineHash(%s)" % json.dumps(lines[1]))
+        # 予約したときは2番目（line=1）だったが、並びが入れ替わって今は1番目（line=0）にあるつもり：line=0 と 2番目の印
+        page = self.clock_page(9, 3, "&source=webpush&trigger=work_start.default&line=0&h=" + h1)
+        page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
+        self.assertEqual(page.text_content("#bubble-text"), lines[1])
+        self.assertNotIn("h=", page.evaluate("location.search"))  # 使い終えたら URL から外す
+        # 番号と印が合っていればそのまま
+        page = self.clock_page(9, 3, "&source=webpush&trigger=work_start.default&line=1&h=" + h1)
+        page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
+        self.assertEqual(page.text_content("#bubble-text"), lines[1])
+        # 文が変わって見つからないときは、番号に頼らず候補から選ぶ（違う文を「通知の文」として出さない）
+        page = self.clock_page(9, 3, "&source=webpush&trigger=work_start.default&line=0&h=zzzz")
+        page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
+        self.assertIn(page.text_content("#bubble-text"), lines)
+        # 声掛けの予約の URL にも印が付く
+        url = page.evaluate("Object.values(Voice.plan(new Date(2026, 10, 9, 9, 3)))[0].url")
+        body = page.evaluate("Object.values(Voice.plan(new Date(2026, 10, 9, 9, 3)))[0].body")
+        self.assertIn("&h=" + page.evaluate("lineHash(%s)" % json.dumps(body)), url)
+
     def primaries(self, page):
         return page.eval_on_selector_all(".act.primary", "els => els.map(e => e.dataset.record)")
 
@@ -1575,7 +1598,7 @@ class PwaTest(unittest.TestCase):
         self.assertIs(body["notBefore"], True)  # 終わる前には届けない
         self.assertEqual(body["title"], "キィニチ")
         self.assertEqual(body["body"], "時間だ。……よくやった。手を止めろ。")
-        self.assertTrue(body["url"].endswith("/index.html?source=webpush&trigger=timer_done.work&line=0#timer"), body["url"])
+        self.assertTrue(body["url"].endswith("/index.html?source=webpush&trigger=timer_done.work&line=0&h=%s#timer" % page.evaluate("lineHash('時間だ。……よくやった。手を止めろ。')")), body["url"])
         page.wait_for_selector("#timer-notify.ok", timeout=3_000)
         self.assertIn("通知で知らせます", page.text_content("#timer-notify"))
         page.click("#timer-stop")
