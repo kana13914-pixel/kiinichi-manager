@@ -84,6 +84,32 @@
 
       <!-- 取り消しの表示。夕方の提案の選択肢が出ているあいだは、セリフの面の中（選択肢の下）に移す（D-060 ⑫, C12-03） -->
       <div id="toast" class="toast" role="status" hidden></div>
+
+      <!-- 写真から選んだ立ち絵（D-066、D-067）。画面いっぱいに、部品の後ろに敷く（z-index で奥に描くので、読む順を変えないよう最後に置く）。置き方は portrait.js -->
+      <div id="portrait-layer" class="portrait-layer" aria-hidden="true" hidden><img id="portrait-photo" class="portrait-img" alt=""></div>
+
+      <!-- 立ち絵の位置と大きさ・部品の透け具合を、ホームの画面そのものの上で合わせる（D-067）。設定の「立ち絵」から開く -->
+      <div id="portrait-editor" class="portrait-editor" hidden>
+        <div id="portrait-drag" class="portrait-drag" aria-hidden="true"></div>
+        <button id="portrait-editor-show" type="button" class="cut-btn quiet chip portrait-editor-show" hidden>調整に戻る</button>
+        <section id="portrait-editor-panel" class="portrait-editor-panel" aria-labelledby="portrait-editor-title">
+          <div class="sheet-head">
+            <h2 id="portrait-editor-title">立ち絵の位置と大きさ</h2>
+            <button id="portrait-editor-hide" type="button" class="cut-btn quiet chip">全体を見る</button>
+          </div>
+          <p class="note">画面を指で動かして位置を合わせます。「全体を見る」で、この板を隠して確かめられます。</p>
+          <label for="portrait-scale">大きさ <span id="portrait-scale-value">100%</span></label>
+          <input id="portrait-scale" class="range" type="range" min="50" max="300" step="5" value="100">
+          <label for="portrait-clear">部品の透け具合 <span id="portrait-clear-value">0%</span></label>
+          <input id="portrait-clear" class="range" type="range" min="0" max="90" step="5" value="0">
+          <div class="portrait-editor-acts">
+            <button id="portrait-cancel" type="button" class="cut-btn quiet">やめる</button>
+            <button id="portrait-center" type="button" class="cut-btn quiet">最初の位置</button>
+            <button id="portrait-save" type="button" class="cut-btn primary">保存</button>
+          </div>
+          <p id="portrait-editor-status" class="status ng portrait-status" role="status"></p>
+        </section>
+      </div>
     </section>
 
     <!-- 予定（D-026 ④, D-030, D-032）：見るだけ。リスト（今日から7日先まで）と月（マス目）を上のボタンで切り替える。
@@ -395,7 +421,7 @@
         </div>
         <button id="portrait-reset" type="button" class="cut-btn quiet" hidden>紋章に戻す</button>
         <p id="portrait-status" class="status ng portrait-status" role="status"></p>
-        <details class="more"><summary>詳しく</summary><p class="note">選んだ画像は、この端末の中だけに置きます（送信サーバー・スプレッドシートには送りません）。背景のある画像は角を斜めに落とした枠に入れ、背景のない画像（透過 PNG）は枠なしで出します。原神の公式の立ち絵や、それをなぞった絵は使わないでください。</p></details>
+        <details class="more"><summary>詳しく</summary><p class="note">選んだ画像は、この端末の中だけに置きます（送信サーバー・スプレッドシートには送りません）。ホームの画面いっぱいに、時計やセリフの面の後ろに出します。位置・大きさと、セリフの面・次の予定・下のタブの地の透け具合は、ホームの画面の上で合わせます。背景のない画像（透過 PNG）は、足元を画面の下にそろえます。原神の公式の立ち絵や、それをなぞった絵は使わないでください。</p></details>
       </section>
       <!-- 仕様関連はふだん開かないので、日常の設定の下にまとめて別の画面へ（2026-11-17 利用者の修正依頼。D-051） -->
       <a href="#system" class="cut-btn quiet sub-link" data-view="system">仕様関連<span aria-hidden="true">›</span></a>
@@ -476,25 +502,6 @@
     </div>
     <button id="routine-day-reset" type="button" class="cut-btn quiet" hidden>元に戻す</button>
     <p id="routine-day-status" class="status ng" role="status"></p>
-  </dialog>
-
-  <!-- 立ち絵の位置と大きさ（D-066）。見本はホームの枠と同じ縦横比。指で動かして位置、つまみで大きさ -->
-  <dialog id="portrait-sheet" class="sheet" aria-labelledby="portrait-sheet-title">
-    <div class="sheet-head">
-      <h2 id="portrait-sheet-title">立ち絵の位置と大きさ</h2>
-      <button id="portrait-cancel" type="button" class="cut-btn quiet chip">やめる</button>
-    </div>
-    <p class="note">絵を指で動かして位置を合わせます。</p>
-    <div class="portrait-preview-wrap">
-      <div id="portrait-preview" class="portrait-frame portrait-preview"><div class="portrait-inner"><img id="portrait-preview-img" class="portrait-img" alt="選んだ画像の見本"></div></div>
-    </div>
-    <label for="portrait-scale">大きさ <span id="portrait-scale-value">100%</span></label>
-    <input id="portrait-scale" class="range" type="range" min="50" max="300" step="5" value="100">
-    <div class="form-actions">
-      <button id="portrait-center" type="button" class="cut-btn quiet">最初の位置</button>
-      <button id="portrait-save" type="button" class="cut-btn primary">保存</button>
-    </div>
-    <p id="portrait-sheet-status" class="status ng" role="status"></p>
   </dialog>
 
   <!-- ほかの記録（D-046）。ホームの「…」から開く。全部の記録の今日の状態と、記録・取り消し・今日はなし -->

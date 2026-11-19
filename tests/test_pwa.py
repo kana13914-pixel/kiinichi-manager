@@ -2189,78 +2189,109 @@ class PwaTest(unittest.TestCase):
 
     def choose_photo(self, page, png):
         page.set_input_files("#portrait-file", files=[{"name": "photo.png", "mimeType": "image/png", "buffer": png}])
-        page.wait_for_selector("#portrait-sheet[open]", timeout=5_000)
+        page.wait_for_selector("#portrait-editor", state="visible", timeout=5_000)
 
-    def test_portrait_from_photo_adjust_and_back_to_emblem(self):
+    def photo_style(self, page):
+        return page.get_attribute("#portrait-photo", "style")
+
+    def test_portrait_full_screen_adjusted_on_home_with_ui_clear(self):
         page = self.portrait_page()
         self.assertIn("紋章を出しています", page.text_content("#portrait-state"))
         self.assertTrue(page.is_hidden("#portrait-adjust"))
-        self.assertTrue(page.is_hidden("#portrait-reset"))
-        # 背景のある横長の画像（2000×1000）→ 長い辺を 1200 に縮め、角を斜めに落とした枠に入れる
+        # 背景のある横長の画像（2000×1000）→ 長い辺を 1200 に縮め、ホームの画面の上で合わせる
         self.choose_photo(page, make_png(2000, 1000, (40, 120, 90, 255)))
-        self.assertIn("framed", page.get_attribute("#portrait-preview", "class"))
-        self.assertEqual(page.input_value("#portrait-scale"), "100")
+        self.assertEqual(page.evaluate("location.hash"), "#home")
+        self.assertTrue(page.is_visible("#view-home"))
+        layer = page.locator("#portrait-layer").bounding_box()
+        self.assertEqual([layer["x"], layer["y"], layer["width"], layer["height"]], [0, 0, 393, 852])  # 画面いっぱい
+        # 画面を覆う：高さ 100%、幅は (2/1)/(393/852)=433.6%
+        self.assertIn("height: 100%", self.photo_style(page))
+        self.assertIn("width: 433.5", self.photo_style(page))
         page.fill("#portrait-scale", "150")
         page.dispatch_event("#portrait-scale", "input")
         self.assertEqual(page.text_content("#portrait-scale-value"), "150%")
-        # 指で動かす：見本の幅の 1/10 右へ → 位置が +10%
-        box = page.locator("#portrait-preview").bounding_box()
-        cx, cy = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
-        page.mouse.move(cx, cy)
+        self.assertIn("scale(1.5)", self.photo_style(page))
+        # 部品の透け具合：セリフの面の地が透ける（文字はそのまま）
+        before = page.evaluate("getComputedStyle(document.querySelector('#view-home .dialogue')).backgroundColor")
+        page.fill("#portrait-clear", "40")
+        page.dispatch_event("#portrait-clear", "input")
+        self.assertEqual(page.text_content("#portrait-clear-value"), "40%")
+        self.assertEqual(page.evaluate("document.body.style.getPropertyValue('--ui-clear')"), "0.4")
+        self.assertNotEqual(before, page.evaluate("getComputedStyle(document.querySelector('#view-home .dialogue')).backgroundColor"))
+        # 画面のどこを触っても絵が動く。画面の幅の 1/10 右へ → +10%。部品（タブ）は押せない
+        page.mouse.move(196, 300)
         page.mouse.down()
-        page.mouse.move(cx + box["width"] / 10, cy, steps=4)
+        page.mouse.move(196 + 39.3, 300, steps=4)
         page.mouse.up()
+        # 板を隠して全体を見る → 戻す
+        page.click("#portrait-editor-hide")
+        self.assertTrue(page.is_hidden("#portrait-editor-panel"))
+        self.assertTrue(page.is_visible("#view-home .record-dock"))
+        page.mouse.click(118, 825)  # 「予定」のタブの位置。合わせている間は押せない
+        self.assertEqual(page.evaluate("location.hash"), "#home")
+        page.click("#portrait-editor-show")
+        self.assertTrue(page.is_visible("#portrait-editor-panel"))
         page.click("#portrait-save")
-        page.wait_for_selector("#portrait-sheet:not([open])", state="attached")
+        page.wait_for_selector("#portrait-editor", state="hidden")
         conf = json.loads(page.evaluate("localStorage.getItem('db.portrait')"))
-        self.assertEqual([conf["w"], conf["h"], conf["alpha"], conf["scale"], conf["y"]], [1200, 600, False, 1.5, 0])
+        self.assertEqual([conf["w"], conf["h"], conf["alpha"], conf["scale"], conf["y"], conf["ui"]], [1200, 600, False, 1.5, 0, 40])
         self.assertAlmostEqual(conf["x"], 10, delta=0.5)
-        self.assertIn("写真から選んだ画像", page.text_content("#portrait-state"))
-        # ホーム：紋章の代わりに、保存した位置と大きさで出る。読み込み直しても残る
+        # 保存したらホームのまま。読み込み直しても同じ置き方・透け具合
         for reload in (False, True):
             if reload:
                 page.reload()
-            page.evaluate("location.hash = '#home'")
-            page.wait_for_selector("#portrait[data-art='photo'] .portrait-frame.framed img", state="attached", timeout=5_000)
+                page.wait_for_function("dialogue !== null")
+            self.assertEqual(page.evaluate("location.hash"), "#home")
+            page.wait_for_function("document.getElementById('portrait').dataset.art === 'photo'", timeout=5_000)
+            self.assertTrue(page.is_visible("#portrait-photo"))
             self.assertEqual(page.get_attribute("#portrait", "role"), "img")
-            style = page.get_attribute("#portrait .portrait-img", "style")
-            self.assertIn("scale(1.5)", style)
-            self.assertIn("left: 60%", style)
-            self.assertIn("width: 266.6", style)  # 横長は枠の高さに合わせる：(2/1)/(3/4)=266.7%
-            fb = page.locator("#portrait .portrait-frame").bounding_box()
-            self.assertAlmostEqual(fb["width"] / fb["height"], 0.75, delta=0.01)
-        # 位置と大きさをあとから直す。「やめる」なら変わらない
+            self.assertIn("scale(1.5)", self.photo_style(page))
+            self.assertIn("left: 60%", self.photo_style(page))
+            self.assertEqual(page.evaluate("document.body.style.getPropertyValue('--ui-clear')"), "0.4")
+            self.assertTrue(page.is_hidden("#view-home .stage-mark"))
+            # 部品は押せる（合わせていないとき）
+            self.assertEqual(page.evaluate("getComputedStyle(document.getElementById('portrait-layer')).pointerEvents"), "none")
+        # 位置と大きさをあとから直す。「やめる」なら変わらず設定に戻る
         page.evaluate("location.hash = '#settings'")
         page.click("#portrait-adjust")
-        page.wait_for_selector("#portrait-sheet[open]")
+        page.wait_for_selector("#portrait-editor", state="visible")
         self.assertEqual(page.input_value("#portrait-scale"), "150")
+        self.assertEqual(page.input_value("#portrait-clear"), "40")
         page.click("#portrait-center")
         self.assertEqual(page.input_value("#portrait-scale"), "100")
         page.click("#portrait-cancel")
+        self.assertEqual(page.evaluate("location.hash"), "#settings")
         self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.portrait')"))["scale"], 1.5)
+        page.wait_for_function("document.getElementById('portrait-photo').style.transform.includes('scale(1.5)')")
+        # 合わせている途中にほかの画面へ移ったら、保存せずにやめる
+        page.click("#portrait-adjust")
+        page.wait_for_selector("#portrait-editor", state="visible")
+        page.evaluate("location.hash = '#tasks'")
+        page.wait_for_selector("#portrait-editor", state="hidden")
+        self.assertFalse(page.evaluate("document.body.classList.contains('portrait-edit')"))
         # 紋章に戻す（確認のあと）
+        page.evaluate("location.hash = '#settings'")
         page.click("#portrait-reset")
         page.click("#confirm-ok")
         page.wait_for_function("document.getElementById('portrait').dataset.art === 'none'")
         self.assertIsNone(page.evaluate("localStorage.getItem('db.portrait')"))
-        self.assertEqual(page.evaluate("document.querySelectorAll('#portrait .portrait-frame').length"), 0)
+        self.assertFalse(page.evaluate("document.body.classList.contains('has-photo')"))
+        self.assertEqual(page.evaluate("document.body.style.getPropertyValue('--ui-clear')"), "0")
         self.assertEqual(page.get_attribute("#portrait", "aria-hidden"), "true")
         self.assertTrue(page.is_hidden("#portrait-reset"))
 
-    def test_portrait_transparent_photo_has_no_frame_and_sits_on_bottom(self):
+    def test_portrait_transparent_photo_sits_on_bottom(self):
         page = self.portrait_page()
         self.choose_photo(page, make_png(300, 600, (200, 50, 50, 0)))  # 透過の縦長（1:2）
-        self.assertNotIn("framed", page.get_attribute("#portrait-preview", "class"))
+        # 画面に収める：幅 100%・高さ (393/852)/(1/2)=92.3%。足元を画面の下にそろえる
+        self.assertIn("width: 100%", self.photo_style(page))
         page.click("#portrait-save")
-        page.wait_for_selector("#portrait-sheet:not([open])", state="attached")
+        page.wait_for_selector("#portrait-editor", state="hidden")
         conf = json.loads(page.evaluate("localStorage.getItem('db.portrait')"))
         self.assertTrue(conf["alpha"])
-        # 枠に収める：高さ 100%・幅 (1/2)/(3/4)=66.7%。足元は下にそろうので位置は真ん中のまま（y=0）
-        self.assertEqual(conf["y"], 0)
-        page.evaluate("location.hash = '#home'")
-        page.wait_for_selector("#portrait[data-art='photo'] img", state="attached", timeout=5_000)
-        self.assertEqual(page.evaluate("document.querySelectorAll('#portrait .framed').length"), 0)
-        self.assertIn("height: 100%", page.get_attribute("#portrait .portrait-img", "style"))
+        self.assertAlmostEqual(conf["y"], 3.9, delta=0.1)
+        box = page.locator("#portrait-photo").bounding_box()
+        self.assertAlmostEqual(box["y"] + box["height"], 852, delta=1)
         # 読めないファイルは理由を出す
         page.evaluate("location.hash = '#settings'")
         page.set_input_files("#portrait-file", files=[{"name": "x.png", "mimeType": "image/png", "buffer": b"not an image"}])

@@ -1,15 +1,17 @@
-// 立ち絵（D-022 ④、D-066）。
-// ①写真から選んだ画像（この端末の IndexedDB。位置と大きさは db.portrait）②app/img/portrait.webp・.png ③紋章、の順に出す。
+// 立ち絵（D-022 ④、D-066、D-067）。
+// ①写真から選んだ画像（この端末の IndexedDB。置き方は db.portrait）②app/img/portrait.webp・.png ③紋章、の順に出す。
+// 写真の画像はホームの画面いっぱいに、部品（時計・セリフの面・記録など）の後ろに敷く。
+// 位置と大きさ・部品の透け具合は、ホームの画面そのものの上で合わせる（部品と重なる見えかたを確かめながら。D-067）。
 // 写真の画像は送信サーバー・スプレッドシートには送らない。
 const Portrait = (() => {
-  const FRAME = 3 / 4;        // 枠の縦横比（幅 / 高さ）。ホームと見本で同じにして、見えかたをそろえる
   const MAX_SIDE = 1200;      // 保存する画像の長いほうの辺
   const SCALE_MIN = 0.5, SCALE_MAX = 3;
-  const SHIFT_MAX = 100;      // 位置のずれ（枠の幅・高さに対する %）
+  const SHIFT_MAX = 100;      // 位置のずれ（画面の幅・高さに対する %）
+  const CLEAR_MAX = 90;       // 部品の地の透け具合（%）の上限。0 は今までどおり
   const BUNDLED = ['img/portrait.webp', 'img/portrait.png'];
   const $ = (id) => document.getElementById(id);
 
-  // ---------- 保存（画像は IndexedDB、位置と大きさは localStorage） ----------
+  // ---------- 保存（画像は IndexedDB、置き方は localStorage） ----------
   function idb() {
     return new Promise((resolve, reject) => {
       if (!window.indexedDB) { reject(new Error('この端末では画像を保存できません')); return; }
@@ -34,7 +36,7 @@ const Portrait = (() => {
 
   function conf() {
     const c = Store.read(DB.portrait, null);
-    return c && typeof c === 'object' && c.w > 0 && c.h > 0 ? c : null;
+    return c && typeof c === 'object' && c.w > 0 && c.h > 0 ? { ui: 0, ...c } : null;
   }
 
   // ---------- 画像を縮めて、透過があるかを調べる ----------
@@ -56,7 +58,7 @@ const Portrait = (() => {
       canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, w, h);
-      // 透過している点があれば、背景のない絵として扱う（枠に入れない）
+      // 透過している点があれば、背景のない絵として扱う（画面に収め、足元を下にそろえる）
       let alpha = false;
       if (file.type !== 'image/jpeg') {
         const data = ctx.getImageData(0, 0, w, h).data;
@@ -69,37 +71,43 @@ const Portrait = (() => {
     } finally { URL.revokeObjectURL(url); }
   }
 
-  // ---------- 枠の中の置き方 ----------
-  // 枠いっぱいに収めたときの大きさ（枠に対する %）。背景のある絵は枠を覆い、透過の絵は枠に収める
-  function baseSize(c) {
-    const ia = c.w / c.h;
-    const cover = !c.alpha;
-    const wide = ia > FRAME;
-    if (wide === cover) return { w: (100 * ia) / FRAME, h: 100 };
-    return { w: 100, h: (100 * FRAME) / ia };
+  // ---------- 画面いっぱいの枠の中の置き方 ----------
+  function frameAspect() {
+    const r = $('portrait-layer').getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? r.width / r.height : window.innerWidth / window.innerHeight;
   }
-  // 初めの位置：背景のある絵は真ん中、透過の絵は足元を枠の下にそろえる
+  // 枠いっぱいにしたときの大きさ（枠に対する %）。背景のある絵は画面を覆い、透過の絵は画面に収める
+  function baseSize(c, fa = frameAspect()) {
+    const ia = c.w / c.h;
+    const wide = ia > fa;
+    if (wide === !c.alpha) return { w: (100 * ia) / fa, h: 100 };
+    return { w: 100, h: (100 * fa) / ia };
+  }
+  // 初めの位置：背景のある絵は真ん中、透過の絵は足元を画面の下にそろえる
   function defaults(c) {
     const b = baseSize(c);
     return { scale: 1, x: 0, y: c.alpha ? (100 - b.h) / 2 : 0 };
   }
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-  function place(frame, img, c) {
+  function place(img, c) {
     const b = baseSize(c);
-    frame.classList.toggle('framed', !c.alpha);
     img.style.width = `${b.w}%`;
     img.style.height = `${b.h}%`;
     img.style.left = `${50 + c.x}%`;
     img.style.top = `${50 + c.y}%`;
     img.style.transform = `translate(-50%, -50%) scale(${c.scale})`;
   }
+  // 部品の地の透け具合（0〜CLEAR_MAX %）。style.css の --ui-clear（0〜1）で使う
+  function applyClear(ui) {
+    document.body.style.setProperty('--ui-clear', String(clamp(Number(ui) || 0, 0, CLEAR_MAX) / 100));
+  }
 
   // ---------- ホーム ----------
   let homeUrl = null;
+  let shown = null; // ホームに出している置き方
   function showEmblem(el) {
     el.dataset.art = 'none';
     el.style.removeProperty('--portrait-art');
-    el.textContent = '';
     el.removeAttribute('role');
     el.removeAttribute('aria-label');
     el.setAttribute('aria-hidden', 'true');
@@ -121,6 +129,19 @@ const Portrait = (() => {
     img.onerror = () => loadBundled(el, sources.slice(1));
     img.src = sources[0];
   }
+  // 画面いっぱいの層に画像を出す（c が null なら消す）
+  function showPhoto(url, c) {
+    const layer = $('portrait-layer');
+    const img = $('portrait-photo');
+    shown = c;
+    document.body.classList.toggle('has-photo', Boolean(c));
+    layer.hidden = !c;
+    if (!c) { img.removeAttribute('src'); applyClear(0); return; }
+    $('portrait').dataset.art = 'photo'; // 紋章を消す（合わせている途中も）
+    if (img.getAttribute('src') !== url) img.src = url;
+    place(img, c);
+    applyClear(c.ui);
+  }
   async function renderHome() {
     const el = $('portrait');
     if (!el) return;
@@ -128,6 +149,7 @@ const Portrait = (() => {
     const blob = c ? await getBlob() : null;
     if (homeUrl) { URL.revokeObjectURL(homeUrl); homeUrl = null; }
     if (!c || !blob) {
+      showPhoto(null, null);
       showEmblem(el);
       loadBundled(el);
       return;
@@ -135,46 +157,47 @@ const Portrait = (() => {
     homeUrl = URL.createObjectURL(blob);
     el.style.removeProperty('--portrait-art');
     el.dataset.art = 'photo';
-    el.textContent = '';
-    const frame = document.createElement('div');
-    frame.className = 'portrait-frame';
-    const inner = document.createElement('div');
-    inner.className = 'portrait-inner';
-    const img = document.createElement('img');
-    img.className = 'portrait-img';
-    img.alt = '';
-    img.src = homeUrl;
-    inner.append(img);
-    frame.append(inner);
-    el.append(frame);
-    place(frame, img, c);
     labelArt(el, '立ち絵（写真から選んだ画像）');
+    showPhoto(homeUrl, c);
   }
+  // 画面の向き・大きさが変わったら置き直す（位置は画面に対する % なので、同じ見えかたになる）
+  window.addEventListener('resize', () => { if (shown) place($('portrait-photo'), shown); });
 
-  // ---------- 設定：選ぶ・合わせる・紋章に戻す ----------
-  let draft = null; // 合わせている途中 { blob, w, h, alpha, scale, x, y, url }
+  // ---------- 設定 ----------
   function renderSettings() {
     const has = Boolean(conf());
-    $('portrait-state').textContent = has ? '写真から選んだ画像を出しています' : '紋章を出しています（画像を選ぶと、ホームの紋章の代わりに出ます）';
+    $('portrait-state').textContent = has ? '写真から選んだ画像を出しています' : '紋章を出しています（画像を選ぶと、ホームの画面いっぱいに出ます）';
     $('portrait-adjust').hidden = !has;
     $('portrait-reset').hidden = !has;
   }
+
+  // ---------- ホームの上で合わせる ----------
+  let draft = null; // 合わせている途中 { blob, w, h, alpha, scale, x, y, ui, url }
   function renderDraft() {
-    place($('portrait-preview'), $('portrait-preview-img'), draft);
+    showPhoto(draft.url, draft);
     $('portrait-scale').value = String(Math.round(draft.scale * 100));
     $('portrait-scale-value').textContent = `${Math.round(draft.scale * 100)}%`;
+    $('portrait-clear').value = String(Math.round(draft.ui));
+    $('portrait-clear-value').textContent = `${Math.round(draft.ui)}%`;
   }
-  function openSheet(d) {
+  function startEdit(d) {
     if (draft && draft.url) URL.revokeObjectURL(draft.url);
-    draft = { ...d, url: URL.createObjectURL(d.blob) };
-    $('portrait-preview-img').src = draft.url;
-    $('portrait-sheet-status').textContent = '';
+    draft = { ui: 0, ...d, url: URL.createObjectURL(d.blob) };
+    if (location.hash !== '#home') location.hash = '#home';
+    document.body.classList.add('portrait-edit'); // 部品を押せないようにして、画面全体で絵を動かせるようにする
+    $('portrait-editor').hidden = false;
+    $('portrait-editor-panel').hidden = false;
+    $('portrait-editor-show').hidden = true;
+    $('portrait-editor-status').textContent = '';
     renderDraft();
-    $('portrait-sheet').showModal();
   }
-  function closeSheet() {
-    $('portrait-sheet').close();
+  function endEdit() {
+    document.body.classList.remove('portrait-edit');
+    $('portrait-editor').hidden = true;
+    if (draft && draft.url) URL.revokeObjectURL(draft.url);
+    draft = null;
   }
+  const editing = () => Boolean(draft);
 
   function bind() {
     $('portrait-file').addEventListener('change', async (e) => {
@@ -184,14 +207,15 @@ const Portrait = (() => {
       $('portrait-status').textContent = '';
       try {
         const p = await prepare(file);
-        openSheet({ ...p, ...defaults(p) });
+        const keep = conf();
+        startEdit({ ...p, ...defaults(p), ui: keep ? keep.ui : 0 }); // 透け具合は前の画像のものを引き継ぐ
       } catch (err) { $('portrait-status').textContent = err.message; }
     });
     $('portrait-adjust').addEventListener('click', async () => {
       const c = conf();
       const blob = c && await getBlob();
       if (!blob) { $('portrait-status').textContent = '画像が見つかりませんでした。もう一度選んでください'; return; }
-      openSheet({ ...c, blob });
+      startEdit({ ...c, blob });
     });
     $('portrait-reset').addEventListener('click', async () => {
       if (!(await confirmDialog('立ち絵の画像を外して、紋章に戻しますか？', '紋章に戻す'))) return;
@@ -205,45 +229,65 @@ const Portrait = (() => {
       draft.scale = clamp(Number(e.target.value) / 100, SCALE_MIN, SCALE_MAX);
       renderDraft();
     });
+    $('portrait-clear').addEventListener('input', (e) => {
+      if (!draft) return;
+      draft.ui = clamp(Number(e.target.value), 0, CLEAR_MAX);
+      renderDraft();
+    });
     $('portrait-center').addEventListener('click', () => {
       if (!draft) return;
       Object.assign(draft, defaults(draft));
       renderDraft();
     });
-    // 指で動かして位置を合わせる
-    const pv = $('portrait-preview');
+    // 操作の板を隠して、画面全体の見えかたを確かめる
+    $('portrait-editor-hide').addEventListener('click', () => {
+      $('portrait-editor-panel').hidden = true;
+      $('portrait-editor-show').hidden = false;
+    });
+    $('portrait-editor-show').addEventListener('click', () => {
+      $('portrait-editor-panel').hidden = false;
+      $('portrait-editor-show').hidden = true;
+    });
+    // 指で動かして位置を合わせる（画面のどこを触ってもよい）
+    const pad = $('portrait-drag');
     let drag = null;
-    pv.addEventListener('pointerdown', (e) => {
+    pad.addEventListener('pointerdown', (e) => {
       if (!draft) return;
       drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x: draft.x, y: draft.y };
-      pv.setPointerCapture(e.pointerId);
+      pad.setPointerCapture(e.pointerId);
       e.preventDefault();
     });
-    pv.addEventListener('pointermove', (e) => {
-      if (!drag || e.pointerId !== drag.id) return;
-      const r = pv.getBoundingClientRect();
+    pad.addEventListener('pointermove', (e) => {
+      if (!drag || !draft || e.pointerId !== drag.id) return;
+      const r = $('portrait-layer').getBoundingClientRect();
       draft.x = clamp(drag.x + ((e.clientX - drag.sx) / r.width) * 100, -SHIFT_MAX, SHIFT_MAX);
       draft.y = clamp(drag.y + ((e.clientY - drag.sy) / r.height) * 100, -SHIFT_MAX, SHIFT_MAX);
       renderDraft();
     });
     const end = (e) => { if (drag && e.pointerId === drag.id) drag = null; };
-    pv.addEventListener('pointerup', end);
-    pv.addEventListener('pointercancel', end);
+    pad.addEventListener('pointerup', end);
+    pad.addEventListener('pointercancel', end);
 
-    $('portrait-cancel').addEventListener('click', closeSheet);
-    $('portrait-sheet').addEventListener('close', () => {
-      if (draft && draft.url) URL.revokeObjectURL(draft.url);
-      draft = null;
+    $('portrait-cancel').addEventListener('click', () => {
+      endEdit();
+      renderHome();
+      location.hash = '#settings';
     });
     $('portrait-save').addEventListener('click', async () => {
       if (!draft) return;
-      try { await putBlob(draft.blob); } catch (err) { $('portrait-sheet-status').textContent = SAVE_FAILED; return; }
+      try { await putBlob(draft.blob); } catch (err) { $('portrait-editor-status').textContent = SAVE_FAILED; return; }
       const r = (v) => Math.round(v * 10) / 10;
-      const ok = Store.write(DB.portrait, { w: draft.w, h: draft.h, alpha: draft.alpha, scale: r(draft.scale), x: r(draft.x), y: r(draft.y), at: Date.now() });
-      if (!ok) { $('portrait-sheet-status').textContent = SAVE_FAILED; return; }
-      closeSheet();
+      const ok = Store.write(DB.portrait, {
+        w: draft.w, h: draft.h, alpha: draft.alpha, scale: r(draft.scale), x: r(draft.x), y: r(draft.y), ui: Math.round(draft.ui), at: Date.now(),
+      });
+      if (!ok) { $('portrait-editor-status').textContent = SAVE_FAILED; return; }
+      endEdit();
       renderSettings();
       renderHome();
+    });
+    // 合わせている途中でほかの画面へ移ったら（戻る操作など）、保存せずにやめる
+    window.addEventListener('hashchange', () => {
+      if (editing() && location.hash !== '#home') { endEdit(); renderHome(); }
     });
   }
 

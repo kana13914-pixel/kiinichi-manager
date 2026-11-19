@@ -59,6 +59,7 @@
   --tabbar-h: 56px;
   /* ---- 機能画面の決まり（R4。CR-F/CR-G） ---- */
   --z-tabbar: 20;          /* タブバーは貼り付く見出し（z-index: 1）より上 */
+  --z-edit: 30;            /* 立ち絵をホームの上で合わせる板（タブバーより上。D-067） */
   --size-ring: 232px;      /* タイマーの輪の直径 */
   --ring-w: 3px;           /* 輪の線の太さ */
   --size-mood: 14px;       /* 調子の印（7日） */
@@ -230,23 +231,35 @@ body[data-state="ready"] #main { display: block; }
 }
 /* 立ち絵が入ったら紋章の代わりに立ち絵を出す（CR-P04, D-022 ④）。--portrait-art は app.js が読み込めた画像で設定する */
 .portrait[data-art="ready"] { background: var(--portrait-art) center bottom / contain no-repeat; }
-/* 写真から選んだ立ち絵（D-066）。枠は縦横比 3:4 で、ホームと見本で同じ。位置と大きさは portrait.js が img に付ける。
-   背景のある絵（.framed）は角を斜めに落とした枠に入れる：外側を金の細線の色で塗り、内側を 1px 内に重ねる（.cut-btn と同じ作り。CR-S01） */
+/* 写真から選んだ立ち絵（D-066、D-067）。ホームの画面いっぱいに、部品の後ろ（z-index: -1：地より手前、部品より奥）に敷く。
+   位置と大きさは portrait.js が img に付ける（画面の幅・高さに対する %） */
 .portrait[data-art="photo"] { background: none; }
-.portrait-frame { position: relative; height: 100%; max-width: 100%; aspect-ratio: 3 / 4; }
-.portrait-inner { position: absolute; inset: 0; overflow: hidden; }
-.portrait-frame.framed {
-  background: var(--color-gold-line);
-  clip-path: polygon(var(--cut-l) 0, 100% 0, 100% calc(100% - var(--cut-l)), calc(100% - var(--cut-l)) 100%, 0 100%, 0 var(--cut-l));
-}
-.portrait-frame.framed .portrait-inner {
-  inset: 1px; background: var(--color-bg-deep);
-  clip-path: polygon(calc(var(--cut-l) - var(--cut-fix)) 0, 100% 0, 100% calc(100% - var(--cut-l) + var(--cut-fix)), calc(100% - var(--cut-l) + var(--cut-fix)) 100%, 0 100%, 0 calc(var(--cut-l) - var(--cut-fix)));
-}
+body.has-photo #view-home .stage::before, body.has-photo #view-home .stage-mark { display: none; } /* 吊り線・縦書きの英字は写真と重なるので出さない */
+.portrait-layer { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 .portrait-img { position: absolute; max-width: none; transform-origin: center; pointer-events: none; -webkit-user-drag: none; }
-.portrait-preview-wrap { display: flex; justify-content: center; margin-top: var(--space-2); }
-.portrait-preview { height: min(50dvh, var(--portrait-max-h)); touch-action: none; cursor: grab; }
-.portrait-preview:not(.framed) { outline: 1px dashed var(--color-gold-line); } /* 透過の絵でも枠の範囲が分かるように */
+/* 部品の地の透け具合（--ui-clear：0〜0.9。利用者が合わせる）。写真があるときのホームだけ。文字・線・ボタンはそのまま */
+body.has-photo .dialogue:not(.dialogue-mini) {
+  background: linear-gradient(var(--dlg-top), var(--dlg-top)) top left / 100% 1px no-repeat,
+    color-mix(in srgb, var(--color-scrim) calc((1 - var(--ui-clear, 0)) * 100%), transparent);
+  -webkit-backdrop-filter: blur(calc(var(--blur-dialogue) * (1 - var(--ui-clear, 0)))); backdrop-filter: blur(calc(var(--blur-dialogue) * (1 - var(--ui-clear, 0))));
+}
+body.has-photo .next-strip {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--color-strip-from) calc((1 - var(--ui-clear, 0)) * 100%), transparent),
+    color-mix(in srgb, var(--color-strip-to) calc((1 - var(--ui-clear, 0)) * 100%), transparent));
+}
+body.has-photo:has(#view-home:not([hidden])) .tabbar { background: color-mix(in srgb, var(--color-ink) calc((1 - var(--ui-clear, 0)) * 100%), transparent); }
+/* ホームの画面の上で合わせる（D-067）。画面全体を触って絵を動かし、下の板で大きさ・透け具合。部品は押せない */
+.portrait-editor { position: fixed; inset: 0; z-index: var(--z-edit); }
+.portrait-drag { position: absolute; inset: 0; touch-action: none; cursor: grab; }
+.portrait-editor-panel {
+  position: absolute; left: 0; right: 0; bottom: calc(var(--vh-fix) * -1);
+  padding: var(--space-3) var(--space-4) calc(var(--safe-bottom) + var(--space-3));
+  background: var(--color-ink); box-shadow: inset 0 1px 0 var(--color-gold-line);
+}
+.portrait-editor-panel label { margin-top: var(--space-1); }
+.portrait-editor-acts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-2); margin-top: var(--space-2); }
+.portrait-editor-acts .cut-btn { margin-top: 0; }
+.portrait-editor .portrait-editor-show { position: absolute; top: calc(var(--safe-top) + var(--space-2)); right: var(--space-4); }
 .portrait-acts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
 .portrait-acts:has(#portrait-adjust[hidden]) { grid-template-columns: 1fr; }
 .portrait-acts .cut-btn, .file-btn { margin-top: var(--space-2); }
