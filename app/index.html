@@ -581,8 +581,13 @@
   <dialog id="records-sheet" class="sheet" aria-labelledby="records-sheet-title">
     <div class="sheet-head">
       <h2 id="records-sheet-title">今日の記録</h2>
-      <button id="records-sheet-close" type="button" class="cut-btn quiet chip">閉じる</button>
+      <span class="sheet-head-acts">
+        <!-- 時刻を手で入れる（1項目につき1日1回。D-079）。押すと各行が時刻の欄になる -->
+        <button id="records-sheet-edit" type="button" class="sheet-edit" aria-pressed="false" aria-label="時刻を手で入れる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg></button>
+        <button id="records-sheet-close" type="button" class="cut-btn quiet chip">閉じる</button>
+      </span>
     </div>
+    <p id="records-sheet-note" class="note sheet-note" hidden>時刻を選んで「入れる」を押してください（手で入れられるのは、各項目1日1回）。</p>
     <ul id="records-list" class="sheet-list"></ul>
     <p id="records-sheet-status" class="status ng" role="status"></p>
   </dialog>

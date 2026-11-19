@@ -833,6 +833,14 @@ body.no-screen-lines .dialogue-mini:not(.weekly-say) { display: none; } /* 週�
 .sheet-row.skipped .sheet-name { color: var(--color-text-tertiary); }
 .sheet-acts { flex: none; display: flex; gap: var(--space-2); }
 .sheet-acts .cut-btn { padding: 0 var(--space-3); }
+/* 記録の一覧の時刻を手で入れる（D-079）：「閉じる」の隣の鉛筆。押している間は地を明るくする。各行は時刻の欄と「入れる」 */
+.sheet-head-acts { flex: none; display: flex; align-items: center; gap: var(--space-2); }
+.sheet-edit { flex: none; width: var(--tap); min-height: var(--tap); margin: 0; padding: 0; background: transparent; color: var(--color-text-secondary); border-radius: 0; }
+.sheet-edit svg { width: var(--size-icon); height: var(--size-icon); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.sheet-edit[aria-pressed="true"] { color: var(--color-text); background: var(--color-surface-2); box-shadow: inset 0 0 0 1px var(--color-text); }
+.sheet-note { margin: var(--space-2) 0 0; }
+.sheet-acts .sheet-time { width: 7.5em; padding: 0 var(--space-2); font-variant-numeric: tabular-nums; }
+.sheet-acts .sheet-used { align-self: center; font-size: var(--fs-footnote); color: var(--color-text-tertiary); }
 
 
 /* ========== R5（2026-11-18。docs/visual_rules.md の CR-F07〜F10・CR-G05） ========== */

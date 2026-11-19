@@ -2280,6 +2280,65 @@ class PwaTest(unittest.TestCase):
           .filter((e) => e.getClientRects().length && getComputedStyle(e).backgroundColor === 'rgb(232, 196, 92)').length""")
         self.assertEqual(fills, 0)  # 一覧には金の塗りを使わない
 
+    def test_records_sheet_manual_time_once_per_day(self):
+        """「…」の一覧の鉛筆で、各項目の時刻を手で入れられる。1項目につき1日1回、先の時刻は入れない。キィニチは何も言わない（D-079）"""
+        def ms(h, m):
+            return int(datetime(2026, 11, 9, h, m).timestamp() * 1000)
+        records = {"2026-11-09": {"wake": {"time": "07:05", "at": ms(7, 5)}, "break": [{"time": "15:00", "at": ms(15, 0)}]}}
+        init = "localStorage.setItem('db.records', %s);" % json.dumps(json.dumps(records)) + MOOD_NORMAL
+        page = self.clock_page(20, 30, init_script=init, size=(375, 667), safe=(20, 0))
+        bubble = page.text_content("#bubble-text")
+        page.click("#records-more")
+        row = "#records-list .sheet-row[data-record=%s]"
+        self.assertEqual(page.get_attribute("#records-sheet-edit", "aria-label"), "時刻を手で入れる")
+        self.assertEqual(page.get_attribute("#records-sheet-edit", "aria-pressed"), "false")
+        self.assertEqual(page.query_selector_all("#records-list input"), [])  # ふだんは今までどおりのボタン
+        page.click("#records-sheet-edit")
+        self.assertEqual(page.get_attribute("#records-sheet-edit", "aria-pressed"), "true")
+        self.assertTrue(page.is_visible("#records-sheet-note"))
+        self.assertEqual(len(page.query_selector_all("#records-list input[type=time]")), 10)
+        self.assertEqual(page.input_value(row % "wake" + " input"), "07:05")  # 記録があればその時刻
+        self.assertEqual(page.input_value(row % "dinner" + " input"), "19:30")  # なければ過ぎた予定の時刻
+        self.assertEqual(page.input_value(row % "bath" + " input"), "20:30")  # 予定がまだ先なら今
+        self.assertLessEqual(page.evaluate("document.getElementById('records-sheet').scrollWidth"), 375)
+        # 夕食を 19:10 で入れる
+        page.fill(row % "dinner" + " input", "19:10")
+        page.click(row % "dinner" + " button:text-is('入れる')")
+        self.assertEqual(page.text_content("#records-sheet-status"), "「夕食」を 19:10 で入れました")
+        self.assertEqual(page.text_content(row % "dinner" + " .sheet-state"), "✓ 19:10（手入力）")
+        self.assertEqual(page.text_content(row % "dinner" + " .sheet-acts"), "今日は入れ済み")  # 1日1回
+        self.assertEqual(page.evaluate("Records.day().dinner"), {"time": "19:10", "at": ms(19, 10), "manual": True})
+        # 記録済みの起床を直す（入れ替え）
+        page.fill(row % "wake" + " input", "06:50")
+        page.click(row % "wake" + " button:text-is('入れる')")
+        self.assertEqual(page.evaluate("Records.day().wake"), {"time": "06:50", "at": ms(6, 50), "manual": True})
+        # 先の時刻・深夜（次の暦日）の先の時刻は入れない
+        for t in ("21:00", "01:30"):
+            page.fill(row % "bath" + " input", t)
+            page.click(row % "bath" + " button:text-is('入れる')")
+            self.assertEqual(page.text_content("#records-sheet-status"), "これから先の時刻は入れられません")
+        self.assertIsNone(page.evaluate("Records.day().bath || null"))
+        # 休憩は1回足して時刻の順に並べる
+        page.fill(row % "break" + " input", "13:00")
+        page.click(row % "break" + " button:text-is('入れる')")
+        self.assertEqual([r["time"] for r in page.evaluate("Records.day().break")], ["13:00", "15:00"])
+        self.assertEqual(page.text_content(row % "break" + " .sheet-state"), "✓ 2回・最後 15:00（手入力）")
+        self.assertEqual(page.text_content(row % "break" + " .sheet-acts"), "今日は入れ済み")
+        # 鉛筆をもう一度押すと、いつものボタンに戻る。手で入れた印は残る
+        page.click("#records-sheet-edit")
+        self.assertEqual(page.query_selector_all("#records-list input"), [])
+        self.assertTrue(page.is_visible(row % "dinner" + " button:text-is('取り消す')"))
+        self.assertEqual(page.text_content(row % "dinner" + " .sheet-state"), "✓ 19:10（手入力）")
+        page.click("#records-sheet-close")
+        self.assertEqual(page.text_content("#bubble-text"), bubble)  # キィニチは何も言わない
+        # スプレッドシートには「記録（手入力）」で送る
+        sent = page.evaluate("Sync.payload().records['2026-11-09']")
+        self.assertIn({"kind": "dinner", "label": "夕食", "time": "19:10", "n": 1, "state": "記録（手入力）", "at": "2026-11-09 19:10"}, sent)
+        # 開き直すと、いつものボタンの形から
+        page.click("#records-more")
+        self.assertEqual(page.get_attribute("#records-sheet-edit", "aria-pressed"), "false")
+        self.assertEqual(page.query_selector_all("#records-list input"), [])
+
     def test_dock_labels_fit_with_three_buttons(self):
         for (h, m) in ((18, 0), (21, 30), (9, 3)):
             page = self.clock_page(h, m, size=(375, 667), safe=(20, 0))

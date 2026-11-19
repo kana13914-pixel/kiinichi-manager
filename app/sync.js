@@ -21,9 +21,10 @@ const Sync = (() => {
       const rows = [];
       for (const k of RECORD_KINDS) {
         const v = day[k.id];
-        if (Array.isArray(v)) v.forEach((r, i) => rows.push({ kind: k.id, label: k.label, time: r.time, n: i + 1, state: '記録', at: stamp(r.at) }));
+        const done = (r) => (r.manual ? '記録（手入力）' : '記録'); // 時刻を手で入れたもの（D-079）
+        if (Array.isArray(v)) v.forEach((r, i) => rows.push({ kind: k.id, label: k.label, time: r.time, n: i + 1, state: done(r), at: stamp(r.at) }));
         else if (v && v.skipped) rows.push({ kind: k.id, label: k.label, time: '', n: '', state: '今日はなし', at: stamp(v.at) });
-        else if (v && v.time) rows.push({ kind: k.id, label: k.label, time: v.time, n: 1, state: '記録', at: stamp(v.at) });
+        else if (v && v.time) rows.push({ kind: k.id, label: k.label, time: v.time, n: 1, state: done(v), at: stamp(v.at) });
       }
       records[date] = rows;
     }

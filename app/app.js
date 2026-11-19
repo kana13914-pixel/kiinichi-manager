@@ -343,6 +343,22 @@ const Records = {
   skip(kind, on, now = new Date()) {
     return this.write(now, (day) => { if (on) day[kind] = { skipped: true, at: now.getTime() }; else delete day[kind]; });
   },
+  // 時刻を手で入れる（D-079）。time は 'HH:MM'（朝4時より前は次の暦日）。ふつうの記録は入れ替え、休憩は1回足して時刻の順に並べる。
+  // 印 manual: true を付ける（1項目につき1日1回まで。スプレッドシートには「記録（手入力）」で送る）。保存できたら true
+  setManual(kind, time, now = new Date()) {
+    const d = logicalDay(now);
+    d.setMinutes(routineMinutes(time));
+    const rec = { time, at: d.getTime(), manual: true };
+    return this.write(now, (day) => {
+      if (kindOf(kind) && kindOf(kind).repeat) day[kind] = [...(Array.isArray(day[kind]) ? day[kind] : []), rec].sort((a, b) => a.at - b.at);
+      else day[kind] = rec;
+    });
+  },
+  // 今日、その項目を手で入れたか
+  manualUsed(kind, day) {
+    const v = day[kind];
+    return Array.isArray(v) ? v.some((r) => r && r.manual) : Boolean(v && v.manual);
+  },
 };
 
 // ---------- ホームの記録ボタン（D-046）：今の時間帯に合うものを、未記録を優先して最大 3 つ。並びは一日の順 ----------
@@ -518,16 +534,62 @@ function sheetButton(text, onClick, extra = '') {
 }
 function sheetAct(fn) {
   return () => {
-    if (!fn()) { document.getElementById('records-sheet-status').textContent = SAVE_FAILED; return; }
-    document.getElementById('records-sheet-status').textContent = '';
+    if (!fn()) { setSheetStatus(SAVE_FAILED); return; }
+    setSheetStatus('');
     applyRecords();
   };
+}
+// 時刻を手で入れる（D-079）。鉛筆を押している間だけ、各行を時刻の欄と「入れる」にする
+let sheetEditing = false;
+function setSheetEditing(on) {
+  sheetEditing = on;
+  document.getElementById('records-sheet-edit').setAttribute('aria-pressed', String(on));
+  document.getElementById('records-sheet-note').hidden = !on;
+  setSheetStatus('');
+  renderSheet();
+}
+function setSheetStatus(text, ok = false) {
+  const el = document.getElementById('records-sheet-status');
+  el.textContent = text;
+  el.className = ok ? 'status ok' : 'status ng';
+}
+// 欄に初めに入れておく時刻：記録があればその時刻、なければ予定の時刻（まだ来ていなければ今）
+function manualDefault(kind, st, now) {
+  if (st.time) return st.time;
+  const planned = ROUTINE_ITEMS.some(([id]) => id === kind) ? plannedMinutes(now)[kind] : null;
+  if (planned !== null && planned <= logicalMinutes(now)) return `${pad(Math.floor(planned / 60) % 24)}:${pad(planned % 60)}`;
+  return hm(now);
+}
+function saveManual(k, input) {
+  const now = new Date();
+  const time = input.value;
+  if (!ROUTINE_TIME.test(time)) { setSheetStatus('時刻を入れてください'); input.focus(); return; }
+  if (routineMinutes(time) > logicalMinutes(now)) { setSheetStatus('これから先の時刻は入れられません'); input.focus(); return; }
+  if (Records.manualUsed(k.id, Records.day(now))) return;
+  if (!Records.setManual(k.id, time, now)) { setSheetStatus(SAVE_FAILED); return; }
+  applyRecords(now); // 一覧（手で入れたあとの形）とホームの記録ボタンを描き直す。キィニチは何も言わない（あとから入れることが多いため）
+  setSheetStatus(`「${k.label}」を ${time} で入れました`, true);
+}
+function manualActs(k, st, used, now) {
+  if (used) {
+    const note = document.createElement('span');
+    note.className = 'sheet-used';
+    note.textContent = '今日は入れ済み';
+    return [note];
+  }
+  const input = document.createElement('input');
+  input.type = 'time';
+  input.className = 'sheet-time';
+  input.value = manualDefault(k.id, st, now);
+  input.setAttribute('aria-label', `「${k.label}」の時刻`);
+  return [input, sheetButton('入れる', () => saveManual(k, input), ' rec')];
 }
 function renderSheet(now = new Date()) {
   const day = Records.day(now);
   document.getElementById('records-sheet-title').textContent = `${labelLong(logicalDay(now))}の記録`;
   document.getElementById('records-list').replaceChildren(...RECORD_KINDS.map((k) => {
     const st = Records.status(k.id, day);
+    const used = Records.manualUsed(k.id, day);
     const li = document.createElement('li');
     li.className = 'sheet-row' + (st.state === 'done' ? ' done' : st.state === 'skipped' ? ' skipped' : '');
     li.dataset.record = k.id;
@@ -538,12 +600,14 @@ function renderSheet(now = new Date()) {
     name.textContent = k.label;
     const state = document.createElement('span');
     state.className = 'sheet-state';
-    state.textContent = st.state === 'skipped' ? '今日はなし'
-      : st.state === 'done' ? (k.repeat ? `✓ ${st.count}回・最後 ${st.time}` : `✓ ${st.time}`) : '未記録';
+    state.textContent = (st.state === 'skipped' ? '今日はなし'
+      : st.state === 'done' ? (k.repeat ? `✓ ${st.count}回・最後 ${st.time}` : `✓ ${st.time}`) : '未記録') + (used ? '（手入力）' : '');
     body.append(name, state);
     const acts = document.createElement('span');
     acts.className = 'sheet-acts';
-    if (st.state === 'skipped') {
+    if (sheetEditing) {
+      acts.append(...manualActs(k, st, used, now));
+    } else if (st.state === 'skipped') {
       acts.append(sheetButton('なしをやめる', sheetAct(() => Records.skip(k.id, false))));
     } else if (st.state === 'done') {
       if (k.repeat) acts.append(sheetButton('もう1回', sheetAct(() => recordNow(k.id)), ' rec'));
@@ -557,12 +621,12 @@ function renderSheet(now = new Date()) {
 }
 document.getElementById('records-more').addEventListener('click', () => {
   homeToast.hide();
-  document.getElementById('records-sheet-status').textContent = '';
-  renderSheet();
+  setSheetEditing(false); // 開くときはいつものボタンの形から
   sheet.showModal();
   document.getElementById('records-sheet-close').focus();
 });
 document.getElementById('records-sheet-close').addEventListener('click', () => sheet.close());
+document.getElementById('records-sheet-edit').addEventListener('click', () => setSheetEditing(!sheetEditing));
 sheet.addEventListener('click', (e) => { if (e.target === e.currentTarget) sheet.close(); }); // 枠の外を押すと閉じる
 applyRecords();
 // 毎日の時刻を変えたら、ホームの記録ボタンと次の予定を決め直す
