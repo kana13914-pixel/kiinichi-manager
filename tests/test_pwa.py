@@ -15,6 +15,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
+ADD_NONE = "#task-list .task-slot[data-priority=none] .add-slot"  # 優先度なしの点線の「追加」の欄（D-070）
 
 # iPhone の 3 機種（V4-02）：(幅, 高さ), (上, 下のセーフエリア)
 DEVICES = [((375, 667), (20, 0)), ((393, 852), (59, 34)), ((430, 932), (59, 34))]
@@ -725,17 +726,171 @@ class PwaTest(unittest.TestCase):
         hit = page.evaluate("document.elementFromPoint(innerWidth / 2, innerHeight - 20).closest('.tabbar') !== null")
         self.assertTrue(hit)
 
-    def test_task_groups_follow_due(self):
-        """未完了のタスクに期限ごとの小見出しが入り、並び順は変わらない（CR-G01）。"""
+    def test_task_groups_follow_priority(self):
+        """未完了のタスクは優先度ごとの見出し（▲高・●中・▼低・なし）に分かれ、中は期限の近い順（D-070、CR-G07）。"""
         tasks = [
             {"id": "1", "title": "古い", "due": "2026-11-07", "done": False, "createdAt": 1},
-            {"id": "2", "title": "今日", "due": "2026-11-09", "done": False, "createdAt": 2},
-            {"id": "3", "title": "なし", "due": None, "done": False, "createdAt": 3},
+            {"id": "2", "title": "高・期限なし", "due": None, "priority": "high", "done": False, "createdAt": 2},
+            {"id": "3", "title": "高・今日", "due": "2026-11-09", "priority": "high", "done": False, "createdAt": 3},
+            {"id": "4", "title": "低", "due": None, "priority": "low", "done": False, "createdAt": 4},
+            {"id": "5", "title": "変な値", "due": None, "priority": "urgent", "done": False, "createdAt": 5},
         ]
         page = self.tasks_page(tasks=tasks)
-        heads = page.eval_on_selector_all("#task-list .task-group", "els => els.map(e => e.firstChild.textContent)")
-        self.assertEqual(heads, ["期限切れ", "今日まで", "期限なし"])
-        self.assertEqual(self.open_titles(page), ["古い", "今日", "なし"])
+        heads = page.eval_on_selector_all("#task-list .task-group", "els => els.map(e => [e.dataset.priority, e.textContent])")
+        self.assertEqual(heads, [["high", "▲高（2）▾"], ["mid", "●中▾"], ["low", "▼低（1）▾"], ["none", "なし（2）▾"]])
+        self.assertEqual(self.open_titles(page), ["高・今日", "高・期限なし", "低", "古い", "変な値"])
+        self.assertIn("期限切れ", page.text_content("#task-list li[data-id='1']"))  # 期限切れの表示は行に残す
+        slots = page.eval_on_selector_all("#task-list .add-slot", "els => els.map(e => e.textContent)")
+        self.assertEqual(slots, ["集中が必要＋", "通常の作業＋", "簡単な作業＋", "タスクを追加＋"])
+        self.assertEqual(page.get_attribute("#task-list .task-group[data-priority=high] .prio-tag", "aria-label"), "優先度 高、2件。たたむ")
+        # 古いデータ（優先度・ミニタスクなし）は「なし」「ミニタスクなし」として読む
+        self.assertEqual(page.query_selector_all("#task-list .sub-bar"), [])
+
+    def test_task_group_fold_is_remembered(self):
+        """見出しを押すとたたみ、アプリを閉じても覚えている（D-070）。"""
+        tasks = [{"id": "a", "title": "高い", "due": None, "priority": "high", "done": False, "createdAt": 1}]
+        page = self.tasks_page(tasks=tasks)
+        page.click("#task-list .task-group[data-priority=high] .prio-tag")
+        self.assertEqual(self.open_titles(page), [])
+        self.assertEqual(page.get_attribute("#task-list .task-group[data-priority=high] .prio-tag", "aria-expanded"), "false")
+        self.assertEqual(page.query_selector_all("#task-list .task-slot[data-priority=high]"), [])  # たたむと追加の欄も隠す
+        self.assertIn("高（1）", page.text_content("#task-list .task-group[data-priority=high]"))  # 件数は見える
+        page.reload()
+        page.wait_for_selector("#view-tasks", state="visible")
+        self.assertEqual(self.open_titles(page), [])
+        page.click("#task-list .task-group[data-priority=high] .prio-tag")
+        self.assertEqual(self.open_titles(page), ["高い"])
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.prefs')"))["taskFolded"], [])
+
+    def test_add_task_from_priority_slot(self):
+        """各優先度の下の点線の欄から、その優先度のタスクを作れる。フォームはその欄に開く（D-070）。"""
+        page = self.tasks_page()
+        page.click("#task-list .task-slot[data-priority=mid] .add-slot")
+        self.assertTrue(page.is_visible("#task-list .task-slot[data-priority=mid] #task-form"))
+        self.assertEqual(page.get_attribute("#task-form .prio-chips .chip[data-priority=mid]", "aria-pressed"), "true")
+        page.fill("#task-title", "見積もり")
+        page.click("#task-submit")
+        self.assertEqual(self.open_titles(page), ["見積もり"])
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["priority"], "mid")
+        self.assertTrue(page.is_hidden("#task-form"))
+        # フォームの中で優先度を変えれば、そちらに入る
+        page.click("#task-list .task-slot[data-priority=mid] .add-slot")
+        page.fill("#task-title", "掃除")
+        page.click("#task-form .prio-chips .chip[data-priority='']")
+        page.click("#task-submit")
+        stored = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))
+        self.assertEqual([t["priority"] for t in stored], ["mid", None])
+        self.assertEqual(stored[1]["subtasks"], [])
+        self.assertIn("掃除", page.text_content("#task-list .task-group[data-priority=none] ~ li"))
+        # やめると閉じて、欄に戻る
+        page.click("#task-list .task-slot[data-priority=low] .add-slot")
+        page.click("#task-cancel")
+        self.assertTrue(page.is_hidden("#task-form"))
+        self.assertTrue(page.is_visible("#task-list .task-slot[data-priority=low] .add-slot"))
+
+    def test_task_row_actions_edit_and_delete(self):
+        """行の丸（四角）以外を押すと操作の一覧。編集で名前・期限・優先度・日報へ・ミニタスクを直せる（D-070）。"""
+        tasks = [{"id": "a", "title": "資料", "due": None, "done": False, "createdAt": 1}]
+        page = self.tasks_page(tasks=tasks)
+        self.assertEqual(page.query_selector_all("#task-list .task-del"), [])  # ごみ箱は行に出さない
+        page.click("#task-list li[data-id=a] .task-main")
+        self.assertTrue(page.is_visible("#task-actions"))
+        self.assertEqual(page.text_content("#task-actions-title"), "資料")
+        self.assertFalse(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["done"])  # 完了にはしない
+        page.click("#task-act-edit")
+        page.wait_for_selector("#task-edit", state="visible")
+        page.fill("#edit-title", "資料を送る")
+        page.click("#task-edit .due-chips .chip[data-due=tomorrow]")
+        page.click("#task-edit .prio-chips .chip[data-priority=high]")
+        page.click("#edit-report")
+        for name in ("下書き", "", "確認"):  # 空の名前は保存しない
+            page.click("#edit-sub-add")
+            page.fill("#edit-subs li:last-child input", name)
+        self.assertEqual(page.text_content("#edit-sub-count"), "3/10")
+        page.click("#task-edit-save")
+        page.wait_for_selector("#task-edit", state="hidden")
+        t = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
+        self.assertEqual([t["title"], t["due"], t["priority"], t["toReport"]], ["資料を送る", "2026-11-10", "high", True])
+        self.assertEqual([x["title"] for x in t["subtasks"]], ["下書き", "確認"])
+        self.assertIn("資料を送る", page.text_content("#task-list .task-group[data-priority=high] ~ li"))
+        self.assertEqual(page.text_content("#task-list li[data-id=a] .sub-count"), "0/2")
+        # 編集でミニタスクを消す。やめると何も変わらない
+        page.click("#task-list li[data-id=a] .task-main")
+        page.click("#task-act-edit")
+        page.click("#edit-subs li:first-child .task-del")
+        page.click("#task-edit-cancel")
+        self.assertEqual(len(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["subtasks"]), 2)
+        page.click("#task-list li[data-id=a] .task-main")
+        page.click("#task-act-edit")
+        page.click("#edit-subs li:first-child .task-del")
+        page.click("#task-edit-save")
+        self.assertEqual([x["title"] for x in json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["subtasks"]], ["確認"])
+        # 削除は赤・確認つき
+        page.click("#task-list li[data-id=a] .task-main")
+        self.assertIn("danger", page.get_attribute("#task-act-delete", "class"))
+        page.click("#task-act-delete")
+        self.assertEqual(page.text_content("#confirm-text"), "「資料を送る」を削除しますか？")
+        page.click("#confirm-ok")
+        page.wait_for_selector("#task-toast", state="visible", timeout=3_000)
+        self.assertEqual(self.open_titles(page), [])
+
+    def test_subtasks_open_check_add_and_limit(self):
+        """ミニタスク：行の下に「済み/全部」の帯と ▾。開くと親の下に並び、最後に「＋ ミニタスクを追加」。10個まで（D-070）。"""
+        subs = [{"id": f"s{i}", "title": f"小{i}", "done": i < 2, "doneAt": None} for i in range(5)]
+        tasks = [{"id": "a", "title": "親", "due": None, "done": False, "createdAt": 1, "subtasks": subs}]
+        page = self.tasks_page(tasks=tasks)
+        self.assertEqual(page.text_content("#task-list li[data-id=a] .sub-count"), "2/5")
+        self.assertEqual(page.get_attribute("#task-list li[data-id=a] .sub-bar", "aria-expanded"), "false")
+        self.assertEqual(page.query_selector_all("#task-list .sub-row"), [])  # ふだんはたたむ
+        page.click("#task-list li[data-id=a] .sub-bar")
+        self.assertEqual(page.eval_on_selector_all("#task-list .sub-title", "els => els.map(e => e.textContent)"), [f"小{i}" for i in range(5)])
+        say = page.text_content("#tasks-say-line")
+        page.click("#task-list .sub-row[data-sub=s2] .sub-check")
+        self.assertEqual(page.text_content("#task-list li[data-id=a] .sub-count"), "3/5")
+        self.assertEqual(page.text_content("#tasks-say-line"), say)  # キィニチは何も言わない
+        self.assertTrue(page.is_hidden("#task-toast"))
+        stored = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
+        self.assertTrue(stored["subtasks"][2]["done"])
+        self.assertFalse(stored["done"])  # 全部終わっても親は自動で完了にしない
+        page.click("#task-list li[data-id=a] .sub-add-btn")
+        page.press("#task-list li[data-id=a] .sub-add-form input", "Enter")  # 空のままなら閉じる
+        self.assertTrue(page.is_visible("#task-list li[data-id=a] .sub-add-btn"))
+        self.assertEqual(len(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["subtasks"]), 5)
+        for sid in ("s3", "s4"):
+            page.click(f"#task-list .sub-row[data-sub={sid}] .sub-check")
+        self.assertFalse(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["done"])
+        self.assertEqual(page.text_content("#task-list li[data-id=a] .sub-count"), "5/5")
+        # 足す：1つずつ。10個まで
+        page.click("#task-list li[data-id=a] .sub-add-btn")
+        self.assertTrue(page.evaluate("document.activeElement.matches('.sub-add-form input')"))
+        for i in range(5):  # 足したあとも欄は開いたまま
+            page.fill("#task-list li[data-id=a] .sub-add-form input", f"足す{i}")
+            page.press("#task-list li[data-id=a] .sub-add-form input", "Enter")
+        self.assertEqual(page.text_content("#task-list li[data-id=a] .sub-count"), "5/10")
+        self.assertEqual(page.query_selector_all("#task-list li[data-id=a] .sub-add"), [])  # 10個で欄ごと消える
+        self.assertEqual(len(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["subtasks"]), 10)
+        # 押せる範囲は 44px 以上
+        for sel in ("#task-list .sub-check", "#task-list .sub-bar", "#task-list .task-done-btn"):
+            box = page.eval_on_selector(sel, "e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }")
+            self.assertGreaterEqual(min(box) if sel != "#task-list .sub-bar" else box[1], 44, sel)
+
+    def test_parent_complete_finishes_subtasks_and_undo_restores(self):
+        """親を完了にすると残りのミニタスクも済み。取り消すと元に戻る。日報へはミニタスクの名前を入れない（D-070）。"""
+        subs = [{"id": "s1", "title": "下書き", "done": True, "doneAt": 5}, {"id": "s2", "title": "清書", "done": False, "doneAt": None}]
+        tasks = [{"id": "a", "title": "手紙", "due": None, "done": False, "createdAt": 1, "toReport": True, "subtasks": subs}]
+        page = self.tasks_page(tasks=tasks)
+        page.click("#task-list li[data-id=a] .task-done-btn")
+        page.wait_for_selector("#done-list li[data-id=a]", state="attached", timeout=3_000)
+        t = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
+        self.assertTrue(t["done"])
+        self.assertEqual([x["done"] for x in t["subtasks"]], [True, True])
+        self.assertEqual(t["subtasks"][0]["doneAt"], 5)
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.reports')"))["2026-11-09"]["done"], "・手紙")
+        page.click("#task-toast .undo")
+        t = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
+        self.assertFalse(t["done"])
+        self.assertEqual([x["done"] for x in t["subtasks"]], [True, False])
+        self.assertEqual(page.text_content("#task-list li[data-id=a] .sub-count"), "1/2")
 
     def test_report_mood_week(self):
         """日報の「これまで」の上に、直近7日の調子の印が出る（CR-G03）。"""
@@ -771,8 +926,8 @@ class PwaTest(unittest.TestCase):
 
     def test_add_task_with_due_chip_and_persist(self):
         page = self.tasks_page()
-        page.click("#task-add-open")
-        self.assertTrue(page.is_hidden("#task-add-open"))
+        page.click(ADD_NONE)
+        self.assertTrue(page.is_visible("#task-form"))
         page.fill("#task-title", "資料を送る")
         page.click("#task-form .chip[data-due=tomorrow]")
         self.assertEqual(page.input_value("#task-due"), "2026-11-10")
@@ -780,14 +935,14 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(self.open_titles(page), ["資料を送る"])
         self.assertEqual(page.text_content("#task-list .task-due"), "明日まで")
         self.assertEqual(page.text_content("#tasks-say-line"), "残りはこれだけだ。一つずつ片づけろ。")  # 0件のときとは別の一言
-        self.assertTrue(page.is_visible("#task-add-open"))
+        self.assertTrue(page.is_hidden("#task-form"))
         page.reload()
         page.wait_for_selector("#view-tasks", state="visible")
         self.assertEqual(self.open_titles(page), ["資料を送る"])
 
     def test_empty_title_is_not_added(self):
         page = self.tasks_page()
-        page.click("#task-add-open")
+        page.click(ADD_NONE)
         page.fill("#task-title", "   ")
         page.click("#task-submit")
         self.assertIn("入力してください", page.text_content("#task-form-status"))
@@ -810,7 +965,7 @@ class PwaTest(unittest.TestCase):
     def test_complete_and_undo(self):
         tasks = [{"id": "a", "title": "洗濯", "due": None, "done": False, "createdAt": 1}]
         page = self.tasks_page(tasks=tasks)
-        page.click("#task-list .task-main")
+        page.click("#task-list .task-done-btn")
         page.wait_for_selector("#done-list li", state="attached", timeout=3_000)  # チェックの印が入るのを見せてから移る（D-039 ⑧）
         self.assertEqual(self.open_titles(page), [])
         self.assertEqual(page.text_content("#done-count"), "1")
@@ -820,29 +975,32 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(self.open_titles(page), ["洗濯"])
         self.assertTrue(page.is_hidden("#done-section"))
         # 完了→未完了に戻す操作はトーストを出さない
-        page.click("#task-list .task-main")
+        page.click("#task-list .task-done-btn")
         page.click("#done-section summary")
-        page.click("#done-list .task-main")
+        page.click("#done-list .task-done-btn")
         self.assertEqual(self.open_titles(page), ["洗濯"])
         self.assertTrue(page.is_hidden("#task-toast"))
 
     def test_delete_and_undo_restores_position(self):
         tasks = [{"id": k, "title": k, "due": None, "done": False, "createdAt": i} for i, k in enumerate(["一", "二", "三"])]
         page = self.tasks_page(tasks=tasks)
-        page.click("#task-list li[data-id='二'] .task-del")
+        page.click("#task-list li[data-id='二'] .task-main")
+        page.click("#task-act-delete")
         self.assertEqual(page.text_content("#confirm-text"), "「二」を削除しますか？")
         self.assertEqual(self.open_titles(page), ["一", "二", "三"])  # 確認するまで消えない
         page.click("#confirm-cancel")
         self.assertTrue(page.is_hidden("#confirm"))
         self.assertEqual(self.open_titles(page), ["一", "二", "三"])
-        page.click("#task-list li[data-id='二'] .task-del")
+        page.click("#task-list li[data-id='二'] .task-main")
+        page.click("#task-act-delete")
         page.click("#confirm-ok")
         page.wait_for_selector("#task-toast", state="visible", timeout=3_000)  # 確認の結果は非同期で届く
         self.assertEqual(self.open_titles(page), ["一", "三"])
         self.assertIn("削除しました", page.text_content("#task-toast"))
         page.click("#task-toast .undo")
         self.assertEqual(self.open_titles(page), ["一", "二", "三"])
-        page.click("#task-list li[data-id='三'] .task-del")
+        page.click("#task-list li[data-id='三'] .task-main")
+        page.click("#task-act-delete")
         page.click("#confirm-ok")
         page.wait_for_selector("#task-toast", state="visible", timeout=3_000)  # 確認の結果は非同期で届く
         page.clock.run_for(5_100)
@@ -856,12 +1014,12 @@ class PwaTest(unittest.TestCase):
         page = self.tasks_page(tasks=[task(1, "2026-11-08"), task(2, "2026-11-09"), task(3, None)])
         page.wait_for_function("document.getElementById('tasks-say-line').textContent !== '…'", timeout=3_000)
         self.assertEqual(page.text_content("#tasks-say-line"), "期限を過ぎたものがある。やるか、期限を引き直すか決めろ。")
-        page.click("#task-list li[data-id='1'] .task-main")  # 期限切れを完了にする → 今日までが残る
+        page.click("#task-list li[data-id='1'] .task-done-btn")  # 期限切れを完了にする → 今日までが残る
         page.wait_for_function("document.getElementById('tasks-say-line').textContent.startsWith('今日まで')", timeout=3_000)
         self.assertEqual(page.text_content("#tasks-say-line"), "今日までのものがある。先にそっちだ。")
-        page.click("#task-list li[data-id='2'] .task-main")
+        page.click("#task-list li[data-id='2'] .task-done-btn")
         page.wait_for_function("document.getElementById('tasks-say-line').textContent.startsWith('残り')", timeout=3_000)
-        page.click("#task-list li[data-id='3'] .task-main")  # 全部終わったら 0件のときの一言
+        page.click("#task-list li[data-id='3'] .task-done-btn")  # 全部終わったら 0件のときの一言
         lines = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))["screen_empty"]["conditions"][0]["lines"]
         page.wait_for_function("lines => lines.includes(document.getElementById('tasks-say-line').textContent)", arg=lines, timeout=3_000)
 
@@ -890,59 +1048,68 @@ class PwaTest(unittest.TestCase):
         page.evaluate("Tasks.render()")
         self.assertEqual(sorted(t["id"] for t in json.loads(page.evaluate("localStorage.getItem('db.tasks')"))), ["nodate", "open"])
 
-    def test_tasks_screen_one_gold_fill_and_touch_sizes(self):
-        tasks = [{"id": "a", "title": "とても長いタスクの名前" * 4, "due": "2026-11-09", "done": False, "createdAt": 1}]
+    def test_tasks_screen_gold_fill_and_touch_sizes(self):
+        """金の塗りは、フォームを閉じている間はなし、開くと「追加」の1つだけ（D-070 案B、CR-F12）"""
+        tasks = [{"id": "a", "title": "とても長いタスクの名前" * 4, "due": "2026-11-09", "done": False, "createdAt": 1,
+                  "subtasks": [{"id": "s", "title": "小さいやつ" * 6, "done": False, "doneAt": None}]}]
         page = self.tasks_page(tasks=tasks, size=(375, 667))
-        fills = page.evaluate("""() => [...document.querySelectorAll('#view-tasks *')]
+        golds = """() => [...document.querySelectorAll('#view-tasks *')]
           .filter((e) => e.getClientRects().length && getComputedStyle(e).backgroundColor === 'rgb(232, 196, 92)')
-          .map((e) => e.id || e.className)""")
-        self.assertEqual(fills, ["task-add-open"])
+          .map((e) => e.id || e.className)"""
+        self.assertEqual(page.evaluate(golds), [])
+        page.click("#task-list li[data-id=a] .sub-bar")
         h = page.eval_on_selector("#task-list .task-main", "e => e.getBoundingClientRect().height")
-        w = page.eval_on_selector("#task-list .task-del", "e => e.getBoundingClientRect().width")
         self.assertGreaterEqual(h, 52)
-        self.assertGreaterEqual(w, 44)
+        for sel in (".task-done-btn", ".prio-tag", ".add-slot", ".sub-add-btn", ".sub-check"):
+            box = page.eval_on_selector("#task-list " + sel, "e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }")
+            self.assertGreaterEqual(min(box), 44, sel)
         self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)  # 長い名前でも横にはみ出さない
-        page.click("#task-add-open")
+        page.click(ADD_NONE)
         self.assertGreaterEqual(page.eval_on_selector("#task-title", "e => parseFloat(getComputedStyle(e).fontSize)"), 16)
-        fills = page.evaluate("""() => [...document.querySelectorAll('#view-tasks *')]
-          .filter((e) => e.getClientRects().length && getComputedStyle(e).backgroundColor === 'rgb(232, 196, 92)')
-          .map((e) => e.id || e.className)""")
-        self.assertEqual(fills, ["task-submit"])
+        self.assertEqual(page.evaluate(golds), ["task-submit"])
+        page.click("#task-cancel")
+        page.click("#task-list li[data-id=a] .task-main")
+        for sel in ("#task-act-edit", "#task-act-delete", "#task-actions-close"):
+            self.assertGreaterEqual(page.eval_on_selector(sel, "e => e.getBoundingClientRect().height"), 44, sel)
+        page.click("#task-act-edit")
+        page.wait_for_selector("#task-edit", state="visible")
+        gold_in_edit = page.evaluate("""() => [...document.querySelectorAll('#task-edit *')]
+          .filter((e) => e.getClientRects().length && getComputedStyle(e).backgroundColor === 'rgb(232, 196, 92)').map((e) => e.id)""")
+        self.assertEqual(gold_in_edit, ["task-edit-save"])
+        r = page.evaluate("""() => { const b = document.getElementById('task-edit-save').getBoundingClientRect(); return [b.bottom, innerHeight]; }""")
+        self.assertLessEqual(r[0], r[1])  # 「保存」はシートの下に貼り付いて見える
 
     def test_task_toast_fits_on_small_screen(self):
         tasks = [{"id": "a", "title": "とても長いタスクの名前を入れておく", "due": None, "done": False, "createdAt": 1}]
         page = self.tasks_page(tasks=tasks, size=(375, 667))
-        page.click("#task-list .task-main")
+        page.click("#task-list .task-done-btn")
         undo_h = page.eval_on_selector("#task-toast .undo", "e => e.getBoundingClientRect().height")
         self.assertGreaterEqual(undo_h, 44)
         self.assertEqual(page.eval_on_selector("#task-toast .undo", "e => getComputedStyle(e).whiteSpace"), "nowrap")
 
     def test_task_form_buttons_visible_after_open(self):
         page = self.tasks_page(tasks=[{"id": k, "title": k, "due": None, "done": False, "createdAt": i} for i, k in enumerate("あいうえおかきくけこさしすせそ")])
-        page.click("#task-add-open")
+        page.click(ADD_NONE)
         r = page.evaluate("""() => { const b = document.getElementById('task-submit').getBoundingClientRect();
           const tb = document.querySelector('.tabbar').getBoundingClientRect(); return [b.bottom, tb.top]; }""")
         self.assertLessEqual(r[0], r[1])
 
-    def test_task_add_visible_without_scroll(self):
-        """タスクが増えても「＋ タスクを追加」は一覧の上にあり、最初の画面で見える（D-064 ①、CR-F12）"""
-        tasks = [{"id": k, "title": k, "due": None, "done": False, "createdAt": i} for i, k in enumerate("あいうえおかきく")]
+    def test_task_form_opens_in_view_from_last_slot(self):
+        """タスクが多くても、下の欄から開いたフォームの「追加」はタブバーに隠れない（D-070）"""
+        tasks = [{"id": k, "title": k, "due": None, "done": False, "createdAt": i} for i, k in enumerate("あいうえおかきくけこさしすせそ")]
         for size in ((393, 852), (375, 667)):
             page = self.tasks_page(tasks=tasks, size=size)
-            r = page.evaluate("""() => { const b = document.getElementById('task-add-open').getBoundingClientRect();
-              const row = document.querySelector('#task-list .task-row').getBoundingClientRect();
-              const tb = document.querySelector('.tabbar').getBoundingClientRect(); return [b.top, b.bottom, row.top, tb.top]; }""")
+            page.click(ADD_NONE)
+            page.wait_for_timeout(400)
+            r = page.evaluate("""() => { const b = document.getElementById('task-title').getBoundingClientRect();
+              const tb = document.querySelector('.tabbar').getBoundingClientRect(); return [b.top, b.bottom, tb.top]; }""")
             self.assertGreaterEqual(r[0], 0, size)
-            self.assertLessEqual(r[1], r[3], size)  # タブバーに隠れない
-            self.assertLess(r[1], r[2], size)       # 一覧より上
-            page.click("#task-add-open")             # 開いたフォームも一覧の上
-            self.assertLess(page.eval_on_selector("#task-form", "e => e.getBoundingClientRect().bottom"),
-                            page.eval_on_selector("#task-list .task-row", "e => e.getBoundingClientRect().top") + 1, size)
+            self.assertLessEqual(r[1], r[2], size)
 
     def test_focused_field_has_single_gold_ring(self):
         """選んでいる入力欄は金の縁＋外側 1px の 1 本の輪。離れた外側の輪（outline）は重ねない（D-064 ⑤、CR-F01, P2-04）"""
         page = self.tasks_page()
-        page.click("#task-add-open")
+        page.click(ADD_NONE)
         page.click("#task-title")
         st = page.eval_on_selector("#task-title", "e => { const s = getComputedStyle(e); return [s.outlineStyle, s.borderTopColor, s.boxShadow]; }")
         self.assertEqual(st[0], "none")
@@ -1577,7 +1744,7 @@ class PwaTest(unittest.TestCase):
         tasks = [{"id": "a", "title": "昨日の暦で今日まで", "due": "2026-11-09", "done": False, "createdAt": 1}]
         page = self.tasks_page(hour=1, minute=30, day=10, tasks=tasks)
         self.assertIn("今日まで", page.text_content("#task-list li[data-id=a]"))
-        page.click("#task-add-open")
+        page.click(ADD_NONE)
         page.click("#task-form .chip[data-due=today]")
         self.assertEqual(page.input_value("#task-due"), "2026-11-09")
         page = self.tasks_page(hour=4, minute=0, day=10, tasks=tasks)
@@ -1682,7 +1849,7 @@ class PwaTest(unittest.TestCase):
         broken = "() => { Storage.prototype.setItem = function () { throw new DOMException('quota', 'QuotaExceededError'); }; }"
         page = self.tasks_page()
         page.evaluate(broken)
-        page.click("#task-add-open")
+        page.click(ADD_NONE)
         page.fill("#task-title", "保存できないタスク")
         page.click("#task-submit")
         self.assertIn("保存できませんでした", page.text_content("#task-form-status"))
@@ -1775,7 +1942,7 @@ class PwaTest(unittest.TestCase):
                  {"id": "b", "title": "済み", "due": None, "done": True, "doneAt": int(datetime(2026, 11, 9, 9, 0).timestamp() * 1000), "createdAt": 2}]
         page = self.tasks_page(tasks=tasks)
         self.assertEqual(page.query_selector_all(".check-enter"), [])  # 開いたときは動かさない
-        page.click("#task-list li[data-id=a] .task-main")
+        page.click("#task-list li[data-id=a] .task-done-btn")
         # 押した行のチェックの印が入り（180ms）、そのあと完了の一覧へ移る
         self.assertEqual(page.evaluate("""() => { const b = document.querySelector('#task-list li[data-id=a] .task-check');
           return [b.textContent, b.classList.contains('check-enter'), getComputedStyle(b).animationDuration]; }"""), ["✓", True, "0.18s"])
@@ -1784,7 +1951,7 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.query_selector_all("#task-list li[data-id=a]"), [])
         self.assertEqual(page.query_selector_all(".check-enter"), [])  # 移ったあとは動きの印が残らない
         page.click("#done-section summary")
-        page.click("#done-list li[data-id=b] .task-main")  # 未完了に戻すときは動かさず、すぐ移る
+        page.click("#done-list li[data-id=b] .task-done-btn")  # 未完了に戻すときは動かさず、すぐ移る
         self.assertEqual(len(page.query_selector_all("#task-list li[data-id=b]")), 1)
         self.assertEqual(page.query_selector_all(".check-enter"), [])
 
@@ -1792,7 +1959,7 @@ class PwaTest(unittest.TestCase):
         tasks = [{"id": "a", "title": "やる", "due": None, "done": False, "createdAt": 1}]
         page = self.tasks_page(tasks=tasks)
         page.emulate_media(reduced_motion="reduce")
-        page.click("#task-list li[data-id=a] .task-main")
+        page.click("#task-list li[data-id=a] .task-done-btn")
         self.assertEqual(page.query_selector_all("#task-list li[data-id=a]"), [])  # 待たずに移る
         self.assertEqual(page.query_selector_all(".check-enter"), [])
 
@@ -1832,13 +1999,13 @@ class PwaTest(unittest.TestCase):
 
     def test_tasks_get_updated_at_for_sync(self):
         page = self.tasks_page()
-        page.click("#task-add-open")
+        page.click(ADD_NONE)
         page.fill("#task-title", "同期の印")
         page.click("#task-submit")
         t = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
         self.assertEqual(t["updatedAt"], t["createdAt"])
         page.clock.fast_forward(60_000)
-        page.click("#task-list .task-main")
+        page.click("#task-list .task-done-btn")
         t2 = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
         self.assertGreater(t2["updatedAt"], t["updatedAt"])
 
@@ -2737,14 +2904,14 @@ class PwaTest(unittest.TestCase):
     # ---------- 完了したタスクを日報へ・仕事終わりの提案・操作への反応・一言の面の紋章（D-059） ----------
     def test_task_to_report_on_complete_and_undo(self):
         page = self.tasks_page(hour=10)
-        page.click("#task-add-open")
+        page.click(ADD_NONE)
         self.assertEqual(page.get_attribute("#task-report", "aria-checked"), "false")  # 作るたびにオフから
         page.fill("#task-title", "見積もりを送る")
         page.click("#task-report")
         page.click("#task-submit")
         self.assertIn("完了したら日報へ", page.text_content("#task-list"))
         self.assertTrue(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["toReport"])
-        page.click("#task-list .task-main")
+        page.click("#task-list .task-done-btn")
         page.wait_for_selector("#done-list li", state="attached", timeout=3_000)
         self.assertIn("日報に入れました", page.text_content("#task-toast"))
         r = json.loads(page.evaluate("localStorage.getItem('db.reports')"))["2026-11-09"]
@@ -2757,27 +2924,27 @@ class PwaTest(unittest.TestCase):
         page.fill("#report-done", "会議")
         page.click("#report-save")
         page.evaluate("location.hash = '#tasks'")
-        page.click("#task-list .task-main")
+        page.click("#task-list .task-done-btn")
         page.wait_for_selector("#done-list li", state="attached", timeout=3_000)
         self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.reports')"))["2026-11-09"]["done"], "会議\n・見積もりを送る")
         page.evaluate("location.hash = '#report'")
         self.assertEqual(page.input_value("#report-done"), "会議\n・見積もりを送る")
         page.evaluate("location.hash = '#tasks'")
         page.click("#done-section summary")
-        page.click("#done-list .task-main")  # 未完了に戻すと外す
+        page.click("#done-list .task-done-btn")  # 未完了に戻すと外す
         self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.reports')"))["2026-11-09"]["done"], "会議")
 
     def test_task_without_report_switch_does_not_touch_report(self):
         tasks = [{"id": "a", "title": "洗濯", "due": None, "done": False, "createdAt": 1}]
         page = self.tasks_page(tasks=tasks)
-        page.click("#task-list .task-main")
+        page.click("#task-list .task-done-btn")
         page.wait_for_selector("#done-list li", state="attached", timeout=3_000)
         self.assertIsNone(page.evaluate("localStorage.getItem('db.reports')"))
         # 完了の反応（D-059）
         self.assertIn(page.text_content("#tasks-say-line"), ["今は抱えているものはないな。", "やることが出てきたら、ここに書いておけ。"])  # 0件になったら空の一言
         tasks = [{"id": "a", "title": "洗濯", "due": None, "done": False, "createdAt": 1}, {"id": "b", "title": "掃除", "due": None, "done": False, "createdAt": 2}]
         page = self.tasks_page(tasks=tasks)
-        page.click("#task-list li[data-id=a] .task-main")
+        page.click("#task-list li[data-id=a] .task-done-btn")
         page.wait_for_selector("#done-list li", state="attached", timeout=3_000)
         self.assertIn(page.text_content("#tasks-say-line"), ["片づいたな。次に移れ。", "一つ減ったな。"])
 

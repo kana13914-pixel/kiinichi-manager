@@ -54,14 +54,14 @@ const SAVE_FAILED = '保存できませんでした。もう一度試してく�
 // データのキーは db.* にそろえ、db.meta.schema に形の版を持つ。形を変えるときは MIGRATIONS に 1 つ足す。
 const DB = {
   meta: 'db.meta',               // { schema: 2 }
-  tasks: 'db.tasks',             // [ { id, title, due, done, doneAt, createdAt, updatedAt } ]
+  tasks: 'db.tasks',             // [ { id, title, due, priority, subtasks: [ { id, title, done, doneAt } ], done, doneAt, createdAt, updatedAt, toReport } ]
   reports: 'db.reports',         // { 'YYYY-MM-DD': { mood, done, left, tomorrow, savedAt } }
   reportDraft: 'db.reportDraft', // { date, mood, done, left, tomorrow } … 保存前の書きかけ（この端末だけ）
   records: 'db.records',         // { 'YYYY-MM-DD': { wake: { time: '07:12', at: 1794190000000 }, … } } … 日付は朝4時区切り
   timer: 'db.timer',             // { custom: [ { id, name, minutes } ], builtin, running, done, cancelPending }
   routineOverrides: 'db.routineOverrides', // { 'YYYY-MM-DD': { 項目: 'HH:MM' か null } } … 毎日の時刻をその日だけ変えたもの（D-060 ⑭）
   routine: 'db.routine',         // { weekday: { wake: '07:00', … }, holiday: { … }, holidays: [0, 6], updatedAt } … 毎日の時刻（D-048）
-  prefs: 'db.prefs',             // { screenLines: true, voice: true } … 端末ごとの好み（D-047, D-049）
+  prefs: 'db.prefs',             // { screenLines: true, voice: true, weekly: true, taskFolded: [] } … 端末ごとの好み（D-047, D-049）
   sync: 'db.sync',               // { url, token, lastAt, lastSig, dirty, error } … スプレッドシートへの控えの送り先と状態（D-050。この端末だけ）
   calendar: 'db.calendar',       // { fetchedAt, from, to, events: [ { title, start, end, allDay } ], error } … カレンダーの予定の控え（D-053。この端末だけ）
   calendarError: 'db.calendarError', // 一度も取れていないときの理由
@@ -111,7 +111,7 @@ function migrateData() {
 migrateData();
 
 // ---------- 端末ごとの好み（D-047）。決まっていないものは既定値 ----------
-const PREF_DEFAULTS = { screenLines: true, voice: true, weekly: true };
+const PREF_DEFAULTS = { screenLines: true, voice: true, weekly: true, taskFolded: [] }; // taskFolded：タスクのたたんだ優先度（D-070）
 const Prefs = {
   get(name) {
     const p = Store.read(DB.prefs, {});

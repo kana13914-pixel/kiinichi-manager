@@ -206,9 +206,9 @@
         <p id="tasks-say-line" class="line" role="status">…</p>
       </section>
 
-      <!-- 追加は一言のすぐ下・一覧の上（タスクが増えても最初の画面で見える。D-064 ①） -->
-      <div class="task-add">
-        <button id="task-add-open" type="button" class="cut-btn primary">＋ タスクを追加</button>
+      <!-- 追加は各優先度の下の点線の欄から（D-070。金の主ボタンは置かない）。押すとフォームがその欄に移る。
+           閉じている間のフォームの置き場所 -->
+      <div id="task-add" class="task-add" hidden>
         <form id="task-form" class="task-form" hidden>
           <label for="task-title">やること</label>
           <input id="task-title" type="text" maxlength="100" autocomplete="off" enterkeyhint="done" required>
@@ -220,6 +220,13 @@
           </div>
           <label for="task-due">日付を選ぶ</label>
           <input id="task-due" type="date">
+          <span class="form-label" id="task-prio-label">優先度</span>
+          <div class="prio-chips" role="group" aria-labelledby="task-prio-label">
+            <button type="button" class="cut-btn quiet chip" data-priority="high" aria-pressed="false">▲ 高</button>
+            <button type="button" class="cut-btn quiet chip" data-priority="mid" aria-pressed="false">● 中</button>
+            <button type="button" class="cut-btn quiet chip" data-priority="low" aria-pressed="false">▼ 低</button>
+            <button type="button" class="cut-btn quiet chip" data-priority="" aria-pressed="true">なし</button>
+          </div>
           <div class="pref-row task-report-row">
             <span id="task-report-label">完了したら日報に入れる</span>
             <button id="task-report" type="button" class="cut-btn quiet chip" role="switch" aria-checked="false" aria-labelledby="task-report-label">オフ</button>
@@ -232,6 +239,7 @@
         </form>
       </div>
 
+      <!-- 未完了は優先度ごと（▲高・●中・▼低・なし）。見出しの札で件数とたたむ（D-070） -->
       <ul id="task-list" class="task-list" aria-label="未完了のタスク"></ul>
 
       <details id="done-section" class="done-section" hidden>
@@ -484,6 +492,56 @@
         <button id="confirm-cancel" type="submit" value="cancel" class="cut-btn quiet">やめる</button>
         <button id="confirm-ok" type="submit" value="ok" class="cut-btn quiet danger">削除する</button>
       </div>
+    </form>
+  </dialog>
+
+  <!-- タスクの操作の一覧（D-070）。行の完了の四角以外を押すと下から出る -->
+  <dialog id="task-actions" class="sheet" aria-labelledby="task-actions-title">
+    <div class="sheet-head">
+      <h2 id="task-actions-title">-</h2>
+      <button id="task-actions-close" type="button" class="cut-btn quiet chip">閉じる</button>
+    </div>
+    <div class="action-list">
+      <button id="task-act-edit" type="button" class="action-item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/></svg>編集</button>
+      <button id="task-act-delete" type="button" class="action-item danger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>削除</button>
+    </div>
+  </dialog>
+
+  <!-- タスクの編集（D-070）：名前・期限・優先度・完了したら日報へ・ミニタスク（10個まで） -->
+  <dialog id="task-edit" class="sheet" aria-labelledby="task-edit-heading">
+    <form id="task-edit-form" class="task-form">
+      <div class="sheet-head">
+        <h2 id="task-edit-heading">タスクを編集</h2>
+      </div>
+      <label for="edit-title">やること</label>
+      <input id="edit-title" type="text" maxlength="100" autocomplete="off" enterkeyhint="done">
+      <span class="form-label" id="edit-due-label">期限</span>
+      <div class="due-chips" role="group" aria-labelledby="edit-due-label">
+        <button type="button" class="cut-btn quiet chip" data-due="today" aria-pressed="false">今日</button>
+        <button type="button" class="cut-btn quiet chip" data-due="tomorrow" aria-pressed="false">明日</button>
+        <button type="button" class="cut-btn quiet chip" data-due="none" aria-pressed="true">なし</button>
+      </div>
+      <label for="edit-due">日付を選ぶ</label>
+      <input id="edit-due" type="date">
+      <span class="form-label" id="edit-prio-label">優先度</span>
+      <div class="prio-chips" role="group" aria-labelledby="edit-prio-label">
+        <button type="button" class="cut-btn quiet chip" data-priority="high" aria-pressed="false">▲ 高</button>
+        <button type="button" class="cut-btn quiet chip" data-priority="mid" aria-pressed="false">● 中</button>
+        <button type="button" class="cut-btn quiet chip" data-priority="low" aria-pressed="false">▼ 低</button>
+        <button type="button" class="cut-btn quiet chip" data-priority="" aria-pressed="true">なし</button>
+      </div>
+      <div class="pref-row task-report-row">
+        <span id="edit-report-label">完了したら日報に入れる</span>
+        <button id="edit-report" type="button" class="cut-btn quiet chip" role="switch" aria-checked="false" aria-labelledby="edit-report-label">オフ</button>
+      </div>
+      <span class="form-label">ミニタスク <span id="edit-sub-count" class="n">0/10</span></span>
+      <ul id="edit-subs" class="edit-subs"></ul>
+      <button id="edit-sub-add" type="button" class="cut-btn quiet">＋ ミニタスクを追加</button>
+      <div class="form-actions">
+        <button id="task-edit-cancel" type="button" class="cut-btn quiet">やめる</button>
+        <button id="task-edit-save" type="submit" class="cut-btn primary">保存</button>
+      </div>
+      <p id="task-edit-status" class="status ng" role="status"></p>
     </form>
   </dialog>
 

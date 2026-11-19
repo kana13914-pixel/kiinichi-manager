@@ -626,6 +626,80 @@ input:focus, textarea:focus { border-color: var(--color-accent); }
 .task-group.overdue { color: var(--color-danger); }
 .task-group .n { font-weight: 400; font-variant-numeric: tabular-nums; }
 
+/* ---------- 優先度とミニタスク（D-070、CR-G07・G08） ---------- */
+/* 1件は「行（本文＋右の完了の四角）」＋（ミニタスクがあれば）進み具合の帯。区切りの線は1件の下に1本 */
+.view.tasks .task-item { box-shadow: inset 0 -1px 0 var(--color-gold-faint); }
+.view.tasks .task-row { box-shadow: none; }
+.view.tasks .task-main { padding-left: 0; }
+.task-done-btn, .sub-check {
+  flex: none; display: flex; align-items: center; justify-content: center; width: var(--tap); min-height: var(--tap);
+  margin: 0; padding: 0; background: transparent; border-radius: 0;
+}
+.task-done-btn[aria-pressed="true"] .task-check, .sub-check[aria-pressed="true"] .task-check { border-color: var(--color-success); }
+/* 優先度の見出し：記号＋文字の小さな札（見える高さは小さく、押せる高さは 44px）。色は記号に添えるだけで、見分けは記号と文字（V3-01） */
+.view.tasks .task-group { display: block; margin-top: var(--space-4); padding: 0; letter-spacing: 0; }
+.view.tasks .task-group:first-child { margin-top: var(--space-2); }
+.prio-tag {
+  width: auto; min-height: var(--tap); margin: 0; padding: 0; display: inline-flex; align-items: center;
+  background: transparent; color: var(--color-text); border-radius: 0; font-weight: 700;
+}
+.prio-tag > .prio-chip {
+  display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--space-6); padding: 0 var(--space-3);
+  background: var(--color-surface-1); box-shadow: inset 0 0 0 1px var(--color-line); font-size: var(--fs-footnote); letter-spacing: 0.04em;
+  clip-path: polygon(var(--cut-s) 0, 100% 0, 100% calc(100% - var(--cut-s)), calc(100% - var(--cut-s)) 100%, 0 100%, 0 var(--cut-s));
+}
+.prio-mark { font-size: var(--fs-caption); }
+.task-group[data-priority="high"] .prio-mark { color: var(--color-ember); }
+.task-group[data-priority="mid"] .prio-mark { color: var(--color-lime); }
+.task-group[data-priority="low"] .prio-mark { color: var(--color-sky); }
+.prio-caret { color: var(--color-text-secondary); font-weight: 400; transition: transform var(--dur-fast) var(--ease-out); }
+.prio-tag[aria-expanded="false"] .prio-caret { transform: rotate(-90deg); }
+/* 点線の「追加」の欄（その優先度のタスクを作る） */
+.add-slot {
+  display: flex; align-items: center; justify-content: space-between; min-height: var(--tap); margin: var(--space-2) 0 0; padding: 0 var(--space-3);
+  background: transparent; border: 1px dashed var(--color-line); border-radius: 0; color: var(--color-text-secondary); font-weight: 400; font-size: var(--fs-subhead);
+}
+.add-slot-plus { font-size: var(--fs-body); }
+.task-slot .task-form { margin-top: var(--space-2); }
+.prio-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+/* ミニタスクの進み具合：細い帯＋「2/5」＋ ▾（押すと開く・たたむ） */
+.sub-bar {
+  display: flex; align-items: center; gap: var(--space-2); min-height: var(--tap); margin: 0; padding: 0;
+  background: transparent; color: var(--color-text-secondary); border-radius: 0; font-weight: 400; font-size: var(--fs-footnote);
+}
+.sub-track { flex: 1; height: var(--space-1); background: var(--color-surface-2); overflow: hidden; }
+.sub-fill { display: block; height: 100%; background: var(--color-success); transition: width var(--dur-fast) var(--ease-out); }
+.sub-count { font-variant-numeric: tabular-nums; }
+.sub-caret { width: var(--tap); text-align: center; transition: transform var(--dur-fast) var(--ease-out); }
+.sub-bar[aria-expanded="true"] .sub-caret { transform: rotate(180deg); }
+.sub-list { list-style: none; margin: 0 0 var(--space-2); padding: 0 0 0 var(--space-4); box-shadow: inset 1px 0 0 var(--color-gold-faint); }
+.sub-row { display: flex; align-items: center; gap: var(--space-2); min-height: var(--tap); }
+.sub-title { flex: 1; min-width: 0; font-size: var(--fs-subhead); overflow-wrap: anywhere; }
+.sub-row.done .sub-title { color: var(--color-text-tertiary); text-decoration: line-through; }
+.sub-add-btn {
+  width: 100%; min-height: var(--tap); margin: 0; padding: 0; text-align: left;
+  background: transparent; color: var(--color-text-secondary); border-radius: 0; font-weight: 400; font-size: var(--fs-subhead);
+}
+.sub-add-form { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) 0; }
+.sub-add-form input { flex: 1; min-width: 0; }
+/* 操作の一覧（行を押したとき）：最奥の黒のシートに、アイコン＋文字の行。削除だけ赤 */
+.action-list { display: flex; flex-direction: column; margin-top: var(--space-2); }
+.action-item {
+  display: flex; align-items: center; gap: var(--space-3); min-height: var(--size-record); margin: 0; padding: 0 var(--space-1);
+  background: transparent; color: var(--color-text); border-radius: 0; font-weight: 500; text-align: left; box-shadow: inset 0 -1px 0 var(--color-gold-faint);
+}
+.action-item svg { width: var(--size-icon); height: var(--size-icon); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.action-item.danger { color: var(--color-danger); }
+/* 編集のミニタスク：名前の欄＋ごみ箱 */
+.edit-subs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.edit-sub { display: flex; align-items: center; gap: var(--space-1); }
+.edit-sub input { flex: 1; min-width: 0; }
+.form-label .n { color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
+#task-edit .task-form { scroll-margin-bottom: 0; }
+/* 編集は項目が多いので、「やめる」「保存」をシートの下に貼り付けて、いつでも押せるようにする */
+#task-edit .form-actions { position: sticky; bottom: calc(var(--safe-bottom) * -1 - var(--space-4)); margin: var(--space-3) calc(var(--space-4) * -1) 0; padding: var(--space-3) var(--space-4) calc(var(--safe-bottom) + var(--space-4)); background: var(--color-ink); box-shadow: inset 0 1px 0 var(--color-gold-faint); }
+#task-edit .status:empty { display: none; }
+
 /* タイマーの輪：紋章の「太陽の輪」で残り時間を見せる（CR-G02） */
 .timer-dial { position: relative; display: grid; place-items: center; width: var(--size-ring); aspect-ratio: 1; margin: var(--space-4) auto var(--space-2); }
 .timer-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
