@@ -2453,6 +2453,42 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.get_attribute("#portrait", "aria-hidden"), "true")
         self.assertTrue(page.is_hidden("#portrait-reset"))
 
+    def test_portrait_adjust_and_save_keeps_image(self):
+        """「位置と大きさ」→「保存」のあとも画像が出る。位置だけ変えたときは保存済みの画像を入れ直さない（2026-11-19 の実機の不具合）"""
+        page = self.portrait_page()
+        self.choose_photo(page, make_png(800, 1200, (40, 120, 90, 255)))
+        page.click("#portrait-save")
+        page.wait_for_selector("#portrait-editor", state="hidden")
+        page.evaluate("""() => { window.__puts = 0; const put = IDBObjectStore.prototype.put;
+          IDBObjectStore.prototype.put = function (...a) { window.__puts++; return put.apply(this, a); }; }""")
+        page.evaluate("location.hash = '#settings'")
+        page.click("#portrait-adjust")
+        page.wait_for_selector("#portrait-editor", state="visible")
+        page.fill("#portrait-scale", "150")
+        page.click("#portrait-save")
+        page.wait_for_selector("#portrait-editor", state="hidden")
+        self.assertEqual(page.evaluate("window.__puts"), 0)
+        page.wait_for_function("document.getElementById('portrait-photo').naturalWidth > 0", timeout=3_000)
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.portrait')"))["scale"], 1.5)
+        # 選び直したときは画像を保存する（中身を写してから）
+        page.evaluate("location.hash = '#settings'")
+        self.choose_photo(page, make_png(600, 600, (200, 120, 90, 255)))
+        page.click("#portrait-save")
+        page.wait_for_selector("#portrait-editor", state="hidden")
+        self.assertEqual(page.evaluate("window.__puts"), 1)
+        page.wait_for_function("document.getElementById('portrait-photo').naturalWidth > 0", timeout=3_000)
+
+    def test_portrait_broken_image_falls_back_to_emblem(self):
+        """保存した画像が読めないときは「？」のままにせず、紋章に戻して選び直しを頼む"""
+        page = self.portrait_page()
+        self.choose_photo(page, make_png(400, 400, (40, 120, 90, 255)))
+        page.click("#portrait-save")
+        page.wait_for_selector("#portrait-editor", state="hidden")
+        page.evaluate("document.getElementById('portrait-photo').src = 'blob:broken'")
+        page.wait_for_function("!document.body.classList.contains('has-photo')", timeout=3_000)
+        self.assertTrue(page.is_hidden("#portrait-layer"))
+        self.assertIn("もう一度「写真から選ぶ」", page.text_content("#portrait-status"))
+
     def test_portrait_transparent_photo_sits_on_bottom(self):
         page = self.portrait_page()
         self.choose_photo(page, make_png(300, 600, (200, 50, 50, 0)))  # 透過の縦長（1:2）

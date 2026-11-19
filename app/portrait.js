@@ -31,7 +31,12 @@ const Portrait = (() => {
     });
   }
   const getBlob = () => idbDo('readonly', (s) => s.get('portrait')).catch(() => null);
-  const putBlob = (blob) => idbDo('readwrite', (s) => s.put(blob, 'portrait'));
+  // 保存する前に中身を写し取る。IndexedDB から読んだ画像をそのまま入れ直すと、iPhone（Safari）で
+  // 中身が消えて表示できなくなることがある（2026-11-19 の実機報告。「位置と大きさ」→「保存」のあと）
+  async function putBlob(blob) {
+    const copy = new Blob([await blob.arrayBuffer()], { type: blob.type || 'image/png' });
+    return idbDo('readwrite', (s) => s.put(copy, 'portrait'));
+  }
   const deleteBlob = () => idbDo('readwrite', (s) => s.delete('portrait'));
 
   function conf() {
@@ -208,7 +213,7 @@ const Portrait = (() => {
       try {
         const p = await prepare(file);
         const keep = conf();
-        startEdit({ ...p, ...defaults(p), ui: keep ? keep.ui : 0 }); // 透け具合は前の画像のものを引き継ぐ
+        startEdit({ ...p, ...defaults(p), ui: keep ? keep.ui : 0, fresh: true }); // 透け具合は前の画像のものを引き継ぐ
       } catch (err) { $('portrait-status').textContent = err.message; }
     });
     $('portrait-adjust').addEventListener('click', async () => {
@@ -275,7 +280,10 @@ const Portrait = (() => {
     });
     $('portrait-save').addEventListener('click', async () => {
       if (!draft) return;
-      try { await putBlob(draft.blob); } catch (err) { $('portrait-editor-status').textContent = SAVE_FAILED; return; }
+      // 画像を選び直したときだけ画像を保存する（位置と大きさだけ変えたときは、保存済みの画像に触らない）
+      if (draft.fresh) {
+        try { await putBlob(draft.blob); } catch (err) { $('portrait-editor-status').textContent = SAVE_FAILED; return; }
+      }
       const r = (v) => Math.round(v * 10) / 10;
       const ok = Store.write(DB.portrait, {
         w: draft.w, h: draft.h, alpha: draft.alpha, scale: r(draft.scale), x: r(draft.x), y: r(draft.y), ui: Math.round(draft.ui), at: Date.now(),
@@ -284,6 +292,14 @@ const Portrait = (() => {
       endEdit();
       renderSettings();
       renderHome();
+    });
+    // 保存した画像が読めなかったら、紋章に戻して選び直しを頼む（「？」の印のままにしない）
+    $('portrait-photo').addEventListener('error', () => {
+      if (editing() || !$('portrait-photo').getAttribute('src')) return;
+      showPhoto(null, null);
+      showEmblem($('portrait'));
+      loadBundled($('portrait'));
+      $('portrait-status').textContent = '保存した画像を読み込めませんでした。もう一度「写真から選ぶ」で選んでください';
     });
     // 合わせている途中でほかの画面へ移ったら（戻る操作など）、保存せずにやめる
     window.addEventListener('hashchange', () => {
