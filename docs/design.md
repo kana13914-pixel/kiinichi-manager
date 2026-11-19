@@ -90,6 +90,7 @@
 | `--stage-min-h` |  | `160px` |
 | `--home-min-h` |  | `520px` |
 | `--tabbar-h` |  | `56px` |
+| `--size-tab-icon` | 下のタブのアイコン（文字なし。D-078） | `28px` |
 | `--color-field` | 入力欄・月のタグの地（CR-F01, CR-F04） | `rgba(244, 241, 232, 0.05)` |
 | `--z-tabbar` | タブバーの重なり順（CR-F06） | `20` |
 | `--size-ring` | タイマーの輪の直径（CR-G02） | `232px` |

@@ -408,6 +408,13 @@ class PwaTest(unittest.TestCase):
         # D-019 Q1：タブは5個、設定はホーム右上のアイコンから開き「‹ ホーム」で戻る
         page = self.ready_page()
         self.assertEqual(len(page.query_selector_all(".tabbar a")), 5)
+        # タブはアイコンだけ。名前は読み上げ用に持つ（D-078）
+        tabs = page.eval_on_selector_all(".tabbar a", """els => els.map((e) => {
+          const r = e.getBoundingClientRect(), s = e.querySelector('svg').getBoundingClientRect();
+          return [e.getAttribute('aria-label'), e.textContent.trim(), r.width >= 44 && r.height >= 44, Math.round(s.width)];
+        })""")
+        self.assertEqual(tabs, [[n, "", True, 28] for n in ["ホーム", "予定", "タスク", "タイマー", "日報"]])
+        self.assertEqual(page.get_by_role("link", name="予定").get_attribute("data-view"), "schedule")
         self.assertEqual(page.get_attribute(".tabbar a[data-view=home]", "aria-current"), "page")
         page.click(".home-header a[data-view=settings]")
         page.wait_for_selector("#view-settings", state="visible", timeout=3_000)

@@ -101,6 +101,7 @@
   --size-bead: 3px;        /* 数珠の幅 */
   --size-diamond: 6px;     /* 名前の前の菱形 */
   --size-tab-mark: 20px;   /* 選択中タブの金の線 */
+  --size-tab-icon: 28px;   /* 下のタブのアイコン（文字なし。D-078） */
   --size-emblem: 260px;    /* 紋章の最大の高さ */
   --shift-hook: 12px;      /* セリフが入るときの移動量 */
   --dur-hook: 260ms; --ease-hook: cubic-bezier(0.05, 0.7, 0.1, 1); /* 減速して止まる（300ms 以内） */
@@ -368,7 +369,7 @@ body.from-notification .dialogue { --dlg-top: var(--color-accent); }
   background: transparent; color: var(--color-text); font-weight: 700; text-decoration: underline;
 }
 
-/* ---------- 下のタブ（D-019 Q1：5個。I2-01〜03）。いちばん奥の黒 ＋ 上辺に段々の帯 ＋ 選択中は金の短い線（CR-L02） ---------- */
+/* ---------- 下のタブ（D-019 Q1：5個。I2-01〜03）。いちばん奥の黒 ＋ 上辺に段々の帯 ＋ 選択中は金の短い線（CR-L02）。アイコンだけ（D-078） ---------- */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: calc(var(--vh-fix) * -1); display: grid; grid-template-columns: repeat(5, 1fr);
   height: calc(var(--tabbar-h) + var(--safe-bottom)); padding-bottom: var(--safe-bottom);
@@ -379,14 +380,15 @@ body.from-notification .dialogue { --dlg-top: var(--color-accent); }
   background: url("img/fret.svg") left bottom / var(--size-fret-w) var(--size-fret-h) repeat-x;
 }
 .tabbar a {
-  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  color: var(--color-text-tertiary); text-decoration: none; font-size: var(--fs-caption2);
+  position: relative; display: flex; align-items: center; justify-content: center;
+  color: var(--color-text-tertiary); text-decoration: none;
 }
 .tabbar svg, .icon-btn svg {
   width: var(--size-icon); height: var(--size-icon);
   fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
 }
-.tabbar a[aria-current="page"] { color: var(--color-accent); font-weight: 700; }
+.tabbar svg { width: var(--size-tab-icon); height: var(--size-tab-icon); } /* 文字がないぶん少し大きく（D-078） */
+.tabbar a[aria-current="page"] { color: var(--color-accent); }
 .tabbar a[aria-current="page"] svg { stroke-width: 2.2; }
 .tabbar a[aria-current="page"]::before {
   content: ""; position: absolute; top: 0; left: 50%; width: var(--size-tab-mark); height: 2px;
