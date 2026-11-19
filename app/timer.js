@@ -118,12 +118,17 @@ const Timer = (() => {
     };
     state.done = null;
     state.cancelPending = false; // 同じキーの予約を上書きするので、前の取り消しは要らない
-    if (!save(state)) return; // 保存できなければ始めない（閉じると消えるタイマーになるため）
+    if (!save(state)) return false; // 保存できなければ始めない（閉じると消えるタイマーになるため）
     toast.hide();
     reserve(state.running);
     render();
     say.react('timer_start.default', { min: minutes }); // 区切りのよい操作への短い反応（D-059）
+    return true;
   }
+  // タスクの「タスクを開始」（D-071）：タスクの名前で、作業のタイマー（変えた時間があればその時間）を始める
+  const workMinutes = () => builtins(load()).find((t) => t.id === 'work').minutes;
+  const startFor = (name) => start(name, workMinutes(), 'work');
+  const runningName = () => { const r = load().running; return r ? r.name : null; };
   function stop() {
     const state = load();
     if (!state.running) return;
@@ -355,5 +360,5 @@ const Timer = (() => {
   render();
   retryCancel(); // 前回届かなかった取り消しをやり直す
 
-  return { load, builtins, parseMinutes, clockText, render };
+  return { load, builtins, parseMinutes, clockText, render, startFor, workMinutes, runningName };
 })();

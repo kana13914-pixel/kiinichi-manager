@@ -4,10 +4,12 @@
 function setIfChanged(el, text) { if (el.textContent !== text) el.textContent = text; }
 
 // 削除の前の確認（I1-04, D-031）。「やめる」に最初のフォーカスを置く。枠の外を押す・Esc は「やめる」と同じ
-function confirmDialog(message, okLabel = '削除する') {
+// danger を false にすると「OK」を赤にしない（消す操作でない確認。例：タスクを開始で動いているタイマーを置き換える）
+function confirmDialog(message, okLabel = '削除する', danger = true) {
   const dlg = document.getElementById('confirm');
   document.getElementById('confirm-text').textContent = message;
   document.getElementById('confirm-ok').textContent = okLabel;
+  document.getElementById('confirm-ok').classList.toggle('danger', danger);
   return new Promise((resolve) => {
     dlg.returnValue = '';
     dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok'), { once: true });

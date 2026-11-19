@@ -15,7 +15,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
-ADD_NONE = "#task-list .task-slot[data-priority=none] .add-slot"  # 優先度なしの点線の「追加」の欄（D-070）
+ADD_NONE = "#task-list .task-group[data-priority=none] .add-plus, #task-list .task-slot[data-priority=none] .add-slot"  # 優先度なしの「追加」（タスクがあれば見出しの ＋、なければ点線の欄。D-070）
 
 # iPhone の 3 機種（V4-02）：(幅, 高さ), (上, 下のセーフエリア)
 DEVICES = [((375, 667), (20, 0)), ((393, 852), (59, 34)), ((430, 932), (59, 34))]
@@ -736,12 +736,19 @@ class PwaTest(unittest.TestCase):
             {"id": "5", "title": "変な値", "due": None, "priority": "urgent", "done": False, "createdAt": 5},
         ]
         page = self.tasks_page(tasks=tasks)
-        heads = page.eval_on_selector_all("#task-list .task-group", "els => els.map(e => [e.dataset.priority, e.textContent])")
+        heads = page.eval_on_selector_all("#task-list .task-group", "els => els.map(e => [e.dataset.priority, e.querySelector('.prio-tag').textContent])")
         self.assertEqual(heads, [["high", "▲高（2）▾"], ["mid", "●中▾"], ["low", "▼低（1）▾"], ["none", "なし（2）▾"]])
         self.assertEqual(self.open_titles(page), ["高・今日", "高・期限なし", "低", "古い", "変な値"])
         self.assertIn("期限切れ", page.text_content("#task-list li[data-id='1']"))  # 期限切れの表示は行に残す
         slots = page.eval_on_selector_all("#task-list .add-slot", "els => els.map(e => e.textContent)")
-        self.assertEqual(slots, ["集中が必要＋", "通常の作業＋", "簡単な作業＋", "タスクを追加＋"])
+        self.assertEqual(slots, ["通常の作業＋"])  # 点線の欄はタスクのない優先度だけ
+        pluses = page.eval_on_selector_all("#task-list .add-plus", "els => els.map(e => e.closest('.task-group').dataset.priority)")
+        self.assertEqual(pluses, ["high", "low", "none"])  # タスクのある優先度は見出しの右の ＋
+        self.assertEqual(page.get_attribute("#task-list .task-group[data-priority=high] .add-plus", "aria-label"), "集中が必要（優先度 高）のタスクを追加")
+        # ＋ は完了の四角の上にそろう
+        xs = page.evaluate("""() => ['.task-group[data-priority=high] .add-plus', 'li[data-id="3"] .task-done-btn']
+          .map((q) => { const r = document.querySelector('#task-list ' + q).getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right)]; })""")
+        self.assertEqual(xs[0], xs[1])
         self.assertEqual(page.get_attribute("#task-list .task-group[data-priority=high] .prio-tag", "aria-label"), "優先度 高、2件。たたむ")
         # 古いデータ（優先度・ミニタスクなし）は「なし」「ミニタスクなし」として読む
         self.assertEqual(page.query_selector_all("#task-list .sub-bar"), [])
@@ -773,8 +780,14 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(self.open_titles(page), ["見積もり"])
         self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["priority"], "mid")
         self.assertTrue(page.is_hidden("#task-form"))
+        self.assertTrue(page.is_hidden("#task-list .task-slot[data-priority=mid] .add-slot"))  # タスクができたら点線の欄は ＋ に変わる
+        # 見出しの ＋ から開くと、フォームは見出しのすぐ下（タスクより上）
+        page.click("#task-list .task-group[data-priority=mid] .add-plus")
+        order = page.evaluate("""() => { const f = document.getElementById('task-form').closest('li');
+          return [f.previousElementSibling.dataset.priority, f.previousElementSibling.className, f.nextElementSibling.className]; }""")
+        self.assertEqual(order, ["mid", "task-group", "task-item"])
+        self.assertEqual(page.query_selector_all("#task-list .task-group[data-priority=mid] .add-plus"), [])  # 開いている間は ＋ を隠す
         # フォームの中で優先度を変えれば、そちらに入る
-        page.click("#task-list .task-slot[data-priority=mid] .add-slot")
         page.fill("#task-title", "掃除")
         page.click("#task-form .prio-chips .chip[data-priority='']")
         page.click("#task-submit")
@@ -833,6 +846,34 @@ class PwaTest(unittest.TestCase):
         page.click("#confirm-ok")
         page.wait_for_selector("#task-toast", state="visible", timeout=3_000)
         self.assertEqual(self.open_titles(page), [])
+
+    def test_task_start_runs_work_timer_with_task_name(self):
+        """操作の一覧の「タスクを開始」：タスクの名前で作業のタイマー（変えた時間）を始めてタイマーの画面へ（D-071）"""
+        tasks = [{"id": "a", "title": "資料を作る", "due": None, "done": False, "createdAt": 1},
+                 {"id": "b", "title": "済み", "due": None, "done": True, "doneAt": int(datetime(2026, 11, 9, 9, 0).timestamp() * 1000), "createdAt": 2}]
+        init = "localStorage.setItem('db.timer', JSON.stringify({ custom: [], builtin: { work: 50 }, running: null, done: null }))"
+        page = self.clock_page(10, 0, "#tasks", init_script="localStorage.setItem('db.tasks', %s);" % json.dumps(json.dumps(tasks)) + init)
+        page.wait_for_selector("#view-tasks", state="visible")
+        page.click("#task-list li[data-id=a] .task-main")
+        self.assertEqual(page.text_content("#task-act-start"), "タスクを開始作業のタイマー 50分")
+        page.click("#task-act-start")
+        page.wait_for_selector("#view-timer", state="visible")
+        self.assertEqual(page.text_content("#timer-name"), "資料を作る（50分）")
+        r = json.loads(page.evaluate("localStorage.getItem('db.timer')"))["running"]
+        self.assertEqual([r["name"], r["minutes"], r["kind"]], ["資料を作る", 50, "work"])
+        self.assertFalse(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["done"])  # 完了にはしない
+        # 動いているタイマーがあれば確かめる。「やめる」なら置き換えない
+        page.evaluate("location.hash = '#tasks'")
+        page.click("#task-list li[data-id=a] .task-main")
+        page.click("#task-act-start")
+        self.assertEqual(page.text_content("#confirm-text"), "動いているタイマー「資料を作る」を止めて、「資料を作る」を始めますか？")
+        self.assertNotIn("danger", page.get_attribute("#confirm-ok", "class"))  # 消す操作ではないので赤にしない
+        page.click("#confirm-cancel")
+        self.assertEqual(page.evaluate("location.hash"), "#tasks")
+        # 完了したタスクには出さない
+        page.click("#done-section summary")
+        page.click("#done-list li[data-id=b] .task-main")
+        self.assertTrue(page.is_hidden("#task-act-start"))
 
     def test_subtasks_open_check_add_and_limit(self):
         """ミニタスク：行の下に「済み/全部」の帯と ▾。開くと親の下に並び、最後に「＋ ミニタスクを追加」。10個まで（D-070）。"""
@@ -1060,7 +1101,7 @@ class PwaTest(unittest.TestCase):
         page.click("#task-list li[data-id=a] .sub-bar")
         h = page.eval_on_selector("#task-list .task-main", "e => e.getBoundingClientRect().height")
         self.assertGreaterEqual(h, 52)
-        for sel in (".task-done-btn", ".prio-tag", ".add-slot", ".sub-add-btn", ".sub-check"):
+        for sel in (".task-done-btn", ".prio-tag", ".add-slot", ".add-plus", ".sub-add-btn", ".sub-check"):
             box = page.eval_on_selector("#task-list " + sel, "e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }")
             self.assertGreaterEqual(min(box), 44, sel)
         self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)  # 長い名前でも横にはみ出さない

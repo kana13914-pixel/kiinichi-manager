@@ -637,7 +637,12 @@ input:focus, textarea:focus { border-color: var(--color-accent); }
 }
 .task-done-btn[aria-pressed="true"] .task-check, .sub-check[aria-pressed="true"] .task-check { border-color: var(--color-success); }
 /* 優先度の見出し：記号＋文字の小さな札（見える高さは小さく、押せる高さは 44px）。色は記号に添えるだけで、見分けは記号と文字（V3-01） */
-.view.tasks .task-group { display: block; margin-top: var(--space-4); padding: 0; letter-spacing: 0; }
+.view.tasks .task-group { display: flex; align-items: center; justify-content: space-between; margin-top: var(--space-4); padding: 0; letter-spacing: 0; }
+/* タスクがある優先度の見出しの右の小さな ＋（完了の四角の上にそろえる。押せる範囲は 44px） */
+.add-plus {
+  flex: none; display: flex; align-items: center; justify-content: center; width: var(--tap); min-height: var(--tap); margin: 0; padding: 0;
+  background: transparent; color: var(--color-text-secondary); border-radius: 0; font-weight: 400; font-size: var(--fs-body);
+}
 .view.tasks .task-group:first-child { margin-top: var(--space-2); }
 .prio-tag {
   width: auto; min-height: var(--tap); margin: 0; padding: 0; display: inline-flex; align-items: center;
@@ -690,6 +695,7 @@ input:focus, textarea:focus { border-color: var(--color-accent); }
 }
 .action-item svg { width: var(--size-icon); height: var(--size-icon); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .action-item.danger { color: var(--color-danger); }
+.action-sub { display: block; font-size: var(--fs-caption); font-weight: 400; color: var(--color-text-secondary); }
 /* 編集のミニタスク：名前の欄＋ごみ箱 */
 .edit-subs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .edit-sub { display: flex; align-items: center; gap: var(--space-1); }

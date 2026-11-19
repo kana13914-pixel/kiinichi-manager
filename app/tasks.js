@@ -249,10 +249,23 @@ const Tasks = (() => {
       head.append(tag);
       out.push(head);
       if (isFolded) continue;
+      if (!items.length) { out.push(addSlot(id)); continue; } // 空の優先度は点線の欄
+      // タスクがある優先度は、見出しの右（完了の四角の上）に小さな ＋。フォームは見出しのすぐ下に開く（2026-11-19 利用者の依頼）
+      if (formAt !== key) head.append(addPlus(id));
+      else { const li = document.createElement('li'); li.className = 'task-slot'; li.dataset.priority = key; li.append($('task-form')); out.push(li); }
       out.push(...items.map((t) => row(t, now)));
-      out.push(addSlot(id));
     }
     return out;
+  }
+  const slotLabel = (priority) => (priority ? `${SLOT_TEXT[priority]}（優先度 ${GROUPS.find((x) => x[0] === priority)[2]}）のタスクを追加` : '優先度なしのタスクを追加');
+  function addPlus(priority) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'add-plus';
+    btn.textContent = '＋';
+    btn.setAttribute('aria-label', slotLabel(priority));
+    btn.addEventListener('click', () => openForm(priority, groupKey(priority)));
+    return btn;
   }
   // 点線の「追加」の欄。押すと、その優先度を選んだ追加のフォームがここに開く
   function addSlot(priority) {
@@ -265,8 +278,7 @@ const Tasks = (() => {
     btn.className = 'add-slot';
     btn.innerHTML = '<span></span><span class="add-slot-plus" aria-hidden="true">＋</span>';
     btn.firstChild.textContent = SLOT_TEXT[groupKey(priority)];
-    const g = GROUPS.find((x) => x[0] === priority);
-    btn.setAttribute('aria-label', priority ? `${SLOT_TEXT[groupKey(priority)]}（優先度 ${g[2]}）のタスクを追加` : '優先度なしのタスクを追加');
+    btn.setAttribute('aria-label', slotLabel(priority));
     btn.addEventListener('click', () => openForm(priority, groupKey(priority)));
     li.append(btn);
     return li;
@@ -464,11 +476,22 @@ const Tasks = (() => {
     if (!t) return;
     actionId = id;
     $('task-actions-title').textContent = t.title;
+    $('task-act-start').hidden = t.done; // 完了したタスクは始めない
+    $('task-act-start-min').textContent = `作業のタイマー ${Timer.workMinutes()}分`;
     $('task-actions').showModal();
   }
   $('task-actions-close').addEventListener('click', () => $('task-actions').close());
   $('task-actions').addEventListener('click', (e) => { if (e.target === e.currentTarget) $('task-actions').close(); });
   $('task-act-edit').addEventListener('click', () => { $('task-actions').close(); openEdit(actionId); });
+  // タスクを開始（D-071）：タスクの名前で作業のタイマーを始め、タイマーの画面へ。動いているタイマーがあれば確かめてから置き換える
+  $('task-act-start').addEventListener('click', async () => {
+    $('task-actions').close();
+    const t = load().find((x) => x.id === actionId);
+    if (!t) return;
+    const running = Timer.runningName();
+    if (running && !(await confirmDialog(`動いているタイマー「${running}」を止めて、「${t.title}」を始めますか？`, '始める', false))) return;
+    if (Timer.startFor(t.title)) location.hash = '#timer';
+  });
   $('task-act-delete').addEventListener('click', () => { $('task-actions').close(); remove(actionId); });
 
   // ---------- 編集（名前・期限・優先度・完了したら日報へ・ミニタスク） ----------
