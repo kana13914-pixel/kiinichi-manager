@@ -2,6 +2,9 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
+  <!-- 読み込んでよいものの決まり（CSP。D-076 ③）。スクリプトと見た目はこのサイトのファイルだけ。
+       通信は送信サーバー（workers.dev）と GAS（script.google.com とその転送先）だけ。画像はこのサイトと写真から選んだ立ち絵（blob:） -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self' https://kiinichi-push.numwm.workers.dev https://*.workers.dev https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'none'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>マネージャー</title>
   <link rel="manifest" href="manifest.webmanifest">

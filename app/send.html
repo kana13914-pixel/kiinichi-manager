@@ -2,6 +2,8 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
+  <!-- 読み込んでよいものの決まり（CSP。D-076 ③）。検証用のページなので、見た目だけはこのページの中の書き方も許す -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; connect-src 'self' https://kiinichi-push.numwm.workers.dev https://*.workers.dev https://ntfy.sh; object-src 'none'; base-uri 'none'; form-action 'self'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>通知テスト送信（検証用）</title>
   <link rel="stylesheet" href="style.css">
