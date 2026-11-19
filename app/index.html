@@ -61,7 +61,13 @@
       <section class="dialogue" aria-label="キィニチのセリフ">
         <div class="nameplate" aria-hidden="true">キィニチ</div>
         <p id="bubble-text" class="line" role="status">…</p>
-        <!-- 仕事終わりに今日までのタスクが残っているときだけ出す（D-059）。決めるのは本人 -->
+        <!-- 仕事終わりに今日の調子を聞く（D-073）。選んだ調子はその日の日報の調子に入れる -->
+        <div id="bubble-mood" class="bubble-choices" hidden>
+          <button type="button" class="cut-btn quiet chip" data-mood="good">元気</button>
+          <button type="button" class="cut-btn quiet chip" data-mood="normal">ふつう</button>
+          <button type="button" class="cut-btn quiet chip" data-mood="tired">疲れた</button>
+        </div>
+        <!-- 仕事終わり・夕方に今日までのタスクが残っているときだけ出す（D-059, D-073）。決めるのは本人 -->
         <div id="bubble-choices" class="bubble-choices" hidden>
           <button id="choice-postpone" type="button" class="cut-btn quiet chip">明日に回す</button>
           <button id="choice-keep" type="button" class="cut-btn quiet chip">このまま</button>

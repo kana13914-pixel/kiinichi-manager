@@ -216,6 +216,23 @@ const Report = (() => {
     renderHistory();
     return true;
   }
+  // 仕事終わりに聞いた今日の調子を入れる（D-073。app.js から呼ぶ）。日報がなければ作る（「できたこと」と同じ）。日報で直せる
+  function setMoodFor(value, at = new Date()) {
+    const key = todayKey(at);
+    const all = load();
+    const r = all[key] || { mood: null, done: '', left: '', tomorrow: '' };
+    all[key] = { ...r, mood: value, savedAt: r.savedAt || Date.now() };
+    if (!save(all)) return false;
+    const d = loadDraft();
+    if (d && d.date === key) Store.write(DRAFT_KEY, { ...d, mood: value });
+    if (shownDate === key) {
+      setMood(value);
+      $('report-save').textContent = '更新する';
+      if (!d || d.date !== key) { $('report-status').textContent = `保存済み（${hm(new Date(all[key].savedAt))}）`; $('report-status').className = 'status'; }
+    }
+    renderHistory();
+    return true;
+  }
   const doneLine = (title) => `・${title}`;
   function addDone(title, at = new Date()) {
     const line = doneLine(title);
@@ -383,5 +400,5 @@ const Report = (() => {
   onShow('report', () => render());
   render();
 
-  return { load, reportDate, render, lastWeek, weekSummary, addDone, removeDone };
+  return { load, reportDate, render, lastWeek, weekSummary, addDone, removeDone, setMoodFor };
 })();

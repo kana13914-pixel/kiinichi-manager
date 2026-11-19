@@ -2,7 +2,7 @@
 // 共通の小道具は util.js（日付・保存）、dialogue.js（セリフ集）、ui.js（確認・取り消しの表示）にある。
 
 // 更新が反映されたか確認するための版。ファイルを更新したら sw.js の CACHE_VERSION と合わせて上げる
-const APP_VERSION = 'phase3-v14';
+const APP_VERSION = 'phase3-v15';
 
 // iOS Safari で :active（押した瞬間の反応）を有効にするため（I3-01）
 document.addEventListener('touchstart', () => {}, { passive: true });
@@ -180,6 +180,7 @@ function showLine(key, { index, vars, extra } = {}) {
   const bubble = document.getElementById('bubble-text');
   bubble.textContent = fillLine(picked.text, vars) + (extra || '');
   document.getElementById('bubble-choices').hidden = true; // 選択肢は、それを出したセリフのときだけ
+  document.getElementById('bubble-mood').hidden = true;
   if (typeof placeToast === 'function' && document.getElementById('toast').classList.contains('in-dialogue')) { homeToast.hide(); placeToast(); }
   bubble.classList.remove('line-enter'); void bubble.offsetWidth; bubble.classList.add('line-enter'); // CR-M01：入りの動きをやり直す
   return true;
@@ -220,7 +221,7 @@ function applyOpenParams(params, now = new Date()) {
     return;
   }
   document.body.classList.remove('from-notification');
-  showIdle(now);
+  if (!offerEvening(now)) showIdle(now);
   markPrimary(now);
 }
 
@@ -407,8 +408,8 @@ const homeToast = makeToast(document.getElementById('toast'));
 const toastHome = { parent: document.getElementById('toast').parentNode, next: document.getElementById('toast').nextSibling };
 function placeToast() {
   const el = document.getElementById('toast');
-  const choices = document.getElementById('bubble-choices');
-  if (!choices.hidden) {
+  const choices = [document.getElementById('bubble-choices'), document.getElementById('bubble-mood')].find((c) => !c.hidden);
+  if (choices) {
     el.classList.add('in-dialogue');
     choices.after(el);
   } else if (el.classList.contains('in-dialogue')) {
@@ -436,18 +437,52 @@ function recordNow(kind) {
   if (!Records.set(kind, now)) return false;
   if (document.body.classList.contains('from-notification')) endNotificationState(); // 記録に移ったら通知の強調は終える（D-020）
   showLine(kind === 'wake' ? wakeTrigger(now) : kindOf(kind).trigger, { extra: kind === 'wake' ? todayPlansLine(now) : '' }); // 反応のセリフ
-  if (kind === 'work_end') offerPostpone(now);
+  if (kind === 'work_end') offerWorkEnd(now);
   applyRecords(now);
   return true;
 }
 
-// 仕事終わりに、今日まで（期限切れを含む）のタスクが残っていれば、明日に回すかを本人に選んでもらう（夕方の予定見直し。D-059）。
-// 決めるのは本人（ボタン2つ）。通知は増やさない
-function offerPostpone(now = new Date()) {
+// 夕方の予定見直し（D-059, D-073）。決めるのは本人（ボタン）。通知は増やさない（アプリの中だけ。利用者回答）
+// ①仕事終わりを押したら、今日の調子をまだ聞いていなければ聞く（選んだ調子は日報の調子に入れる）
+// ②今日まで（期限切れを含む）のタスクが残っていれば「明日に回す／このまま」。疲れているときは回すほうを先に言う
+// ③仕事終わりの時刻を過ぎて（または仕事終わりを押したあと）ホームを開いたら、②をその日1回だけ出す
+function todayMood(now = new Date()) {
+  const key = todayKey(now);
+  const r = Report.load()[key];
+  if (r && r.mood) return r.mood;
+  const d = Store.read(DB.reportDraft);
+  return d && d.date === key && d.mood ? d.mood : null;
+}
+function offerPostpone(now = new Date(), key = null) {
   const n = Tasks.dueLeft(now);
-  if (!n) return;
-  showLine('work_end_check.left', { vars: { n } });
+  if (!n) return false;
+  showLine(todayMood(now) === 'tired' ? 'work_end_check.tired' : key || 'work_end_check.left', { vars: { n } });
   document.getElementById('bubble-choices').hidden = false;
+  Store.write(DB.evening, { date: todayKey(now) }); // ホームを開いたときにもう一度は出さない
+  return true;
+}
+function offerWorkEnd(now = new Date()) {
+  if (todayMood(now)) { offerPostpone(now); return; }
+  showLine('work_end_mood.ask');
+  document.getElementById('bubble-mood').hidden = false;
+}
+function isEvening(now = new Date()) {
+  if (Records.status('work_end', Records.day()).state === 'done') return true;
+  const t = Routine.timesFor(logicalDay(now)).work_end;
+  return Boolean(t) && logicalMinutes(now) >= routineMinutes(t);
+}
+function offerEvening(now = new Date()) {
+  if (typeof Tasks === 'undefined' || typeof Report === 'undefined') return false;
+  const shown = Store.read(DB.evening, null);
+  if (shown && shown.date === todayKey(now)) return false;
+  return isEvening(now) && offerPostpone(now, 'work_end_check.evening');
+}
+for (const b of document.querySelectorAll('#bubble-mood [data-mood]')) {
+  b.addEventListener('click', () => {
+    const now = new Date();
+    if (!Report.setMoodFor(b.dataset.mood, now)) { homeToast.show(SAVE_FAILED); return; }
+    if (!offerPostpone(now)) showLine(b.dataset.mood === 'tired' ? 'work_end_mood.tired' : 'work_end_mood.ok');
+  });
 }
 document.getElementById('choice-postpone').addEventListener('click', () => {
   const n = Tasks.postponeToTomorrow();
@@ -558,7 +593,7 @@ function onResume(away) {
   if (away >= RESUME_REFRESH_MS) { // 長く裏にあった：通知から開いた状態を終え、今の時間帯の一言に戻す
     homeToast.hide();
     endNotificationState();
-    showIdle(now);
+    if (!offerEvening(now)) showIdle(now);
     checkPush(); // 購読が切れていないか確かめ直す
   }
   lastMinute = ''; // 時計と次の予定をすぐ更新する

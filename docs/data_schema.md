@@ -46,6 +46,7 @@
 | --- | --- |
 | `db.meta` | `{ schema, migratedAt }` 形の版 |
 | `db.reportDraft` | 日報の書きかけ（D-033） |
+| `db.evening` | 夕方の提案（D-073）をホームで出した日 `{ date }`。その日はもう出さない |
 | `db.prefs` | 端末ごとの好み。`screenLines`（キィニチの一言を出すか。既定 true。D-047）、`voice`（声掛けの通知。既定 true。D-049）、`weekly`（週次コメント。既定 true。D-058）、`taskFolded`（タスクのたたんだ優先度 `['high', 'none', …]`。既定 []。D-070） |
 | `db.sync` | `{ url, token, lastAt, lastSig, dirty, error }` スプレッドシートへの控えの送り先・合言葉・最後に送った時点・まだ送っていない変更があるか（D-050） |
 | `db.calendar` | `{ fetchedAt, from, to, events: [ { id, calendarId, title, start, end, allDay, editable } ], error }` Google カレンダーの予定の控え（D-053。読むだけ。同期しない）。`db.calendarError` は一度も取れていないときの理由 |

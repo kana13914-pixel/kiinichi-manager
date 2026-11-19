@@ -15,6 +15,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
+MOOD_NORMAL = "localStorage.setItem('db.reports', JSON.stringify({ '2026-11-09': { mood: 'normal', done: '', left: '', tomorrow: '', savedAt: 1 } }));"  # 今日の調子を聞いたあと（D-073）
 ADD_NONE = "#task-list .task-group[data-priority=none] .add-plus, #task-list .task-slot[data-priority=none] .add-slot"  # 優先度なしの「追加」（タスクがあれば見出しの ＋、なければ点線の欄。D-070）
 
 # iPhone の 3 機種（V4-02）：(幅, 高さ), (上, 下のセーフエリア)
@@ -3039,8 +3040,8 @@ class PwaTest(unittest.TestCase):
         tasks = [{"id": "a", "title": "見積もり", "due": "2026-11-09", "done": False, "createdAt": 1},
                  {"id": "b", "title": "請求書", "due": "2026-11-05", "done": False, "createdAt": 2},
                  {"id": "c", "title": "読書", "due": None, "done": False, "createdAt": 3}]
-        init = "localStorage.setItem('db.tasks', %s)" % json.dumps(json.dumps(tasks))
-        page = self.clock_page(18, 40, init_script=init)
+        init = "localStorage.setItem('db.tasks', %s);" % json.dumps(json.dumps(tasks)) + MOOD_NORMAL  # 調子は聞いたあと（D-073）
+        page = self.clock_page(18, 20, init_script=init)  # 仕事終わりの時刻（18:30）の前
         self.assertTrue(page.is_hidden("#bubble-choices"))
         page.click(".act[data-record=work_end]")
         self.assertEqual(page.text_content("#bubble-text"), "今日までのものが2件残っている。明日に回すかどうかは、自分で決めろ。")
@@ -3053,15 +3054,67 @@ class PwaTest(unittest.TestCase):
         due = {t["id"]: t["due"] for t in json.loads(page.evaluate("localStorage.getItem('db.tasks')"))}
         self.assertEqual(due, {"a": "2026-11-10", "b": "2026-11-10", "c": None})
         # 「このまま」・残りがない日は聞かない
-        page = self.clock_page(18, 40, init_script=init)
+        page = self.clock_page(18, 20, init_script=init)
         page.click(".act[data-record=work_end]")
         page.click("#choice-keep")
         self.assertEqual(page.text_content("#bubble-text"), "わかった。無理のない分だけでいい。")
         self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["due"], "2026-11-09")
-        page = self.clock_page(18, 40)
+        page = self.clock_page(18, 20, init_script=MOOD_NORMAL)
         page.click(".act[data-record=work_end]")
         self.assertTrue(page.is_hidden("#bubble-choices"))
         self.assertEqual(page.text_content("#bubble-text"), "今日の仕事はここまでだ。切り替えろ。")
+
+    def test_work_end_asks_mood_then_offers(self):
+        """仕事終わりで今日の調子を聞き、日報の調子に入れる。疲れたなら回すほうを先に言う（D-073）"""
+        tasks = [{"id": "a", "title": "見積もり", "due": "2026-11-09", "done": False, "createdAt": 1}]
+        init = "localStorage.setItem('db.tasks', %s);" % json.dumps(json.dumps(tasks))
+        page = self.clock_page(18, 20, init_script=init)
+        page.click(".act[data-record=work_end]")
+        self.assertEqual(page.text_content("#bubble-text"), "今日の調子はどうだった。")
+        self.assertEqual(page.eval_on_selector_all("#bubble-mood .chip", "els => els.map(e => e.textContent)"), ["元気", "ふつう", "疲れた"])
+        self.assertTrue(page.is_hidden("#bubble-choices"))
+        self.assertTrue(page.evaluate("document.querySelector('.dialogue').contains(document.getElementById('toast'))"))  # 取り消しはセリフの面の中
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollHeight"), page.evaluate("innerHeight"))
+        page.click("#bubble-mood [data-mood=tired]")
+        self.assertEqual(page.text_content("#bubble-text"), "疲れているなら、今日までの1件は明日に回してもいい。決めるのは自分だ。")
+        self.assertTrue(page.is_visible("#bubble-choices"))
+        self.assertTrue(page.is_hidden("#bubble-mood"))
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.reports')"))["2026-11-09"]["mood"], "tired")
+        page.evaluate("location.hash = '#report'")  # 日報で直せる
+        self.assertEqual(page.get_attribute("#report-form .mood[data-mood=tired]", "aria-pressed"), "true")
+        # 調子がわかっている日は聞かない。残りがなければ調子への一言
+        page = self.clock_page(18, 20, init_script=MOOD_NORMAL)
+        page.click(".act[data-record=work_end]")
+        self.assertTrue(page.is_hidden("#bubble-mood"))
+        page = self.clock_page(18, 20)
+        page.click(".act[data-record=work_end]")
+        page.click("#bubble-mood [data-mood=good]")
+        self.assertEqual(page.text_content("#bubble-text"), "わかった。今日はここまでだ。")
+        page = self.clock_page(18, 20)
+        page.click(".act[data-record=work_end]")
+        page.click("#bubble-mood [data-mood=tired]")
+        self.assertEqual(page.text_content("#bubble-text"), "そうか。今日は早めに休め。")
+
+    def test_evening_offer_on_home_once_a_day(self):
+        """仕事終わりの時刻を過ぎてホームを開くと、今日までの残りがあれば提案を1回だけ出す。通知はしない（D-073）"""
+        tasks = [{"id": "a", "title": "見積もり", "due": "2026-11-09", "done": False, "createdAt": 1}]
+        init = "localStorage.setItem('db.tasks', %s);" % json.dumps(json.dumps(tasks))
+        page = self.clock_page(18, 20, init_script=init)
+        self.assertTrue(page.is_hidden("#bubble-choices"))  # 時刻の前は出さない
+        page = self.clock_page(18, 40, init_script=init)
+        self.assertEqual(page.text_content("#bubble-text"), "仕事の時間は過ぎたな。今日までのものが1件残っている。明日に回すか、自分で決めろ。")
+        self.assertTrue(page.is_visible("#bubble-choices"))
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.evening')")), {"date": "2026-11-09"})
+        page.reload()  # その日はもう出さない
+        page.wait_for_function("dialogue !== null")
+        page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
+        self.assertTrue(page.is_hidden("#bubble-choices"))
+        # 疲れている日は回すほうを先に。休日（仕事終わりの時刻なし）は出さない
+        tired = init + "localStorage.setItem('db.reports', JSON.stringify({ '2026-11-09': { mood: 'tired', done: '', left: '', tomorrow: '', savedAt: 1 } }));"
+        page = self.clock_page(18, 40, init_script=tired)
+        self.assertIn("疲れているなら", page.text_content("#bubble-text"))
+        page = self.clock_page(18, 40, day=8, init_script=init)  # 11/8 は日曜
+        self.assertTrue(page.is_hidden("#bubble-choices"))
 
     def test_mini_dialogue_has_small_emblem(self):
         page = self.timer_page()
@@ -3072,7 +3125,7 @@ class PwaTest(unittest.TestCase):
     # ---------- R5 の利用者の決定（D-060 ⑫⑬⑮） ----------
     def test_undo_toast_moves_into_dialogue_during_proposal(self):
         tasks = [{"id": "a", "title": "見積もり", "due": "2026-11-09", "done": False, "createdAt": 1}]
-        page = self.clock_page(18, 40, init_script="localStorage.setItem('db.tasks', %s)" % json.dumps(json.dumps(tasks)))
+        page = self.clock_page(18, 20, init_script="localStorage.setItem('db.tasks', %s);" % json.dumps(json.dumps(tasks)) + MOOD_NORMAL)
         page.click(".act[data-record=work_end]")
         self.assertTrue(page.is_visible("#bubble-choices"))
         self.assertTrue(page.is_visible("#toast"))
@@ -3093,7 +3146,7 @@ class PwaTest(unittest.TestCase):
         """夕方の提案中、セリフの面の中の取り消しの表示は文を途中で切らない（13px、入らなければ折り返す）。ホームははみ出さない（D-064 ⑧、I3-02）"""
         tasks = [{"id": "a", "title": "見積もり", "due": "2026-11-09", "done": False, "createdAt": 1}]
         for size, safe in (((393, 852), (59, 34)), ((375, 667), (20, 0))):
-            page = self.clock_page(18, 40, size=size, safe=safe, init_script="localStorage.setItem('db.tasks', %s)" % json.dumps(json.dumps(tasks)))
+            page = self.clock_page(18, 20, size=size, safe=safe, init_script="localStorage.setItem('db.tasks', %s);" % json.dumps(json.dumps(tasks)) + MOOD_NORMAL)
             page.click(".act[data-record=work_end]")
             self.assertTrue(page.evaluate("document.getElementById('toast').classList.contains('in-dialogue')"))
             span = page.eval_on_selector("#toast > span", "e => [e.textContent, e.scrollWidth <= e.clientWidth, getComputedStyle(e).fontSize]")
