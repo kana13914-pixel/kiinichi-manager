@@ -178,7 +178,7 @@ class PwaTest(unittest.TestCase):
         body2 = json.loads(post2.post_data)
         # 本文はセリフそのもの、URL にその番号（line）が付く（T07, C5-05）
         self.assertTrue(body2["url"].endswith("?source=webpush&trigger=midday_check.meal_overdue&line=0"), body2["url"])
-        self.assertEqual(body2["body"], "そろそろ飯の時間、過ぎてるぞ。")
+        self.assertEqual(body2["body"], "そろそろ飯の時間、過ぎてるぞ。食べたら開いて押しておけ。")
         self.assertEqual(body2["title"], "キィニチ（テスト）")
         self.assertNotIn("delaySeconds", body2)
         page.reload()  # 設定は端末に保存される
@@ -545,7 +545,7 @@ class PwaTest(unittest.TestCase):
         page.evaluate("""navigator.serviceWorker.dispatchEvent(new MessageEvent('message', { data: {
           type: 'open-url', url: location.origin + '/index.html?source=webpush&trigger=midday_check.meal_overdue&line=0' } }))""")
         page.wait_for_function("document.body.classList.contains('from-notification')", timeout=3_000)
-        self.assertEqual(page.text_content("#bubble-text"), "そろそろ飯の時間、過ぎてるぞ。")
+        self.assertEqual(page.text_content("#bubble-text"), "そろそろ飯の時間、過ぎてるぞ。食べたら開いて押しておけ。")
         self.assertEqual(self.primaries(page), ["work_start"])
 
     def test_records_reload_when_date_changes(self):
@@ -1609,13 +1609,13 @@ class PwaTest(unittest.TestCase):
 
     def test_notification_params_are_removed_from_url(self):
         page = self.clock_page(12, 0, "&source=webpush&trigger=midday_check.meal_overdue&line=0#timer")
-        self.assertEqual(page.text_content("#bubble-text"), "そろそろ飯の時間、過ぎてるぞ。")
+        self.assertEqual(page.text_content("#bubble-text"), "そろそろ飯の時間、過ぎてるぞ。食べたら開いて押しておけ。")
         self.assertTrue(page.evaluate("document.body.classList.contains('from-notification')"))
         self.assertTrue(page.url.endswith("index.html?mode=standalone#timer"), page.url)
         page.reload()
         page.wait_for_function("dialogue !== null")
         self.assertFalse(page.evaluate("document.body.classList.contains('from-notification')"))
-        self.assertNotEqual(page.text_content("#bubble-text"), "そろそろ飯の時間、過ぎてるぞ。")
+        self.assertNotEqual(page.text_content("#bubble-text"), "そろそろ飯の時間、過ぎてるぞ。食べたら開いて押しておけ。")
 
     def test_timer_retries_cancel_that_did_not_reach_server(self):
         calls, offline = [], {"cancel": True}
@@ -2219,7 +2219,7 @@ class PwaTest(unittest.TestCase):
         sched = {b["key"]: b for p, b in calls if p == "schedule"}
         self.assertEqual(sorted(sched), ["meal:2026-11-09:dinner", "meal:2026-11-09:lunch", "night:2026-11-09", "sleep:2026-11-09"])  # 朝食は過ぎた
         self.assertEqual(sched["meal:2026-11-09:lunch"]["at"], self.at_ms(9, 12, 30))
-        self.assertEqual(sched["meal:2026-11-09:lunch"]["body"], "そろそろ飯の時間、過ぎてるぞ。")
+        self.assertEqual(sched["meal:2026-11-09:lunch"]["body"], "そろそろ飯の時間、過ぎてるぞ。食べたら開いて押しておけ。")
         self.assertIn("trigger=midday_check.meal_overdue&line=0", sched["meal:2026-11-09:lunch"]["url"])
         self.assertEqual(sched["meal:2026-11-09:dinner"]["at"], self.at_ms(9, 20, 0))
         self.assertEqual(sched["night:2026-11-09"]["at"], self.at_ms(9, 22, 30))
@@ -2240,7 +2240,7 @@ class PwaTest(unittest.TestCase):
         self.wait_calls(page, calls, 5)
         self.assertEqual(calls[4][1]["key"], "break:2026-11-09")
         self.assertAlmostEqual(calls[4][1]["at"], self.at_ms(9, 11, 30), delta=5000)
-        self.assertEqual(calls[4][1]["body"], "休憩、挟んだほうがいいんじゃないか。")
+        self.assertEqual(calls[4][1]["body"], "休憩、挟んだほうがいいんじゃないか。取ったら開いて押しておけ。")
         page.click("#records-more")
         page.click("#records-list .sheet-row[data-record=lunch] button:text-is('記録')")  # 昼食を記録 → 取り消す
         page.click("#records-list .sheet-row[data-record=dinner] button:text-is('今日はなし')")  # 夕食はなし → 取り消す・夜の数が減る
