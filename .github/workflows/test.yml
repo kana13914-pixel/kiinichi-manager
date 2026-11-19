@@ -3,6 +3,9 @@ name: test
 on:
   push:
   pull_request:
+# テストはリポジトリを読むだけ。書き込みの権限は渡さない（D-075 ②）
+permissions:
+  contents: read
 jobs:
   test:
     runs-on: ubuntu-latest
