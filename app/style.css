@@ -765,6 +765,7 @@ body:not(.calendar-on) #event-add { display: none; }
 .event-allday-row { margin-top: var(--space-2); }
 .event-times { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-2); }
 .event-times label { margin: 0; }
+.event-days { margin-top: var(--space-2); }
 #event-delete { margin-top: var(--space-3); }
 /* 予定の行の「直す」（鉛筆）。ごみ箱と同じ大きさ */
 .event-edit { flex: none; width: var(--tap); min-height: var(--tap); margin: 0; padding: 0; background: transparent; color: var(--color-text-tertiary); border-radius: 0; }

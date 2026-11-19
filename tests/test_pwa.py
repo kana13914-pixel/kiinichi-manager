@@ -3031,6 +3031,55 @@ class PwaTest(unittest.TestCase):
         self.assertEqual({k: writes[2][k] for k in ("action", "id")}, {"action": "remove", "id": "new1"})
         self.assertNotIn("歯医者", page.text_content("#schedule-days"))
 
+    def test_event_allday_can_span_days(self):
+        """終日の予定は、始まりの日から終わりの日まで（含む）で足せる・直せる。31日まで（D-077）"""
+        events, writes = [], []
+        page, posts = self.sync_page(events=events, writes=writes)
+        page.wait_for_function("document.body.classList.contains('calendar-on')", timeout=3_000)
+        page.evaluate("location.hash = '#schedule'")
+        page.click("#event-add-open")
+        self.assertTrue(page.is_hidden("#event-days"))  # 終日でないときは出さない
+        page.fill("#event-title", "帰省")
+        page.click("#event-allday")
+        self.assertTrue(page.is_visible("#event-days"))
+        self.assertTrue(page.is_hidden("#event-times"))
+        self.assertEqual(page.text_content("#event-date-label"), "始まりの日")
+        self.assertEqual(page.input_value("#event-end-date"), "2026-11-09")  # 初めは同じ日
+        page.fill("#event-date", "2026-11-11")
+        self.assertEqual(page.input_value("#event-end-date"), "2026-11-11")  # 始まりを動かすと終わりもついてくる
+        page.fill("#event-end-date", "2026-11-13")
+        page.click("#event-save")
+        page.wait_for_selector("#event-form", state="hidden", timeout=3_000)
+        self.assertEqual({k: writes[0][k] for k in ("action", "start", "end", "allDay")},
+                         {"action": "add", "start": self.ms(11), "end": self.ms(14), "allDay": True})
+        for d in ("2026-11-11", "2026-11-12", "2026-11-13"):
+            self.assertIn(["終日", "帰省"], [r[:2] for r in self.schedule_rows(page, d)])
+        self.assertNotIn(["終日", "帰省"], [r[:2] for r in self.schedule_rows(page, "2026-11-14")])
+        # 直す：終わりの日が戻り、始まりを1日後ろにすると期間ごと動く
+        page.click("#schedule-days .schedule-day[data-date='2026-11-12'] .event-edit")
+        self.assertEqual([page.input_value("#event-date"), page.input_value("#event-end-date")], ["2026-11-11", "2026-11-13"])
+        page.fill("#event-date", "2026-11-12")
+        self.assertEqual(page.input_value("#event-end-date"), "2026-11-14")
+        page.click("#event-save")
+        page.wait_for_selector("#event-form", state="hidden", timeout=3_000)
+        self.assertEqual({k: writes[1][k] for k in ("action", "start", "end", "allDay")},
+                         {"action": "update", "start": self.ms(12), "end": self.ms(15), "allDay": True})
+        # 期間がおかしいときは送らない
+        page.click("#event-add-open")
+        page.fill("#event-title", "合宿")
+        page.click("#event-allday")
+        page.fill("#event-end-date", "2026-11-08")
+        page.click("#event-save")
+        self.assertIn("始まりの日と同じか後", page.text_content("#event-form-status"))
+        page.fill("#event-end-date", "2026-12-10")  # 32日
+        page.click("#event-save")
+        self.assertIn("31日まで", page.text_content("#event-form-status"))
+        page.fill("#event-end-date", "2026-12-09")  # ちょうど31日
+        page.click("#event-save")
+        page.wait_for_selector("#event-form", state="hidden", timeout=3_000)
+        self.assertEqual(writes[2]["end"] - writes[2]["start"], 31 * 86_400_000)
+        self.assertEqual(len(writes), 3)
+
     def test_event_form_shows_error_when_offline_and_hidden_without_calendar(self):
         fail, writes = {"on": False}, []
         page, posts = self.sync_page(events=[], writes=writes, fail=fail)

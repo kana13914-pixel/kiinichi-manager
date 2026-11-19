@@ -220,12 +220,31 @@ const Schedule = (() => {
   // ---------- 予定を足す・直す・消す（D-054） ----------
   let editing = null; // 直している予定（Calendar の控えの1件）。足すときは null
   let allDay = false;
+  const MAX_ALLDAY_DAYS = 31; // 終日の予定の長さの上限（GAS の MAX_EVENT_MS と同じ。D-077）
+  const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const daysBetween = (a, b) => Math.round((parseDay(b) - parseDay(a)) / 86400000);
   function setAllDay(on) {
     allDay = on;
     $('event-allday').setAttribute('aria-checked', String(on));
     $('event-allday').textContent = on ? 'オン' : 'オフ';
     $('event-times').hidden = on;
+    // 終日のときは、始まりの日と終わりの日で期間を入れる（D-077）
+    $('event-days').hidden = !on;
+    $('event-date-label').textContent = on ? '始まりの日' : '日付';
+    const start = $('event-date').value;
+    if (on && isDay(start) && (!isDay($('event-end-date').value) || $('event-end-date').value < start)) $('event-end-date').value = start;
   }
+  // 始まりの日を動かしたら、終わりの日も同じ日数だけ動かす（期間の長さを保つ）
+  let shownStart = '';
+  function followStart() {
+    const start = $('event-date').value;
+    const end = $('event-end-date').value;
+    if (isDay(start) && isDay(shownStart) && isDay(end)) $('event-end-date').value = dateStr(addDays(parseDay(end), daysBetween(shownStart, start)));
+    if (isDay(start)) shownStart = start;
+  }
+  // iPhone は選んでいる途中に input、閉じたときに change が来る。両方で呼んでも、2回目は動かす日数が 0 になる
+  $('event-date').addEventListener('input', followStart);
+  $('event-date').addEventListener('change', followStart);
   function openForm(ref = null) {
     editing = ref;
     const now = new Date();
@@ -240,16 +259,20 @@ const Schedule = (() => {
       $('event-date').value = dateStr(st);
       $('event-start').value = ref.allDay ? '' : hm(st);
       $('event-end').value = ref.allDay ? '' : hm(en);
+      // 終日の終わりは次の日の0時で届く（含まない）。画面では含む日で出す
+      $('event-end-date').value = ref.allDay ? dateStr(addDays(startOfDay(new Date(Math.max(ref.start + 1, ref.end))), -1)) : dateStr(st);
       setAllDay(ref.allDay);
     } else {
       const day = mode === 'month' && selected ? selected : now;
       const h = Math.min(22, now.getHours() + 1);
       $('event-title').value = '';
       $('event-date').value = dateStr(day);
+      $('event-end-date').value = dateStr(day);
       $('event-start').value = `${pad(h)}:00`;
       $('event-end').value = `${pad(h + 1)}:00`;
       setAllDay(false);
     }
+    shownStart = $('event-date').value;
     $('event-add-open').hidden = true;
     $('event-form').hidden = false;
     $('event-title').focus();
@@ -260,12 +283,17 @@ const Schedule = (() => {
     $('event-form').hidden = true;
     $('event-add-open').hidden = false;
   }
-  // 入力から始まりと終わり（ミリ秒）を作る。終わりが始まり以前なら翌日とみなす。終日は直す前の日数を保つ
+  // 入力から始まりと終わり（ミリ秒）を作る。終わりが始まり以前なら翌日とみなす。
+  // 終日は始まりの日から終わりの日まで（終わりの日を含む。送るときは次の日の0時を終わりにする。D-077）。期間がおかしければ { error }
   function formTimes() {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test($('event-date').value)) return null;
+    if (!isDay($('event-date').value)) return null;
     const day = parseDay($('event-date').value);
     if (allDay) {
-      const days = editing && editing.allDay ? Math.max(1, Math.round((editing.end - editing.start) / 86400000)) : 1;
+      const last = $('event-end-date').value;
+      if (!isDay(last)) return null;
+      const days = daysBetween($('event-date').value, last) + 1;
+      if (days < 1) return { error: '終わりの日は、始まりの日と同じか後の日にしてください' };
+      if (days > MAX_ALLDAY_DAYS) return { error: `終日の予定は${MAX_ALLDAY_DAYS}日までです` };
       return { start: day.getTime(), end: addDays(day, days).getTime() };
     }
     const [sh, sm] = ($('event-start').value || '').split(':').map(Number);
@@ -302,7 +330,8 @@ const Schedule = (() => {
     const title = $('event-title').value.trim();
     if (!title) { $('event-form-status').textContent = '予定の名前を入れてください'; return; }
     const t = formTimes();
-    if (!t) { $('event-form-status').textContent = '日付と時刻を入れてください'; return; }
+    if (!t) { $('event-form-status').textContent = allDay ? '始まりの日と終わりの日を入れてください' : '日付と時刻を入れてください'; return; }
+    if (t.error) { $('event-form-status').textContent = t.error; return; }
     const data = { title: title.slice(0, 200), allDay, ...t };
     if (editing) submit('update', { ...data, id: editing.id, calendarId: editing.calendarId }, `「${data.title}」を直しました`);
     else submit('add', data, `「${data.title}」を足しました`);

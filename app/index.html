@@ -139,11 +139,16 @@
           <p id="event-form-title" class="form-title">予定を足す</p>
           <label for="event-title">予定の名前</label>
           <input id="event-title" type="text" maxlength="200" autocomplete="off" enterkeyhint="done">
-          <label for="event-date">日付</label>
+          <label for="event-date" id="event-date-label">日付</label>
           <input id="event-date" type="date">
           <div class="pref-row event-allday-row">
             <span id="event-allday-label">終日</span>
             <button id="event-allday" type="button" class="cut-btn quiet chip" role="switch" aria-checked="false" aria-labelledby="event-allday-label">オフ</button>
+          </div>
+          <!-- 終日の予定は、日をまたぐ期間で入れられる（終わりの日を含む。31日まで。D-077） -->
+          <div id="event-days" class="event-days" hidden>
+            <label for="event-end-date">終わりの日</label>
+            <input id="event-end-date" type="date">
           </div>
           <div id="event-times" class="event-times">
             <label for="event-start">始まり</label>
