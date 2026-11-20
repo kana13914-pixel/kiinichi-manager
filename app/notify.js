@@ -118,6 +118,7 @@ const Voice = (() => {
   window.addEventListener('recordschange', soon);
   window.addEventListener('routinechange', soon);
   window.addEventListener('calendarchange', soon); // 予定が変わったら、予定の前の声掛けを付け替える
+  window.addEventListener('tonechange', soon); // 話し方を変えたら、通知の文をその話し方で選び直す（D-082）
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') soon(); });
   dialogueReady.then(() => sync());
   return { plan, sync };

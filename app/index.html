@@ -405,6 +405,17 @@
     <section id="view-settings" class="view">
       <header class="sub-header"><a href="#home" class="back">‹ ホーム</a><h1><span class="label-en" aria-hidden="true">SETTINGS</span>設定</h1></header>
       <p id="sync-alert" class="status ng sync-alert" role="status" hidden></p>
+      <!-- キィニチの話し方（距離感。D-082）。3つから1つ。この端末に覚える -->
+      <section class="card">
+        <h2 id="tone-title">キィニチの話し方</h2>
+        <div class="schedule-modes tone-modes" role="group" aria-labelledby="tone-title">
+          <button type="button" class="cut-btn quiet chip" data-tone="client" aria-pressed="true">依頼人</button>
+          <button type="button" class="cut-btn quiet chip" data-tone="friend" aria-pressed="false">友人</button>
+          <button type="button" class="cut-btn quiet chip" data-tone="sweet" aria-pressed="false">甘やかし</button>
+        </div>
+        <p id="tone-note" class="note">-</p>
+        <details class="more"><summary>詳しく</summary><p class="note">ホームのセリフ・各画面の一言・声掛けの通知・先週のひとこと（AI）の話し方が変わります。その話し方の文がまだない場面は、依頼人の文を出します。この端末にだけ覚えます。</p></details>
+      </section>
       <section class="card">
         <h2>声掛けの通知</h2>
         <div class="pref-row">

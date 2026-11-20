@@ -523,6 +523,27 @@ class PwaTest(unittest.TestCase):
         page.evaluate("Prefs.set('tone', 'boss')")  # 知らない値は依頼人版
         self.assertEqual(picks(), ["依頼人", "依頼人だけ"])
 
+    def test_tone_setting_switches_and_remembers(self):
+        """設定の「キィニチの話し方」（D-082）：3つから1つ。押すと覚え、説明が変わり、tonechange を出す。はじめは依頼人"""
+        for size, safe in (((393, 852), (59, 34)), ((375, 667), (20, 0))):
+            page = self.clock_page(10, 0, "#settings", size=size, safe=safe)
+            pressed = lambda: page.eval_on_selector_all("#view-settings [data-tone]", "els => els.map(e => [e.dataset.tone, e.getAttribute('aria-pressed')])")
+            self.assertEqual(pressed(), [["client", "true"], ["friend", "false"], ["sweet", "false"]])
+            self.assertIn("依頼人", page.text_content("#tone-note"))
+            sizes = page.eval_on_selector_all("#view-settings [data-tone]", "els => els.map(e => [Math.round(e.getBoundingClientRect().height), e.scrollWidth <= e.clientWidth])")
+            self.assertTrue(all(h >= 44 and fits for h, fits in sizes), sizes)
+            self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), size[0])
+        page.evaluate("window.__tone = 0; addEventListener('tonechange', () => { window.__tone++; })")
+        page.click("#view-settings [data-tone=sweet]")
+        self.assertEqual(pressed(), [["client", "false"], ["friend", "false"], ["sweet", "true"]])
+        self.assertIn("気を許した相手", page.text_content("#tone-note"))
+        self.assertEqual(page.evaluate("[currentTone(), window.__tone]"), ["sweet", 1])
+        page.click("#view-settings [data-tone=sweet]")  # 同じものをもう一度押しても変わらない
+        self.assertEqual(page.evaluate("window.__tone"), 1)
+        page.reload()
+        page.wait_for_function("dialogue !== null")
+        self.assertEqual(page.get_attribute("#view-settings [data-tone=sweet]", "aria-pressed"), "true")
+
     def test_notification_finds_same_line_when_order_changed(self):
         """通知の URL の h（文の印）で、セリフ集の並びが変わっても通知と同じ文を出す。見つからなければ選び直す（D-081）"""
         lines = ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"]

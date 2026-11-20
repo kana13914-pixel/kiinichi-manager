@@ -722,6 +722,26 @@ document.getElementById('pref-weekly').addEventListener('click', () => {
   setSwitch('pref-weekly', Prefs.get('weekly'));
 });
 setSwitch('pref-weekly', Prefs.get('weekly'));
+// キィニチの話し方（D-082）。変えたら声掛けの通知の文も選び直す（notify.js が tonechange を聞く）
+const TONE_NOTES = {
+  client: 'あなたは仕事を頼んだ依頼人です。無愛想ですが礼儀正しく、仕事は確実です（はじめはこれ）。',
+  friend: 'あなたは親しい友人です。言い方は短く、軽い皮肉や本音が少し混ざります。',
+  sweet: 'あなたは気を許した相手です。手間を引き受け、休んでいいと言い、短く素直に褒めます。',
+};
+function applyTone() {
+  const t = currentTone();
+  for (const b of document.querySelectorAll('#view-settings [data-tone]')) b.setAttribute('aria-pressed', String(b.dataset.tone === t));
+  setText('tone-note', TONE_NOTES[t]);
+}
+for (const b of document.querySelectorAll('#view-settings [data-tone]')) {
+  b.addEventListener('click', () => {
+    if (currentTone() === b.dataset.tone) return;
+    Prefs.set('tone', b.dataset.tone);
+    applyTone();
+    window.dispatchEvent(new Event('tonechange'));
+  });
+}
+applyTone();
 
 // Web Push：ボタン操作 → 通知許可 → 購読 → 送信サーバーに登録
 Settings.bind('app-token', 'appToken');
