@@ -423,3 +423,64 @@ test('週次コメント：合言葉・鍵なし・入力の誤り・断られ�
   assert.equal(over.status, 429);
   assert.equal(s.calls.length, 8);
 });
+
+// ---- 話し方（D-082）と H-026 ①の守り（D-076） ----
+test('週次コメント：話し方（tone）ごとに Claude への指示を変える。知らない値・なしは依頼人版', async () => {
+  const { calls, post } = weeklySetup();
+  await post({ week: '2026-11-02', summary: 'x' });
+  await post({ week: '2026-11-09', summary: 'x', tone: 'friend' });
+  await post({ week: '2026-11-16', summary: 'x', tone: 'sweet' });
+  await post({ week: '2026-11-23', summary: 'x', tone: 'boss' });
+  const sys = calls.map((c) => c.body.system);
+  assert.match(sys[0], /依頼した依頼人/);
+  assert.match(sys[1], /親しい友人/);
+  assert.match(sys[2], /気を許している相手/);
+  assert.match(sys[2], /告白・性的な言い方/);
+  assert.match(sys[3], /依頼した依頼人/);
+  for (const s of sys) {
+    assert.match(s, /キィニチ/);
+    assert.match(s, /専門の相談窓口/); // どの版でも安全の決まりは同じ
+    assert.match(s, /200字/);
+  }
+});
+
+test('購読の宛先は通知サービスだけ（Apple・Google・Mozilla・Windows）', async () => {
+  const { env } = setup();
+  const browser = await makeBrowser();
+  const sub = (endpoint) => worker.fetch(req('/api/subscribe', { method: 'POST', token: env.APP_TOKEN, body: { ...browser.subscription, endpoint } }), env);
+  for (const ok of ['https://web.push.apple.com/QX1', 'https://api.push.apple.com/x', 'https://fcm.googleapis.com/fcm/send/abc', 'https://updates.push.services.mozilla.com/wpush/v2/x', 'https://wns2-par02p.notify.windows.com/w/?token=x']) {
+    assert.equal((await sub(ok)).status, 200, ok);
+  }
+  for (const ng of ['https://evil.example/x', 'https://push.apple.com.evil.example/x', 'https://evilpush.apple.com.example/x', 'http://web.push.apple.com/x', 'not a url']) {
+    assert.equal((await sub(ng)).status, 400, ng);
+  }
+});
+
+test('通知を押して開く URL は、このアプリのサイトの中だけ。外なら付けずに送る', async () => {
+  const { env, pushes } = setup();
+  const browser = await makeBrowser();
+  await worker.fetch(req('/api/subscribe', { method: 'POST', token: env.APP_TOKEN, body: browser.subscription }), env);
+  await worker.fetch(req('/api/send', { method: 'POST', token: env.APP_TOKEN, body: { body: 'x', url: 'https://evil.example/login' } }), env);
+  await worker.fetch(req('/api/send', { method: 'POST', token: env.APP_TOKEN, body: { body: 'y', url: ORIGIN + '/kiinichi-manager/app/index.html#timer' } }), env);
+  const msgs = [];
+  for (const p of pushes) msgs.push(await decrypt(browser, new Uint8Array(p.init.body)));
+  assert.equal(msgs[0].url, undefined);
+  assert.equal(msgs[1].url, ORIGIN + '/kiinichi-manager/app/index.html#timer');
+  const at = Date.now() + 120000;
+  await worker.fetch(req('/api/schedule', { method: 'POST', token: env.APP_TOKEN, body: { key: 'timer', at, body: 'z', url: 'javascript:alert(1)' } }), env);
+  const queued = (await env.PUSH_KV.get('queue', 'json')).find((q) => q.id === 'key:timer');
+  assert.equal(queued.url, undefined);
+});
+
+test('VAPID の鍵は一度読んだら覚えておき、KV を読み直さない', async () => {
+  const { env } = setup();
+  let reads = 0;
+  const get = env.PUSH_KV.get.bind(env.PUSH_KV);
+  env.PUSH_KV.get = (k, t) => { if (k === 'vapid') reads++; return get(k, t); };
+  const a = await (await worker.fetch(req('/api/vapid-public-key'), env)).json();
+  const b = await (await worker.fetch(req('/api/vapid-public-key'), env)).json();
+  const c = await (await worker.fetch(req('/api/vapid-public-key'), env)).json();
+  assert.equal(a.publicKey, b.publicKey);
+  assert.equal(b.publicKey, c.publicKey);
+  assert.ok(reads <= 1, `KV の読み取りは1回まで（${reads}回）`);
+});

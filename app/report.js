@@ -377,7 +377,7 @@ const Report = (() => {
     // 前の週のひとことに返事があれば、一緒に送る（言い回しの好み・不満を反映してもらう。D-060 ⑪）
     const prev = (Store.read(DB.weekly, {}) || {})[dateStr(addDays(week.days[0], -7))];
     const previous = prev && prev.reply && prev.reply.text ? { comment: String(prev.text || '').slice(0, 600), reply: prev.reply.text.slice(0, REPLY_MAX) } : undefined;
-    Settings.api('/api/weekly', { method: 'POST', body: { week: week.key, summary: weekSummary(week), previous } })
+    Settings.api('/api/weekly', { method: 'POST', body: { week: week.key, summary: weekSummary(week), previous, tone: currentTone() } }) // tone：話し方（D-082）
       .then((r) => {
         const all = Store.read(DB.weekly, {}) || {};
         all[week.key] = { text: r.text, at: Date.now() };

@@ -2530,6 +2530,7 @@ class PwaTest(unittest.TestCase):
         page.wait_for_selector("#weekly", state="visible", timeout=5_000)
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0]["week"], "2026-11-09")  # 先週の月曜（11/16 は月曜）
+        self.assertEqual(calls[0]["tone"], "client")  # 話し方（D-082）。既定は依頼人版
         summary = calls[0]["summary"]
         self.assertIn("11/9(月) ／ 調子：疲れた ／ できたこと：資料作り ／ 記録：起きた07:40、休憩1回、夕食なし", summary)
         self.assertIn("11/10(火) ／ 日報なし ／ 記録：なし", summary)
@@ -2553,6 +2554,12 @@ class PwaTest(unittest.TestCase):
         page.click("#pref-weekly")  # 週次コメントをオフにすると出さない
         page.evaluate("location.hash = '#report'")
         self.assertTrue(page.is_hidden("#weekly"))
+
+    def test_weekly_comment_sends_chosen_tone(self):
+        """先週のひとことを頼むとき、設定した話し方（D-082）を送信サーバーに伝える"""
+        page, calls = self.weekly_page(self.WEEK_REPORTS, extra_init="localStorage.setItem('db.prefs', JSON.stringify({ voice: false, tone: 'sweet' }));")
+        page.wait_for_selector("#weekly", state="visible", timeout=5_000)
+        self.assertEqual(calls[0]["tone"], "sweet")
 
     def test_weekly_comment_needs_three_reports_and_reports_errors(self):
         two = dict(list(self.WEEK_REPORTS.items())[:2])

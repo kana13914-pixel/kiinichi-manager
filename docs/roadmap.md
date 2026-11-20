@@ -673,7 +673,7 @@
 
 H-026 の回答で「今はしない。次の貼り替えで一緒に」と決めたもの。**ほかの用事で `worker/worker.js` か `gas/Code.gs` を変えるときは、先にこれを入れてから貼り替えを頼む**（貼り替えの回数を増やさないため）。
 
-- 送信サーバー（`worker/worker.js`）
+- 送信サーバー（`worker/worker.js`）→ **2026-11-20 に入れた（D-082 の話し方と一緒に。貼り替えは H-027）**
   - 通知の宛先（`/api/subscribe` の endpoint）を、通知サービスの URL だけにする（Apple `*.push.apple.com`、Google `fcm.googleapis.com`、Mozilla `*.push.services.mozilla.com`、Windows `*.notify.windows.com`）
   - 合言葉なしで呼べる `/api/vapid-public-key` は、一度読んだ鍵を覚えておき、KV の読み取りを減らす
   - `/api/send`・`/api/schedule` の `url` は、`ALLOWED_ORIGIN` のこのアプリの下だけを受け付ける（アプリ側は D-075 ①で守り済み。二重の守り）

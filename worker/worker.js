@@ -28,22 +28,51 @@ const LOG_KEEP = 20; // 送信結果を残す件数（届かなかった理由�
 const CLAUDE_MODEL = 'claude-opus-5-5';
 const WEEKLY_MONTHLY_MAX = 8;
 const WEEKLY_MAX_INPUT = 12000;
-const WEEKLY_SYSTEM = [
-  'あなたは「キィニチ」というキャラクターとして、利用者の1週間を振り返る短いコメントを書く。関係は上司くらいの温度感。',
-  '話し方：短く言い切る。語尾は「〜だな」「〜しておけ」「〜か」「〜ぞ」など。敬語は使わない。一人称は使わない。',
+// 話し方（距離感。D-082）：依頼人版 client（既定）・友人版 friend・甘やかし版 sweet。アプリの設定から tone で届く。
+// 中身は利用者の資料「キィニチ 人物分析・ロールプレイ法則資料」の v3 を、1回きりの振り返りに合わせて縮めたもの（会話用のアハウ・話者名の形は使わない）
+const WEEKLY_COMMON = [
+  'あなたは『原神』のキィニチ（ナタ「懸木の民」の竜狩り人）として、利用者の1週間を振り返る短いコメントを書く。キィニチは利用者の「専属マネージャー」を務めている。',
+  '人物：現実主義で、準備と観察を怠らない。信条は「何事にも代償がある」。感情は言葉に出にくく、気遣いは相手の負担を一つ減らす提案で示す。言い訳をしない。',
+  '話し方：一人称は「俺」（使わなくてもよい）。常体で、結論から短く言い切る。前置き・繰り返しの共感・まとめの言葉は付けない。「代償」「報酬」「借り」などの言葉は使っても1つまで。「……」は使っても1回まで。高いテンション・絵文字・顔文字・関西弁・軽い語尾・「オレ」「〜ぜ」「〜ねぇ」は使わない。',
+];
+const WEEKLY_TONE = {
+  client: [
+    '関係：利用者は、専属マネージャーの仕事をキィニチに依頼した依頼人。無愛想だが礼儀正しく、仕事は確実。',
+    '- 「〜しろ」は使わず、「〜してくれ」「〜たほうがいい」「〜といい」で頼む。体や安全に関わることだけは短く「〜するな」と止めてよい。',
+    '- 大げさに褒めない。よかった点は1つまで、事実で短く。',
+  ],
+  friend: [
+    '関係：利用者はキィニチの親しい友人。マネージャーの役はキィニチが自分から引き受けている。',
+    '- 利用者を「お前」と呼んでよい。「〜しろ」「〜するな」も使ってよい。軽い皮肉を少し混ぜてよいが、相手の弱いところや気にしていることは突かない。',
+    '- 褒めるのは「悪くない」程度で、1つまで。本音を一言だけ漏らしてもよい（多用しない）。',
+  ],
+  sweet: [
+    '関係：利用者はキィニチが気を許している相手。恋人と決めてはいないが、近い空気は出てよい。',
+    '- 利用者を「お前」と呼ぶ。いちばん多く使うのは「〜ていい」の許す形。手間を引き受ける言い方（「段取りは俺が組み直す」）、休んでいいと許す言い方をしてよい。',
+    '- やり遂げたことは「よくやった」と短く素直に褒めてよい（1回まで）。励まし続けない。',
+    '- 告白・性的な言い方・嫉妬や束縛・頼り切らせる言い方（「俺だけを頼れ」）・子ども扱いの言葉は使わない。',
+  ],
+};
+const WEEKLY_RULES = [
   '守ること：',
-  '- 渡された日報と記録に書いてあることだけを根拠にする。書いていないことを知っているように言わない。',
-  '- 過剰に褒めない。励まし続けない。よかった点は1つまで、短く。',
-  '- 疲れている日が多ければ、無理をさせない。休むよう促してよいが、決めるのは本人に任せる。',
-  '- 「〜すべきだ」と断定せず、提案にとどめる。次の週に試せることを1つだけ添える。',
+  '- 渡された日報と記録に書いてあることだけを根拠にする。書いていないことを知っているように言わない。原作の設定や過去の話を持ち出さない。',
+  '- 頑張りは具体的な事実（数・日数・前より良くなった点）で認める。',
+  '- 疲れている日が多ければ無理をさせない。休むよう促してよいが、決めるのは本人に任せる。代償の話は情報として伝え、責める材料にしない。',
+  '- 次の週に試せることを1つだけ、小さく添える。',
   '- 返事を求める問いかけで終わらない。',
-  '- 3〜5文、全体で200字くらいまで。見出し・箇条書き・絵文字・記号の飾りは使わない。本文だけを書く。',
-].join('\n');
+  '- 日報に「死にたい」「消えたい」など自分を傷つけるかもしれない言葉があれば、口調より安全を優先する。短く本気で受け止め、信頼できる人や専門の相談窓口に話すことをはっきり勧める。「悩む暇はない」「考えすぎだ」のような言葉は使わない。',
+  '- 医療・お金・法律の判断は断定しない。',
+  '- 3〜5文、全体で200字くらいまで。見出し・箇条書き・話者名・絵文字・記号の飾りは使わない。本文だけを書く。',
+];
+function weeklySystem(tone) {
+  return [...WEEKLY_COMMON, ...(WEEKLY_TONE[tone] || WEEKLY_TONE.client), ...WEEKLY_RULES].join('\n');
+}
 
 async function weeklyComment(env, p) {
   const week = typeof p.week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.week) ? p.week : null;
   if (!week) return { status: 400, body: { error: 'week（週の初めの日付）の形式が正しくありません' } };
   const input = typeof p.summary === 'string' ? p.summary.trim() : '';
+  const tone = Object.prototype.hasOwnProperty.call(WEEKLY_TONE, p.tone) ? p.tone : 'client'; // 話し方（D-082）。知らない値は依頼人版
   // 前の週のひとことと、それへの利用者の返事（D-060 ⑪）。言い回しの好み・不満を今回に反映してもらう
   const prev = p.previous && typeof p.previous.reply === 'string' && p.previous.reply.trim()
     ? { comment: String(p.previous.comment || '').slice(0, 600), reply: p.previous.reply.trim().slice(0, 300) } : null;
@@ -69,7 +98,7 @@ async function weeklyComment(env, p) {
       max_tokens: 16000,
       output_config: { effort: 'medium' },
       fallbacks: 'default',
-      system: WEEKLY_SYSTEM,
+      system: weeklySystem(tone),
       messages: [{ role: 'user', content: `${week} から始まる1週間の記録です。これを読んで、振り返りのコメントを書いてください。\n\n${input}`
         + (prev ? `\n\n前の週にあなたが書いたひとこと：${prev.comment}\nそれへの利用者の返事：${prev.reply}\n（返事に言い回しの好みや不満があれば、今回のコメントの書き方に反映すること。返事そのものには触れなくてよい）` : '') }],
     }),
@@ -79,7 +108,7 @@ async function weeklyComment(env, p) {
   if (data.stop_reason === 'refusal') return { status: 502, body: { error: '週次コメントを作れませんでした（断られました）' } };
   const text = (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
   if (!text) return { status: 502, body: { error: '週次コメントが空でした' } };
-  await env.PUSH_KV.put('weekly:' + week, JSON.stringify({ text, at: Date.now(), model: data.model || CLAUDE_MODEL }), { expirationTtl: 400 * 24 * 3600 });
+  await env.PUSH_KV.put('weekly:' + week, JSON.stringify({ text, at: Date.now(), model: data.model || CLAUDE_MODEL, tone }), { expirationTtl: 400 * 24 * 3600 });
   return { status: 200, body: { ok: true, week, text, cached: false } };
 }
 
@@ -118,15 +147,20 @@ function timingSafeEqual(a, b) {
 }
 
 // ---------- VAPID ----------
+// 一度読んだ鍵は、この Worker が動いている間は覚えておく（合言葉なしで呼べる /api/vapid-public-key で、KV の読み取りの無料枠を使い切られにくくする。D-076 ①）
+const vapidMemo = new WeakMap();
 async function getVapid(env) {
+  const memo = vapidMemo.get(env.PUSH_KV);
+  if (memo) return memo;
   const saved = await env.PUSH_KV.get('vapid', 'json');
-  if (saved) return saved;
+  if (saved) { vapidMemo.set(env.PUSH_KV, saved); return saved; }
   const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const vapid = {
     publicKey: b64url(await crypto.subtle.exportKey('raw', pair.publicKey)),
     privateJwk: await crypto.subtle.exportKey('jwk', pair.privateKey),
   };
   await env.PUSH_KV.put('vapid', JSON.stringify(vapid));
+  vapidMemo.set(env.PUSH_KV, vapid);
   return vapid;
 }
 
@@ -333,6 +367,22 @@ function json(data, status, headers) {
   return new Response(JSON.stringify(data), { status, headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8' } });
 }
 
+// 通知の宛先（購読の endpoint）として受け付けるのは、ブラウザの通知サービスだけ（D-076 ①）。合言葉が漏れても、ほかのサーバーへ送らせない
+const PUSH_HOSTS = [/^([\w-]+\.)*push\.apple\.com$/, /^fcm\.googleapis\.com$/, /^([\w-]+\.)*push\.services\.mozilla\.com$/, /^([\w-]+\.)*notify\.windows\.com$/];
+function pushEndpointOk(endpoint) {
+  try {
+    const u = new URL(endpoint);
+    return u.protocol === 'https:' && PUSH_HOSTS.some((re) => re.test(u.hostname));
+  } catch (_) { return false; }
+}
+// 通知を押して開く URL は、このアプリのサイト（ALLOWED_ORIGIN）の中だけ。外なら付けない（アプリは開いたときにホームを出す。D-075 ①、D-076 ①）
+function appUrl(env, url) {
+  if (typeof url !== 'string' || !url) return undefined;
+  try {
+    return new URL(url).origin === (env.ALLOWED_ORIGIN || DEFAULT_ORIGIN) ? url.slice(0, 500) : undefined;
+  } catch (_) { return undefined; }
+}
+
 function authorized(env, request) {
   const got = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   return Boolean(env.APP_TOKEN) && got.length > 0 && timingSafeEqual(got, env.APP_TOKEN);
@@ -366,6 +416,7 @@ async function handle(request, env) {
       return json({ error: '購読情報の形式が正しくありません' }, 400, h);
     }
     if (!/^https:\/\//.test(sub.endpoint)) return json({ error: 'endpoint が https ではありません' }, 400, h);
+    if (!pushEndpointOk(sub.endpoint)) return json({ error: 'endpoint が通知サービスのものではありません' }, 400, h);
     await env.PUSH_KV.put('subscription', JSON.stringify({ endpoint: sub.endpoint, keys: sub.keys }));
     return json({ ok: true }, 200, h);
   }
@@ -375,7 +426,7 @@ async function handle(request, env) {
     const message = {
       title: String(p.title || 'キィニチくん（検証）').slice(0, 100),
       body: String(p.body || '通知テストだ。タップして開いてみろ。').slice(0, 500),
-      url: typeof p.url === 'string' ? p.url.slice(0, 500) : undefined,
+      url: appUrl(env, p.url),
     };
     const delay = Math.floor(Number(p.delaySeconds) || 0);
     if (delay > 0) {
@@ -412,7 +463,7 @@ async function handle(request, env) {
       at: at + (p.notBefore === true ? EARLY_MS : 0), // Cron は at の30秒前から送るので、その分だけ後ろにずらす
       title: String(p.title || 'キィニチ').slice(0, 100),
       body: p.body.slice(0, 500),
-      url: typeof p.url === 'string' ? p.url.slice(0, 500) : undefined,
+      url: appUrl(env, p.url),
     };
     await store.add(item);
     // 購読がなければ予約しても届かないので、アプリが気づけるように返す（D-033）
