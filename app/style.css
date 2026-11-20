@@ -237,6 +237,9 @@ body[data-state="ready"] #main { display: block; }
 .portrait[data-art="photo"] { background: none; }
 body.has-photo #view-home .stage::before, body.has-photo #view-home .stage-mark { display: none; } /* 吊り線・縦書きの英字は写真と重なるので出さない */
 .portrait-layer { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+/* キィニチに触る（D-083）：続けて押しても拡大しない・長押しで文字の選択や保存の一覧を出さない */
+#view-home { touch-action: manipulation; }
+#view-home .stage { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .portrait-img { position: absolute; max-width: none; transform-origin: center; pointer-events: none; -webkit-user-drag: none; }
 /* 部品の地の透け具合（--ui-clear：0〜0.9。利用者が合わせる）。写真があるときのホームだけ。文字・線・ボタンはそのまま */
 body.has-photo .dialogue:not(.dialogue-mini) {

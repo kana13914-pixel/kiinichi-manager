@@ -310,5 +310,10 @@ const Portrait = (() => {
   bind();
   renderSettings();
   renderHome();
-  return { renderHome, baseSize, defaults };
+  // 触る場所の印（D-083 ②）：{ head: { x, y, r }, … }。x・y は画像の上の位置（0〜1）、r は画像の幅に対する半径
+  function spots() {
+    const c = conf();
+    return c && c.spots && typeof c.spots === 'object' ? c.spots : {};
+  }
+  return { renderHome, baseSize, defaults, spots };
 })();

@@ -18,6 +18,7 @@ const ASSETS = [
   './schedule.js',
   './sync.js',
   './portrait.js',
+  './touch.js',
   './style.css',
   './img/canopy-emblem.svg',
   './img/canopy-vines.svg',

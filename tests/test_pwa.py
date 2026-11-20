@@ -544,6 +544,142 @@ class PwaTest(unittest.TestCase):
         page.wait_for_function("dialogue !== null")
         self.assertEqual(page.get_attribute("#view-settings [data-tone=sweet]", "aria-pressed"), "true")
 
+    # ---------- 触ったときの反応・開いたときの場面（D-083）。文面はまだないので、テスト用のセリフを足して確かめる ----------
+    SCENE_LINES = {
+        "touch": ["rapid:連続", "warn:注意", "after_warn:注意後", "stop:打ち切り", "return:再訪", "morning:朝のタッチ", "day:昼のタッチ", "night:夜のタッチ", "head:頭"],
+        "hold": ["head:頭の長押し"],
+        "first_launch": ["default:初回"],
+        "home": ["tasks_some:{done}つ片づいた。残り{left}", "tasks_all:全部片づいた", "tired_today:疲れた日", "after_tired:疲れた翌日", "after_late:遅寝の翌日"],
+        "rare": ["open:レア", "day7:7日目", "day30:30日目", "day100:100日目"],
+    }
+
+    def scene_page(self, hour, minute=0, init="", day=9, size=(393, 852)):
+        data = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))
+        for trigger, items in self.SCENE_LINES.items():
+            data[trigger] = {"conditions": [{"id": x.split(":", 1)[0], "lines": [x.split(":", 1)[1]]} for x in items]}
+        body = json.dumps(data, ensure_ascii=False)
+        route = lambda r: r.fulfill(status=200, content_type="application/json", body=body)
+        return self.clock_page(hour, minute, init_script=init, day=day, size=size, routes={"**/data/dialogue.json": route})
+
+    def bubble(self, page):
+        return page.text_content("#bubble-text")
+
+    def test_touch_stages_escalate_mute_and_return(self):
+        """触る段階（D-083 ①）：3秒以内に3回で連続、2回ごとに注意 → 注意後も → 打ち切り。打ち切りのあとは黙り、時間をおいて触ると再訪"""
+        page = self.scene_page(10, 0)
+        t = lambda ms: page.evaluate("(ms) => Touch.touch(null, false, ms)", ms)
+        base = page.evaluate("Date.now()")  # 偽の時計の今（時間帯はこの時刻で決まる）
+        self.assertEqual([t(base), t(base + 500)], ["touch.day", "touch.day"])  # 場所なしは時間帯のセリフ
+        self.assertEqual(t(base + 1000), "touch.rapid")
+        self.assertEqual(self.bubble(page), "連続")
+        got = [t(base + 1000 + 400 * i) for i in range(1, 7)]
+        self.assertEqual(got, ["touch.rapid", "touch.warn", "touch.warn", "touch.after_warn", "touch.after_warn", "touch.stop"])
+        stop = base + 1000 + 400 * 6
+        self.assertIsNone(t(stop + 60_000))  # 打ち切りのあいだは黙る
+        self.assertEqual(self.bubble(page), "打ち切り")
+        self.assertEqual(t(stop + 4 * 60_000), "touch.return")  # 3分たって触った
+        self.assertEqual(t(stop + 10 * 60_000), "touch.day")  # そのあとは通常
+        # しばらく触らなければ段階は戻る
+        self.assertEqual([t(base + 3_600_000 + i * 300) for i in range(3)][-1], "touch.rapid")
+        self.assertEqual(t(base + 3_600_000 + 20_000), "touch.day")
+
+    def test_touch_place_alternates_with_time_and_hold(self):
+        """場所の印に入れば場所のセリフと時間帯のセリフを交互に。長押しは場所の長押しのセリフ。印の外は時間帯だけ"""
+        init = "localStorage.setItem('db.portrait', JSON.stringify({ w: 300, h: 400, alpha: false, scale: 1, x: 0, y: 0, spots: { head: { x: 0.5, y: 0.1, r: 0.1 } } }));"
+        page = self.scene_page(21, 0, init=init)
+        rect = "{ width: 300, height: 400 }"
+        self.assertEqual(page.evaluate("Touch.partAt(0.52, 0.11, %s)" % rect), "head")
+        self.assertIsNone(page.evaluate("Touch.partAt(0.5, 0.5, %s)" % rect))
+        t = lambda part, hold, ms: page.evaluate("([p, h, ms]) => Touch.touch(p, h, ms)", [part, hold, ms])
+        base = page.evaluate("Date.now()")  # 偽の時計の今（時間帯はこの時刻で決まる）
+        self.assertEqual([t("head", False, base), t("head", False, base + 5000), t("head", False, base + 10000)], ["touch.head", "touch.night", "touch.head"])  # 夕方は夜の文
+        self.assertEqual(t("head", True, base + 40000), "hold.head")
+        self.assertEqual(self.bubble(page), "頭の長押し")
+        self.assertEqual(t("neck", False, base + 80000), "touch.night")  # 文面のない場所は時間帯のセリフ
+
+    def test_touch_by_tapping_emblem_but_not_parts_or_during_evening_offer(self):
+        """紋章を押すと反応する。セリフの面・記録のボタンの上、夕方の提案中は反応しない"""
+        page = self.scene_page(10, 0)
+        box = page.eval_on_selector("#portrait", "e => { const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }")
+        before = self.bubble(page)
+        page.mouse.click(*box)
+        self.assertEqual(self.bubble(page), "昼のタッチ")
+        page.evaluate("document.getElementById('bubble-text').textContent = 'そのまま'")
+        page.click("#bubble-text")
+        page.click("#records-more")
+        page.click("#records-sheet-close")
+        self.assertEqual(self.bubble(page), "そのまま")
+        page.evaluate("document.getElementById('bubble-choices').hidden = false")
+        page.mouse.click(*box)
+        self.assertEqual(self.bubble(page), "そのまま")
+        page.evaluate("document.getElementById('bubble-choices').hidden = true")
+        page.mouse.move(*box)
+        page.mouse.down()
+        page.clock.run_for(800)
+        page.mouse.up()
+        self.assertEqual(self.bubble(page), "昼のタッチ")  # 場所のない長押しは通常のタッチ
+        self.assertNotEqual(before, None)
+
+    def test_scene_first_launch_only_for_new_users(self):
+        """初回起動（D-083 ③）：記録・日報・タスクがないときだけ、ホームで1回。前から使っている人には出さない"""
+        page = self.scene_page(10, 0)
+        self.assertEqual(self.bubble(page), "初回")
+        page.reload()
+        page.wait_for_function("dialogue !== null")
+        page.wait_for_timeout(200)
+        self.assertNotEqual(self.bubble(page), "初回")
+        page = self.scene_page(10, 0, init=MOOD_NORMAL)
+        self.assertNotEqual(self.bubble(page), "初回")
+
+    def test_scene_care_lines_once_a_day_and_priority(self):
+        """翌日の再訪（疲れた次の日・就寝が遅かった次の日）・疲れた日は1日1回。節目より先。2回目に開くと次の候補（D-083 ④）"""
+        reports = {"2026-11-08": {"mood": "tired", "savedAt": 1}}
+        records = {"2026-11-03": {"wake": {"time": "07:00", "at": 1}}, "2026-11-08": {"sleep": {"time": "01:30", "at": 2}}}
+        init = "localStorage.setItem('db.reports', %s); localStorage.setItem('db.records', %s);" % (json.dumps(json.dumps(reports)), json.dumps(json.dumps(records)))
+        page = self.scene_page(8, 0, init=init)  # 11/3 から使って 11/9 は7日目
+        self.assertEqual(self.bubble(page), "疲れた翌日")
+        opens = []
+        for _ in range(3):
+            page.reload()
+            page.wait_for_function("dialogue !== null")
+            page.wait_for_timeout(150)
+            opens.append(self.bubble(page))
+        self.assertEqual(opens[:2], ["遅寝の翌日", "7日目"])
+        self.assertNotIn(opens[2], ["疲れた翌日", "遅寝の翌日", "7日目"])  # どれも出したので、ふだんの一言
+        tired = "localStorage.setItem('db.reports', JSON.stringify({ '2026-11-09': { mood: 'tired', savedAt: 1 } }));"
+        page = self.scene_page(13, 0, init=tired)
+        self.assertEqual(self.bubble(page), "疲れた日")
+
+    def test_scene_tasks_progress_when_back_home(self):
+        """タスクを完了してホームに戻ると、今日の進み具合（残りあり／今日までの分が全部）。増えていなければ出さない"""
+        tasks = [{"id": "a", "title": "見積もり", "due": "2026-11-09", "done": False, "createdAt": 1},
+                 {"id": "b", "title": "請求書", "due": "2026-11-09", "done": False, "createdAt": 2}]
+        init = "localStorage.setItem('db.tasks', %s);" % json.dumps(json.dumps(tasks)) + MOOD_NORMAL
+        page = self.scene_page(11, 0, init=init)
+        first = self.bubble(page)
+        page.evaluate("location.hash = '#tasks'")
+        page.click("#task-list .task-item[data-id=a] .task-done-btn")
+        page.evaluate("location.hash = '#home'")
+        self.assertEqual(self.bubble(page), "1つ片づいた。残り1")
+        page.evaluate("location.hash = '#tasks'")
+        page.evaluate("location.hash = '#home'")
+        self.assertEqual(self.bubble(page), "1つ片づいた。残り1")  # 増えていなければ変えない
+        page.evaluate("location.hash = '#tasks'")
+        page.click("#task-list .task-item[data-id=b] .task-done-btn")
+        page.evaluate("location.hash = '#home'")
+        self.assertEqual(self.bubble(page), "全部片づいた")
+        self.assertNotEqual(first, None)
+
+    def test_scene_rare_once_a_day(self):
+        """レア：開いたときに低い確率で、1日1回まで"""
+        init = MOOD_NORMAL + "localStorage.setItem('db.tasks', '[]'); Math.random = () => 0;"
+        page = self.scene_page(11, 0, init=init + "localStorage.setItem('db.records', JSON.stringify({ '2026-11-08': { wake: { time: '07:00', at: 1 } } }));")
+        self.assertEqual(self.bubble(page), "レア")
+        page.reload()
+        page.wait_for_function("dialogue !== null")
+        page.wait_for_timeout(150)
+        self.assertNotEqual(self.bubble(page), "レア")
+
     def test_notification_finds_same_line_when_order_changed(self):
         """通知の URL の h（文の印）で、セリフ集の並びが変わっても通知と同じ文を出す。見つからなければ選び直す（D-081）"""
         lines = ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"]

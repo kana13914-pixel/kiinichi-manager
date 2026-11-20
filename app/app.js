@@ -188,9 +188,9 @@ function showLine(key, { index, hash, vars, extra } = {}) {
 
 // 通知や記録の反応がないときの時間帯の一言（D-019 Q4 = 出す）。出せなければ「…」（沈黙）
 function showIdle(now = new Date()) {
-  // 記録のくせに合わせたセリフ（同じ食事の記録なしが3日続いた など。D-060 ⑩）。その日1回だけ、時間帯の一言の代わりに
-  const pattern = typeof Stats !== 'undefined' ? Stats.patternLine(now) : null;
-  if (pattern && showLine(pattern)) { Stats.markShown(pattern, now); return; }
+  // 初回起動・翌日の再訪・疲れた日・記録のくせ（D-060 ⑩）・節目・タスクの進み具合・レア（D-083。touch.js の Scenes）。
+  // どれも出なければ時間帯の一言
+  if (typeof Scenes !== 'undefined' && Scenes.show(now)) return;
   if (showLine('idle_greeting.' + periodOf(now))) return;
   document.getElementById('bubble-text').textContent = '…';
 }
