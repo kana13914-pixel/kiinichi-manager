@@ -100,17 +100,38 @@
       <!-- 立ち絵の位置と大きさ・部品の透け具合を、ホームの画面そのものの上で合わせる（D-067）。設定の「立ち絵」から開く -->
       <div id="portrait-editor" class="portrait-editor" hidden>
         <div id="portrait-drag" class="portrait-drag" aria-hidden="true"></div>
+        <!-- 触る場所の印（D-083 ②）。「触る場所」を選んでいる間だけ、画像の上に出す -->
+        <div id="portrait-spot-layer" class="portrait-spot-layer" aria-hidden="true" hidden></div>
         <button id="portrait-editor-show" type="button" class="cut-btn quiet chip portrait-editor-show" hidden>調整に戻る</button>
+        <p id="portrait-spot-hint" class="portrait-spot-hint" role="status" hidden></p>
         <section id="portrait-editor-panel" class="portrait-editor-panel" aria-labelledby="portrait-editor-title">
           <div class="sheet-head">
-            <h2 id="portrait-editor-title">立ち絵の位置と大きさ</h2>
+            <h2 id="portrait-editor-title">立ち絵を合わせる</h2>
             <button id="portrait-editor-hide" type="button" class="cut-btn quiet chip">全体を見る</button>
           </div>
-          <p class="note">画面を指で動かして位置を合わせます。「全体を見る」で、この板を隠して確かめられます。</p>
-          <label for="portrait-scale">大きさ <span id="portrait-scale-value">100%</span></label>
-          <input id="portrait-scale" class="range" type="range" min="50" max="300" step="5" value="100">
-          <label for="portrait-clear">部品の透け具合 <span id="portrait-clear-value">0%</span></label>
-          <input id="portrait-clear" class="range" type="range" min="0" max="90" step="5" value="0">
+          <div class="schedule-modes portrait-modes" role="group" aria-label="合わせるもの">
+            <button id="portrait-mode-place" type="button" class="cut-btn quiet chip" aria-pressed="true">位置と大きさ</button>
+            <button id="portrait-mode-spots" type="button" class="cut-btn quiet chip" aria-pressed="false">触る場所</button>
+          </div>
+          <div id="portrait-place-panel">
+            <p class="note">画面を指で動かして位置を合わせます。「全体を見る」で、この板を隠して確かめられます。</p>
+            <label for="portrait-scale">大きさ <span id="portrait-scale-value">100%</span></label>
+            <input id="portrait-scale" class="range" type="range" min="50" max="300" step="5" value="100">
+            <label for="portrait-clear">部品の透け具合 <span id="portrait-clear-value">0%</span></label>
+            <input id="portrait-clear" class="range" type="range" min="0" max="90" step="5" value="0">
+          </div>
+          <div id="portrait-spots-panel" hidden>
+            <p class="note">部位を選んで画像を押すと印を置きます（手・足は2か所まで）。板の下は「全体を見る」で。</p>
+            <div id="portrait-spot-parts" class="spot-parts" role="group" aria-label="部位"></div>
+            <div class="spot-sizes" role="group" aria-label="印の大きさ">
+              <span id="portrait-spot-sizes" class="spot-size-chips">
+                <button type="button" class="cut-btn quiet chip" data-size="s" aria-pressed="false" aria-label="印の大きさ 小">小</button>
+                <button type="button" class="cut-btn quiet chip" data-size="m" aria-pressed="true" aria-label="印の大きさ 中">中</button>
+                <button type="button" class="cut-btn quiet chip" data-size="l" aria-pressed="false" aria-label="印の大きさ 大">大</button>
+              </span>
+              <button id="portrait-spot-clear" type="button" class="cut-btn quiet chip" aria-label="この部位の印を消す">消す</button>
+            </div>
+          </div>
           <div class="portrait-editor-acts">
             <button id="portrait-cancel" type="button" class="cut-btn quiet">やめる</button>
             <button id="portrait-center" type="button" class="cut-btn quiet">最初の位置</button>

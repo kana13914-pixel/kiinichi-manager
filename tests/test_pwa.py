@@ -2876,6 +2876,61 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.evaluate("window.__puts"), 1)
         page.wait_for_function("document.getElementById('portrait-photo').naturalWidth > 0", timeout=3_000)
 
+    def test_portrait_touch_spots_placed_saved_and_hit(self):
+        """触る場所の印（D-083 ②）：部位を選んで画像を押すと印。手は2つまで（3つ目は近いほうを置き直す）。大きさ・消す。保存して、ホームでその所を触るとその部位"""
+        page = self.portrait_page()
+        self.choose_photo(page, make_png(800, 1200, (40, 120, 90, 255)))
+        self.assertTrue(page.is_hidden("#portrait-spot-layer"))
+        page.click("#portrait-mode-spots")
+        self.assertTrue(page.is_visible("#portrait-spots-panel"))
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('#view-home .dialogue')).visibility"), "hidden")  # 部品を隠して画像だけ
+        page.click("#portrait-editor-hide")
+        self.assertEqual(page.text_content("#portrait-spot-hint"), "「頭」の印を置きます")
+        page.click("#portrait-editor-show")
+        self.assertTrue(page.is_hidden("#portrait-spot-hint"))
+        sizes = page.eval_on_selector_all("#portrait-spots-panel button", "els => els.map(e => [Math.round(e.getBoundingClientRect().width), Math.round(e.getBoundingClientRect().height)])")
+        self.assertTrue(all(w >= 44 and h >= 44 for w, h in sizes), sizes)
+        self.assertTrue(page.is_hidden("#portrait-place-panel"))
+        self.assertEqual(page.eval_on_selector_all("#portrait-spot-parts [data-part]", "els => els.map(e => e.textContent)"), ["頭", "顔", "首", "手", "体", "足"])
+        r = page.eval_on_selector("#portrait-photo", "e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; }")
+        at = lambda fx, fy: (r[0] + fx * r[2], r[1] + fy * r[3])
+        page.mouse.click(*at(0.5, 0.12))  # 頭（はじめに選ばれている）
+        page.click("#portrait-spot-parts [data-part=hand]")
+        page.mouse.click(*at(0.3, 0.3))
+        page.mouse.click(*at(0.7, 0.3))
+        page.mouse.click(*at(0.72, 0.33))  # 3つ目は近いほう（右手）を置き直す
+        marks = page.eval_on_selector_all(".portrait-spot", "els => els.map(e => [e.dataset.part, e.classList.contains('on')])")
+        self.assertEqual(marks, [["head", False], ["hand", True], ["hand", True]])
+        page.click("#portrait-spot-sizes [data-size=l]")
+        page.click("#portrait-spot-parts [data-part=foot]")
+        self.assertTrue(page.is_disabled("#portrait-spot-clear"))
+        page.mouse.click(*at(0.5, 0.2))
+        page.click("#portrait-spot-clear")  # 足だけ消える
+        self.assertEqual(len(page.query_selector_all(".portrait-spot[data-part=foot]")), 0)
+        page.click("#portrait-save")
+        page.wait_for_selector("#portrait-editor", state="hidden")
+        saved = json.loads(page.evaluate("localStorage.getItem('db.portrait')"))["spots"]
+        self.assertEqual(sorted(saved), ["hand", "head"])
+        self.assertAlmostEqual(saved["head"][0]["x"], 0.5, places=2)
+        self.assertEqual([round(s["x"], 2) for s in saved["hand"]], [0.3, 0.72])
+        self.assertEqual({s["r"] for s in saved["hand"]}, {0.13})
+        # ホームでその所を触ると、その部位として受け取る
+        page.wait_for_function("document.getElementById('portrait-photo').naturalWidth > 0", timeout=3_000)
+        page.evaluate("() => { window.__keys = []; const show = showLine; showLine = (k, o) => { window.__keys.push(k); return show(k, o); }; }")
+        r = page.eval_on_selector("#portrait-photo", "e => { const r = e.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; }")
+        page.mouse.click(*at(0.5, 0.12))
+        self.assertEqual(page.evaluate("window.__keys[0]"), "touch.head")
+        # 印は「位置と大きさ」を開き直しても残り、画像を選び直すと消える
+        page.evaluate("location.hash = '#settings'")
+        page.click("#portrait-adjust")
+        page.click("#portrait-mode-spots")
+        self.assertEqual(len(page.query_selector_all(".portrait-spot")), 3)
+        page.click("#portrait-cancel")
+        self.assertEqual(page.evaluate("getComputedStyle(document.querySelector('#view-home .dialogue')).visibility"), "visible")  # やめると部品が戻る
+        self.choose_photo(page, make_png(600, 600, (200, 120, 90, 255)))
+        page.click("#portrait-mode-spots")
+        self.assertEqual(len(page.query_selector_all(".portrait-spot")), 0)
+
     def test_portrait_broken_image_falls_back_to_emblem(self):
         """保存した画像が読めないときは「？」のままにせず、紋章に戻して選び直しを頼む"""
         page = self.portrait_page()

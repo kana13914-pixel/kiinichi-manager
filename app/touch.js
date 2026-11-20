@@ -76,20 +76,19 @@ const Touch = (() => {
     const spots = Portrait.spots();
     let best = null;
     for (const part of PARTS) {
-      const s = spots[part];
-      if (!s) continue;
-      const dx = (fx - s.x) * rect.width;
-      const dy = (fy - s.y) * rect.height;
-      const d = Math.hypot(dx, dy);
-      if (d <= s.r * rect.width && (!best || d < best.d)) best = { part, d };
+      for (const s of [].concat(spots[part] || [])) { // 手と足は2つまで
+        const d = Math.hypot((fx - s.x) * rect.width, (fy - s.y) * rect.height);
+        if (d <= s.r * rect.width && (!best || d < best.d)) best = { part, d };
+      }
     }
     return best ? best.part : null;
   }
-  // 触ってよい所か。部品の上・夕方の提案中・立ち絵の外は null。立ち絵の上なら { part }
+  // 触ってよい所か。部品（ボタン・セリフの面・次の予定・記録）の上・夕方の提案中・立ち絵の外は null。立ち絵の上なら { part }。
+  // 時計の文字の上は触ってよい（全画面の立ち絵では、頭が時計の後ろに来ることが多いため）
   function hit(e) {
     if (document.body.dataset.state !== 'ready' || $('view-home').hidden) return null;
     const t = e.target;
-    if (!(t instanceof Element) || t.closest('button, a, input, textarea, select, label, dialog, .home-header, .dialogue, .next-strip, .record-dock, .toast, .portrait-editor')) return null;
+    if (!(t instanceof Element) || t.closest('button, a, input, textarea, select, label, dialog, .dialogue, .next-strip, .record-dock, .toast, .portrait-editor')) return null;
     if (!$('bubble-choices').hidden || !$('bubble-mood').hidden) return null; // 夕方の提案中
     const x = e.clientX, y = e.clientY;
     if (!$('portrait-layer').hidden) {

@@ -176,28 +176,115 @@ const Portrait = (() => {
     $('portrait-reset').hidden = !has;
   }
 
+  // ---------- 触る場所の印（D-083 ②） ----------
+  // { head: [ { x, y, r } ], hand: [ …2つまで ], … }。x・y は画像の上の位置（0〜1）、r は画像の幅に対する半径
+  const SPOT_PARTS = [['head', '頭'], ['face', '顔'], ['neck', '首'], ['hand', '手'], ['body', '体'], ['foot', '足']];
+  const SPOT_MAX = { hand: 2, foot: 2 }; // ほかは1つ
+  const SPOT_R = { s: 0.05, m: 0.08, l: 0.13 };
+  const SPOT_DEFAULT = { head: 'm', face: 's', neck: 's', hand: 's', body: 'l', foot: 's' };
+  function normalizeSpots(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    for (const [part] of SPOT_PARTS) {
+      const list = [].concat(raw[part] || []).filter((s) => s && [s.x, s.y, s.r].every(Number.isFinite) && s.r > 0)
+        .map((s) => ({ x: clamp(s.x, 0, 1), y: clamp(s.y, 0, 1), r: clamp(s.r, 0.01, 0.5) }));
+      if (list.length) out[part] = list.slice(0, SPOT_MAX[part] || 1);
+    }
+    return out;
+  }
+  function spots() { const c = conf(); return normalizeSpots(c && c.spots); }
+  const sizeOf = (r) => Object.keys(SPOT_R).reduce((a, k) => (Math.abs(SPOT_R[k] - r) < Math.abs(SPOT_R[a] - r) ? k : a), 'm');
+
   // ---------- ホームの上で合わせる ----------
-  let draft = null; // 合わせている途中 { blob, w, h, alpha, scale, x, y, ui, url }
+  let draft = null; // 合わせている途中 { blob, w, h, alpha, scale, x, y, ui, spots, url }
+  let editMode = 'place'; // 'place'（位置と大きさ）／'spots'（触る場所）
+  let spotPart = 'head';
+  function renderSpots() {
+    const layer = $('portrait-spot-layer');
+    layer.hidden = !draft || editMode !== 'spots';
+    if (layer.hidden) { layer.replaceChildren(); return; }
+    const r = $('portrait-photo').getBoundingClientRect();
+    const base = $('portrait-editor').getBoundingClientRect();
+    const marks = [];
+    for (const [part, label] of SPOT_PARTS) {
+      for (const s of draft.spots[part] || []) {
+        const el = document.createElement('span');
+        el.className = 'portrait-spot' + (part === spotPart ? ' on' : '');
+        el.dataset.part = part;
+        const d = 2 * s.r * r.width;
+        el.style.width = `${d}px`;
+        el.style.height = `${d}px`;
+        el.style.left = `${r.left - base.left + s.x * r.width}px`;
+        el.style.top = `${r.top - base.top + s.y * r.height}px`;
+        el.textContent = label;
+        marks.push(el);
+      }
+    }
+    layer.replaceChildren(...marks);
+    for (const b of document.querySelectorAll('#portrait-spot-parts [data-part]')) b.setAttribute('aria-pressed', String(b.dataset.part === spotPart));
+    const list = draft.spots[spotPart] || [];
+    const size = list.length ? sizeOf(list[0].r) : SPOT_DEFAULT[spotPart];
+    for (const b of document.querySelectorAll('#portrait-spot-sizes [data-size]')) b.setAttribute('aria-pressed', String(b.dataset.size === size));
+    $('portrait-spot-clear').disabled = !list.length;
+    renderSpotHint();
+  }
+  // 「全体を見る」で板を隠しているとき、どの部位の印を置くかを上に出す
+  function renderSpotHint() {
+    const hint = $('portrait-spot-hint');
+    hint.hidden = !draft || editMode !== 'spots' || !$('portrait-editor-panel').hidden;
+    if (!hint.hidden) hint.textContent = `「${SPOT_PARTS.find(([p]) => p === spotPart)[1]}」の印を置きます`;
+  }
+  function setEditMode(mode) {
+    editMode = mode;
+    document.body.classList.toggle('portrait-spots', mode === 'spots');
+    $('portrait-mode-place').setAttribute('aria-pressed', String(mode === 'place'));
+    $('portrait-mode-spots').setAttribute('aria-pressed', String(mode === 'spots'));
+    $('portrait-place-panel').hidden = mode !== 'place';
+    $('portrait-spots-panel').hidden = mode !== 'spots';
+    $('portrait-editor-status').textContent = '';
+    renderSpots();
+    renderSpotHint();
+  }
+  // 押した所に、選んでいる部位の印を置く。1つまでの部位は置き直し、2つまでの部位は足すか近いほうを置き直す
+  function placeSpot(clientX, clientY) {
+    const r = $('portrait-photo').getBoundingClientRect();
+    const x = (clientX - r.left) / r.width, y = (clientY - r.top) / r.height;
+    if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) { $('portrait-editor-status').textContent = '画像の上を押してください'; return; }
+    $('portrait-editor-status').textContent = '';
+    const list = draft.spots[spotPart] || [];
+    const rr = list.length ? list[0].r : SPOT_R[SPOT_DEFAULT[spotPart]];
+    const mark = { x, y, r: rr };
+    const max = SPOT_MAX[spotPart] || 1;
+    if (list.length < max) list.push(mark);
+    else {
+      const near = list.reduce((a, s, i) => (Math.hypot(s.x - x, s.y - y) < Math.hypot(list[a].x - x, list[a].y - y) ? i : a), 0);
+      list[near] = mark;
+    }
+    draft.spots[spotPart] = list;
+    renderSpots();
+  }
   function renderDraft() {
     showPhoto(draft.url, draft);
     $('portrait-scale').value = String(Math.round(draft.scale * 100));
     $('portrait-scale-value').textContent = `${Math.round(draft.scale * 100)}%`;
     $('portrait-clear').value = String(Math.round(draft.ui));
     $('portrait-clear-value').textContent = `${Math.round(draft.ui)}%`;
+    renderSpots(); // 印は画像に付いているので、位置と大きさを変えると一緒に動く
   }
   function startEdit(d) {
     if (draft && draft.url) URL.revokeObjectURL(draft.url);
-    draft = { ui: 0, ...d, url: URL.createObjectURL(d.blob) };
+    draft = { ui: 0, ...d, spots: d.fresh ? {} : normalizeSpots(d.spots), url: URL.createObjectURL(d.blob) }; // 画像を選び直したら印は消す（絵が違うため）
     if (location.hash !== '#home') location.hash = '#home';
     document.body.classList.add('portrait-edit'); // 部品を押せないようにして、画面全体で絵を動かせるようにする
     $('portrait-editor').hidden = false;
     $('portrait-editor-panel').hidden = false;
     $('portrait-editor-show').hidden = true;
     $('portrait-editor-status').textContent = '';
+    setEditMode('place');
     renderDraft();
   }
   function endEdit() {
-    document.body.classList.remove('portrait-edit');
+    document.body.classList.remove('portrait-edit', 'portrait-spots');
     $('portrait-editor').hidden = true;
     if (draft && draft.url) URL.revokeObjectURL(draft.url);
     draft = null;
@@ -244,20 +331,50 @@ const Portrait = (() => {
       Object.assign(draft, defaults(draft));
       renderDraft();
     });
+    // 位置と大きさ／触る場所（D-083 ②）
+    $('portrait-mode-place').addEventListener('click', () => setEditMode('place'));
+    $('portrait-mode-spots').addEventListener('click', () => setEditMode('spots'));
+    $('portrait-spot-parts').replaceChildren(...SPOT_PARTS.map(([part, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cut-btn quiet chip';
+      b.dataset.part = part;
+      b.textContent = label;
+      b.setAttribute('aria-pressed', String(part === spotPart));
+      b.addEventListener('click', () => { spotPart = part; renderSpots(); });
+      return b;
+    }));
+    for (const b of document.querySelectorAll('#portrait-spot-sizes [data-size]')) {
+      b.addEventListener('click', () => {
+        if (!draft) return;
+        const list = draft.spots[spotPart] || [];
+        if (list.length) for (const s of list) s.r = SPOT_R[b.dataset.size];
+        else SPOT_DEFAULT[spotPart] = b.dataset.size; // まだ印がなければ、次に置く印の大きさ
+        renderSpots();
+      });
+    }
+    $('portrait-spot-clear').addEventListener('click', () => {
+      if (!draft) return;
+      delete draft.spots[spotPart];
+      renderSpots();
+    });
     // 操作の板を隠して、画面全体の見えかたを確かめる
     $('portrait-editor-hide').addEventListener('click', () => {
       $('portrait-editor-panel').hidden = true;
       $('portrait-editor-show').hidden = false;
+      renderSpotHint();
     });
     $('portrait-editor-show').addEventListener('click', () => {
       $('portrait-editor-panel').hidden = false;
       $('portrait-editor-show').hidden = true;
+      renderSpotHint();
     });
     // 指で動かして位置を合わせる（画面のどこを触ってもよい）
     const pad = $('portrait-drag');
     let drag = null;
     pad.addEventListener('pointerdown', (e) => {
       if (!draft) return;
+      if (editMode === 'spots') { placeSpot(e.clientX, e.clientY); e.preventDefault(); return; } // 触る場所：押した所に印
       drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, x: draft.x, y: draft.y };
       pad.setPointerCapture(e.pointerId);
       e.preventDefault();
@@ -287,6 +404,7 @@ const Portrait = (() => {
       const r = (v) => Math.round(v * 10) / 10;
       const ok = Store.write(DB.portrait, {
         w: draft.w, h: draft.h, alpha: draft.alpha, scale: r(draft.scale), x: r(draft.x), y: r(draft.y), ui: Math.round(draft.ui), at: Date.now(),
+        spots: Object.fromEntries(Object.entries(draft.spots).map(([k, list]) => [k, list.map((s) => ({ x: Math.round(s.x * 1000) / 1000, y: Math.round(s.y * 1000) / 1000, r: s.r }))])),
       });
       if (!ok) { $('portrait-editor-status').textContent = SAVE_FAILED; return; }
       endEdit();
@@ -310,10 +428,5 @@ const Portrait = (() => {
   bind();
   renderSettings();
   renderHome();
-  // 触る場所の印（D-083 ②）：{ head: { x, y, r }, … }。x・y は画像の上の位置（0〜1）、r は画像の幅に対する半径
-  function spots() {
-    const c = conf();
-    return c && c.spots && typeof c.spots === 'object' ? c.spots : {};
-  }
   return { renderHome, baseSize, defaults, spots };
 })();
