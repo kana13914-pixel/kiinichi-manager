@@ -3707,7 +3707,8 @@ class PwaTest(unittest.TestCase):
         self.assertNotIn("break", st["days"]["2026-11-08"]["missed"])  # 休憩は数えない
         # 声掛けの数：取り消されないまま時刻を過ぎた分（すり合わせのときに数える）
         page.evaluate("localStorage.setItem('phase0.appToken', 'tok')")
-        page.route(self.WORKER + "/**", lambda r: r.fulfill(status=200, content_type="application/json", headers=self.CORS, body='{"ok":true,"subscribed":true}') if r.request.method != "OPTIONS" else r.fulfill(status=204, headers=self.CORS))
+        # 画面の route は Service Worker が動き出すと素通りすることがあるので、ブラウザ全体（context）で受ける
+        page.context.route(self.WORKER + "/**", lambda r: r.fulfill(status=200, content_type="application/json", headers=self.CORS, body='{"ok":true,"subscribed":true}') if r.request.method != "OPTIONS" else r.fulfill(status=204, headers=self.CORS))
         page.evaluate("Voice.sync()")
         page.wait_for_function("JSON.parse(localStorage.getItem('db.stats')).days['2026-11-09']", timeout=3_000)
         st = json.loads(page.evaluate("localStorage.getItem('db.stats')"))
