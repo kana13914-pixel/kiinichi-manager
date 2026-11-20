@@ -61,7 +61,7 @@ const DB = {
   timer: 'db.timer',             // { custom: [ { id, name, minutes } ], builtin, running, done, cancelPending }
   routineOverrides: 'db.routineOverrides', // { 'YYYY-MM-DD': { 項目: 'HH:MM' か null } } … 毎日の時刻をその日だけ変えたもの（D-060 ⑭）
   routine: 'db.routine',         // { weekday: { wake: '07:00', … }, holiday: { … }, holidays: [0, 6], updatedAt } … 毎日の時刻（D-048）
-  prefs: 'db.prefs',             // { screenLines: true, voice: true, weekly: true, taskFolded: [] } … 端末ごとの好み（D-047, D-049）
+  prefs: 'db.prefs',             // { screenLines: true, voice: true, weekly: true, taskFolded: [], tone: 'client' } … 端末ごとの好み（D-047, D-049, D-082）
   sync: 'db.sync',               // { url, token, lastAt, lastSig, dirty, error } … スプレッドシートへの控えの送り先と状態（D-050。この端末だけ）
   calendar: 'db.calendar',       // { fetchedAt, from, to, events: [ { title, start, end, allDay } ], error } … カレンダーの予定の控え（D-053。この端末だけ）
   calendarError: 'db.calendarError', // 一度も取れていないときの理由
@@ -112,7 +112,7 @@ function migrateData() {
 migrateData();
 
 // ---------- 端末ごとの好み（D-047）。決まっていないものは既定値 ----------
-const PREF_DEFAULTS = { screenLines: true, voice: true, weekly: true, taskFolded: [] }; // taskFolded：タスクのたたんだ優先度（D-070）
+const PREF_DEFAULTS = { screenLines: true, voice: true, weekly: true, taskFolded: [], tone: 'client' }; // taskFolded：タスクのたたんだ優先度（D-070）。tone：話し方（D-082）
 const Prefs = {
   get(name) {
     const p = Store.read(DB.prefs, {});

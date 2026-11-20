@@ -507,6 +507,22 @@ class PwaTest(unittest.TestCase):
         self.assertIn(page.text_content("#bubble-text"),
                       ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"])
 
+    def test_tone_picks_own_lines_or_falls_back_to_client(self):
+        """話し方（D-082）：友人版・甘やかし版の文があればそれ、なければ依頼人版の文。既定は依頼人版"""
+        page = self.clock_page(9, 3)
+        self.assertEqual(page.evaluate("currentTone()"), "client")
+        page.evaluate("""() => { dialogue = { t: { conditions: [
+          { id: 'a', lines: ['依頼人'], lines_friend: ['友人'], lines_sweet: ['甘やかし'] },
+          { id: 'b', lines: ['依頼人だけ'] } ] } }; }""")
+        picks = lambda: page.evaluate("[pickLine('t.a').text, pickLine('t.b').text]")
+        self.assertEqual(picks(), ["依頼人", "依頼人だけ"])
+        page.evaluate("Prefs.set('tone', 'friend')")
+        self.assertEqual(picks(), ["友人", "依頼人だけ"])
+        page.evaluate("Prefs.set('tone', 'sweet')")
+        self.assertEqual(picks(), ["甘やかし", "依頼人だけ"])
+        page.evaluate("Prefs.set('tone', 'boss')")  # 知らない値は依頼人版
+        self.assertEqual(picks(), ["依頼人", "依頼人だけ"])
+
     def test_notification_finds_same_line_when_order_changed(self):
         """通知の URL の h（文の印）で、セリフ集の並びが変わっても通知と同じ文を出す。見つからなければ選び直す（D-081）"""
         lines = ["わかった。何かあったら声をかけてくれ。", "了解。進捗、気になったらこっちから聞く。"]

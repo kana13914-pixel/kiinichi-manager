@@ -25,6 +25,16 @@ class DialogueTest(unittest.TestCase):
             for cond in body["conditions"]:
                 self.assertTrue(cond["lines"], f"{trigger}/{cond['id']} にセリフがない")
 
+    def test_tone_lines_are_known_and_not_empty(self):
+        """話し方ごとの文（D-082）は lines_friend・lines_sweet だけ。書くなら空にしない"""
+        data = json.loads(build_dialogue.build())
+        for trigger, body in data.items():
+            for cond in body.get("conditions", []):
+                for k, v in cond.items():
+                    if k.startswith("lines_"):
+                        self.assertIn(k, ("lines_friend", "lines_sweet"), f"{trigger}/{cond['id']} の {k}")
+                        self.assertTrue(isinstance(v, list) and v and all(isinstance(x, str) and x for x in v), f"{trigger}/{cond['id']} の {k}")
+
 
 if __name__ == "__main__":
     unittest.main()

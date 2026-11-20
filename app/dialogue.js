@@ -4,11 +4,21 @@ let dialogue = null;
 const dialogueReady = fetch('data/dialogue.json').then((r) => r.json()).then((d) => { dialogue = d; }).catch(() => {});
 const lastLineIndex = {}; // キーごとに直前に出した候補の番号（C1-02）
 
-function candidates(key) {
+// 話し方（D-082）：依頼人版 client（既定）・友人版 friend・甘やかし版 sweet。設定で選び、この端末に覚える（db.prefs.tone）
+const TONES = ['client', 'friend', 'sweet'];
+function currentTone() {
+  const t = typeof Prefs !== 'undefined' ? Prefs.get('tone') : 'client';
+  return TONES.includes(t) ? t : 'client';
+}
+// その場面の候補。今の話し方の文（lines_friend・lines_sweet）があればそれ、なければ依頼人版の文（lines）
+function candidates(key, tone = currentTone()) {
   if (!dialogue || !key) return null;
   const [trigger, condId] = key.split('.');
   const cond = dialogue[trigger] && (dialogue[trigger].conditions || []).find((c) => c.id === condId);
-  return cond && cond.lines && cond.lines.length ? cond.lines : null;
+  if (!cond) return null;
+  const own = tone !== 'client' ? cond['lines_' + tone] : null;
+  const lines = Array.isArray(own) && own.length ? own : cond.lines;
+  return Array.isArray(lines) && lines.length ? lines : null;
 }
 
 // "morning_wake.on_time" のようなキーからセリフを1つ選び、{ text, index } を返す
