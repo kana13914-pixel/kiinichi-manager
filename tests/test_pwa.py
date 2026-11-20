@@ -3045,7 +3045,7 @@ class PwaTest(unittest.TestCase):
     def test_settings_daily_items_then_system_screen(self):
         page = self.clock_page(10, 0, "#settings")
         cards = page.eval_on_selector_all("#view-settings .card h2", "els => els.map(e => e.textContent)")
-        self.assertEqual(cards, ["声掛けの通知", "週次コメント", "キィニチの一言", "立ち絵"])  # 日常の設定だけ（毎日の時刻は予定の画面へ。D-060 ⑭。立ち絵は D-066）
+        self.assertEqual(cards, ["キィニチの話し方", "声掛けの通知", "週次コメント", "キィニチの一言", "立ち絵"])  # 日常の設定だけ（毎日の時刻は予定の画面へ。D-060 ⑭。立ち絵は D-066。話し方は D-082）
         self.assertNotIn("移りました", page.text_content("#view-settings"))  # 移したときのお知らせは消した（D-064 ⑨）
         link = page.eval_on_selector("#view-settings .sub-link", "e => [e.textContent, e.getBoundingClientRect().top > document.querySelector('#view-settings .card:last-of-type').getBoundingClientRect().bottom]")
         self.assertEqual(link, ["仕様関連›", True])  # いちばん下
