@@ -558,6 +558,18 @@ class PwaTest(unittest.TestCase):
         page.wait_for_function("dialogue !== null")
         self.assertEqual(page.get_attribute("#view-settings [data-tone=sweet]", "aria-pressed"), "true")
 
+    def test_tone_change_updates_other_screens_without_reopen(self):
+        """話し方を変えたら、ホーム以外の画面の一言も開き直さずに今の話し方になる（D-090）"""
+        page = self.tasks_page()
+        page.wait_for_function("document.getElementById('tasks-say-line').textContent !== '…'", timeout=3_000)
+        key = page.evaluate("Object.keys(dialogue).find((k) => document.getElementById('tasks-say-line').textContent && dialogue[k].conditions.some((c) => c.lines.includes(document.getElementById('tasks-say-line').textContent)))")
+        self.assertTrue(key)
+        page.evaluate("""(k) => { for (const c of dialogue[k].conditions) { c.lines_friend = ['友人の一言']; } }""", key)
+        page.evaluate("location.hash = '#settings'")
+        page.click("#view-settings [data-tone=friend]")
+        page.evaluate("location.hash = '#tasks'")
+        page.wait_for_function("document.getElementById('tasks-say-line').textContent === '友人の一言'", timeout=3_000)
+
     # ---------- 触ったときの反応・開いたときの場面（D-083）。文面はまだないので、テスト用のセリフを足して確かめる ----------
     SCENE_LINES = {
         "touch": ["rapid:連続", "warn:注意", "after_warn:注意後", "stop:打ち切り", "return:再訪", "morning:朝のタッチ", "day:昼のタッチ", "night:夜のタッチ", "head:頭"],
@@ -3561,9 +3573,8 @@ class PwaTest(unittest.TestCase):
     def test_task_to_report_on_complete_and_undo(self):
         page = self.tasks_page(hour=10)
         page.click(ADD_NONE)
-        self.assertEqual(page.get_attribute("#task-report", "aria-checked"), "false")  # 作るたびにオフから
+        self.assertEqual(page.get_attribute("#task-report", "aria-checked"), "true")  # 作るたびにオンから（D-091）
         page.fill("#task-title", "見積もりを送る")
-        page.click("#task-report")
         page.click("#task-submit")
         self.assertIn("完了したら日報へ", page.text_content("#task-list"))
         self.assertTrue(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["toReport"])

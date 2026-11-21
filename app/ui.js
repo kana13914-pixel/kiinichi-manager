@@ -58,6 +58,8 @@ function makeToast(el) {
 function makeSay(lineEl) {
   let shown = null;
   let reacting = false;
+  // 話し方を変えたら、次に画面を描くときに今の話し方で選び直す（開き直さなくても切り替わる。D-090）
+  window.addEventListener('tonechange', () => { shown = null; reacting = false; });
   const say = (key) => {
     if (key === shown) return; // 同じ状況なら選び直さない（反応を出していれば、それを残す）
     shown = key;
