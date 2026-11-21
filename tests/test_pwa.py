@@ -628,7 +628,12 @@ class PwaTest(unittest.TestCase):
         s = next(now + 300 * i for i in range(12) if t(now + 300 * i) == "touch.stop")
         page.reload()
         page.wait_for_function("dialogue !== null")
-        self.assertIsNone(t(s + 2 * 60_000))  # 開き直しても、まだ黙っている
+        page.wait_for_timeout(200)
+        self.assertEqual(self.bubble(page), "打ち切り")  # 開き直しても、黙っている間は打ち切りの文（D-089）
+        page.evaluate("location.hash = '#tasks'")
+        page.evaluate("location.hash = '#home'")
+        self.assertEqual(self.bubble(page), "打ち切り")  # ほかの画面から戻っても
+        self.assertIsNone(t(s + 2 * 60_000))  # まだ黙っている
         self.assertEqual(t(s + 6 * 60_000), "touch.return")
 
     def test_touch_place_alternates_with_time_and_hold(self):

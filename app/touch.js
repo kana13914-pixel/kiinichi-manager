@@ -31,13 +31,15 @@ const Touch = (() => {
   let stoppedAt = 0;
   let muteLevel = 0;    // 続けて打ち切りになった回数（黙る時間を延ばす）
   let lastAt = 0;       // 最後に触った時刻
+  let stopIndex = null; // 打ち切りで出した文の番号（黙っている間、開き直しても同じ文を出す。D-089）
   // 打ち切りの黙る時間は、アプリを閉じても覚えておく（開き直しで5分に戻らないように。D-088）
   (() => {
     const s = Store.read(DB.touch, {}) || {};
     mutedUntil = Number(s.mutedUntil) || 0; stoppedAt = Number(s.stoppedAt) || 0;
     muteLevel = Number(s.muteLevel) || 0; lastAt = Number(s.lastAt) || 0;
+    stopIndex = Number.isInteger(s.stopIndex) ? s.stopIndex : null;
   })();
-  const remember = () => Store.write(DB.touch, { mutedUntil, stoppedAt, muteLevel, lastAt });
+  const remember = () => Store.write(DB.touch, { mutedUntil, stoppedAt, muteLevel, lastAt, stopIndex });
   let placeFirst = true; // 通常タッチで、場所のセリフを先に出すか（交互）
 
   const say = (key, vars) => showLine(key, { vars });
@@ -88,7 +90,15 @@ const Touch = (() => {
       muteLevel += 1;
       stoppedAt = now; taps = []; stage = -1;
     }
-    return say('touch.' + name) ? 'touch.' + name : null;
+    const said = say('touch.' + name);
+    if (name === 'stop') stopIndex = said ? lastLineIndex['touch.stop'] : null;
+    return said ? 'touch.' + name : null;
+  }
+  // 黙っている間（打ち切りから5分など）なら、打ち切りの文をもう一度出して true。開き直し・裏から戻る・ホームに戻ったときに、
+  // ほかのどの一言よりも先に呼ぶ（D-089）
+  function showMuted(now = Date.now()) {
+    if (now >= mutedUntil) return false;
+    return showLine('touch.stop', { index: stopIndex === null ? undefined : stopIndex });
   }
 
   // ---------- どこを触ったか ----------
@@ -144,7 +154,7 @@ const Touch = (() => {
   // 長押しで文字の選択や画像の保存の一覧が出ないように（iPhone）
   home.addEventListener('contextmenu', (e) => { if (hit(e)) e.preventDefault(); });
 
-  return { touch, partAt, PARTS };
+  return { touch, partAt, PARTS, showMuted };
 })();
 
 // ---------- ホームを開いたときの場面（D-083 ④の優先順） ----------
@@ -232,6 +242,7 @@ const Scenes = (() => {
   }
   // タスクの画面などからホームに戻ったとき：タスクの進み具合だけを見る（夕方の提案・通知の強調中は出さない）
   function backHome(now = new Date()) {
+    if (Touch.showMuted(now.getTime())) return true; // 黙っている間は打ち切りの文のまま（D-089）
     if (!document.getElementById('bubble-choices').hidden || !document.getElementById('bubble-mood').hidden) return false;
     if (document.body.classList.contains('from-notification')) return false;
     const s = load();

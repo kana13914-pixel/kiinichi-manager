@@ -220,7 +220,10 @@ function endNotificationState() {
 }
 
 // 開いたときの処理（読み込み時・通知のタップ時）。URL の source / trigger / line を見る
+// 触る段階の打ち切りで黙っている間は、ほかのどの一言よりも先に打ち切りの文を出す（D-089。touch.js）
+const showMuted = (now = new Date()) => typeof Touch !== 'undefined' && Touch.showMuted(now.getTime());
 function applyOpenParams(params, now = new Date()) {
+  if (showMuted(now)) { markPrimary(now); return; }
   const trigger = params.get('trigger');
   const index = params.has('line') ? Number(params.get('line')) : undefined; // Number(null) は 0 になるため has を確かめる
   const hash = params.get('h') || undefined; // 通知の文の印（D-081）。古い通知にはない
@@ -673,7 +676,7 @@ function onResume(away) {
   if (away >= RESUME_REFRESH_MS) { // 長く裏にあった：通知から開いた状態を終え、今の時間帯の一言に戻す
     homeToast.hide();
     endNotificationState();
-    if (!offerEvening(now)) showIdle(now);
+    if (!showMuted(now) && !offerEvening(now)) showIdle(now);
     checkPush(); // 購読が切れていないか確かめ直す
   }
   lastMinute = ''; // 時計と次の予定をすぐ更新する
