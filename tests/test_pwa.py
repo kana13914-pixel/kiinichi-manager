@@ -589,13 +589,36 @@ class PwaTest(unittest.TestCase):
         got = [t(base + 1000 + 400 * i) for i in range(1, 7)]
         self.assertEqual(got, ["touch.rapid", "touch.warn", "touch.warn", "touch.after_warn", "touch.after_warn", "touch.stop"])
         stop = base + 1000 + 400 * 6
-        self.assertIsNone(t(stop + 60_000))  # 打ち切りのあいだは黙る
+        self.assertIsNone(t(stop + 4 * 60_000))  # 打ち切りのあと5分は黙る（D-087）
         self.assertEqual(self.bubble(page), "打ち切り")
-        self.assertEqual(t(stop + 4 * 60_000), "touch.return")  # 3分たって触った
+        self.assertEqual(t(stop + 6 * 60_000), "touch.return")  # 5分たって触った
         self.assertEqual(t(stop + 10 * 60_000), "touch.day")  # そのあとは通常
         # しばらく触らなければ段階は戻る
         self.assertEqual([t(base + 3_600_000 + i * 300) for i in range(3)][-1], "touch.rapid")
         self.assertEqual(t(base + 3_600_000 + 20_000), "touch.day")
+
+    def test_touch_mute_grows_when_stopped_again(self):
+        """打ち切りのあと黙る時間は5分。続けてまた打ち切りになるたびに倍（10分・20分…60分まで）。1時間触らなければ5分に戻る（D-087）"""
+        page = self.scene_page(10, 0)
+        t = lambda ms: page.evaluate("(ms) => Touch.touch(null, false, ms)", ms)
+        def stop_at(start):  # 打ち切りになるまで続けて触る。打ち切りの時刻を返す
+            for i in range(12):
+                if t(start + 300 * i) == "touch.stop":
+                    return start + 300 * i
+            self.fail("打ち切りにならない")
+        now = page.evaluate("Date.now()")
+        mutes = []
+        for _ in range(5):
+            s = stop_at(now)
+            m = 1
+            while t(s + m * 60_000) is None:  # 1分ずつ触って、黙っている長さを測る
+                m += 1
+            mutes.append(m)  # 話し出した分（= 黙っていた長さ）
+            now = s + m * 60_000 + 1000
+        self.assertEqual(mutes, [5, 10, 20, 40, 60])
+        s = stop_at(now + 2 * 3_600_000)  # 1時間以上あけてから
+        self.assertIsNone(t(s + 4 * 60_000))
+        self.assertEqual(t(s + 6 * 60_000), "touch.return")  # 5分に戻っている
 
     def test_touch_place_alternates_with_time_and_hold(self):
         """場所の印に入れば場所のセリフと時間帯のセリフを交互に。長押しは場所の長押しのセリフ。印の外は時間帯だけ"""

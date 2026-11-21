@@ -4,7 +4,7 @@
 // app.js（showLine・periodOf・todayMood・Records）、stats.js、tasks.js、report.js、portrait.js の後に読み込む。
 
 // ---------- 触ったとき ----------
-// 段階は場所を問わず共通：通常 → 連続（3秒以内に3回）→ 注意 → 注意後も → 打ち切り（しばらく黙る）→ 時間をおいて再訪。
+// 段階は場所を問わず共通：通常 → 連続（3秒以内に3回）→ 注意 → 注意後も → 打ち切り（しばらく黙る。続けて打ち切りになるほど長く）→ 時間をおいて再訪。
 // 通常タッチ・長押しだけ場所（頭・顔・首・手・体・足）ごと。通常タッチは時間帯のセリフと場所のセリフを交互に出す。
 // 打ち切りのあいだ・夕方の提案中・部品（セリフの面・ボタンなど）の上を触ったときは何も言わない。
 const Touch = (() => {
@@ -13,8 +13,11 @@ const Touch = (() => {
   const RAPID_MS = 3000;              // この時間のうちに触ると「連続」
   const STEP_TAPS = 2;                // 連続のあと、この回数触るごとに一段上がる（注意 → 注意後も → 打ち切り）
   const KEEP_MS = 10 * 1000;          // この間触らなければ、段階は通常に戻る（打ち切りのあとは別）
-  const MUTE_MS = 3 * 60 * 1000;      // 打ち切りのあと、この間は何も言わない
-  const RETURN_MS = 60 * 60 * 1000;   // 打ち切りからこの時間のうちにまた触ったら「時間をおいて再訪」
+  // 打ち切りのあと黙る時間：5分。続けてまた打ち切りになるたびに倍（5 → 10 → 20 → 40 → 60分まで）。1時間触らなければ5分に戻る（D-087）
+  const MUTE_MS = 5 * 60 * 1000;
+  const MUTE_MAX_MS = 60 * 60 * 1000;
+  const CALM_MS = 60 * 60 * 1000;
+  const RETURN_MS = 60 * 60 * 1000;   // 黙る時間が明けてからこの時間のうちにまた触ったら「時間をおいて再訪」
   const HOLD_MS = 600;                // 長押し
   const MOVE_PX = 12;                 // これより動いたら、触ったのではなく動かした
   const STAGES = ['rapid', 'warn', 'after_warn', 'stop'];
@@ -26,6 +29,8 @@ const Touch = (() => {
   let inStage = 0;      // 今の段階に入ってから触った回数
   let mutedUntil = 0;
   let stoppedAt = 0;
+  let muteLevel = 0;    // 続けて打ち切りになった回数（黙る時間を延ばす）
+  let lastAt = 0;       // 最後に触った時刻
   let placeFirst = true; // 通常タッチで、場所のセリフを先に出すか（交互）
 
   const say = (key, vars) => showLine(key, { vars });
@@ -50,9 +55,11 @@ const Touch = (() => {
   }
   // 触った（hold は長押し）。出したセリフのキー、黙ったときは null
   function touch(part = null, hold = false, now = Date.now()) {
+    if (lastAt && now - lastAt > CALM_MS) muteLevel = 0; // しばらく触らなかった：黙る時間は5分に戻る
+    lastAt = now;
     if (now < mutedUntil) return null; // 打ち切りのあいだは黙る
     if (stoppedAt) { // 打ち切りのあと、時間をおいてまた触った
-      const back = now - stoppedAt <= RETURN_MS;
+      const back = now - mutedUntil <= RETURN_MS;
       stoppedAt = 0; stage = -1; taps = [];
       if (back) { taps.push(now); return say('touch.return') ? 'touch.return' : null; }
     }
@@ -66,7 +73,11 @@ const Touch = (() => {
       stage += 1; inStage = 0;
     }
     const name = STAGES[stage];
-    if (name === 'stop') { mutedUntil = now + MUTE_MS; stoppedAt = now; taps = []; stage = -1; }
+    if (name === 'stop') {
+      mutedUntil = now + Math.min(MUTE_MS * 2 ** muteLevel, MUTE_MAX_MS);
+      muteLevel += 1;
+      stoppedAt = now; taps = []; stage = -1;
+    }
     return say('touch.' + name) ? 'touch.' + name : null;
   }
 
