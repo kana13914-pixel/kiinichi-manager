@@ -191,20 +191,19 @@ const Portrait = (() => {
   // { head: [ { x, y, r } ], hand: [ …2つまで ], … }。x・y は画像の上の位置（0〜1）、r は画像の幅に対する半径
   const SPOT_PARTS = [['head', '頭'], ['face', '顔'], ['neck', '首'], ['hand', '手'], ['body', '体'], ['foot', '足']];
   const SPOT_MAX = { hand: 2, foot: 2 }; // ほかは1つ
-  const SPOT_R = { s: 0.05, m: 0.08, l: 0.13 };
-  const SPOT_DEFAULT = { head: 'm', face: 's', neck: 's', hand: 's', body: 'l', foot: 's' };
+  const SPOT_R_MIN = 0.03, SPOT_R_MAX = 0.4; // 印の半径（画像の幅に対する割合）。スライダーで 3〜40%（D-087）
+  const SPOT_DEFAULT = { head: 0.08, face: 0.05, neck: 0.05, hand: 0.05, body: 0.13, foot: 0.05 }; // まだ印がない部位の、次に置く印の大きさ
   function normalizeSpots(raw) {
     const out = {};
     if (!raw || typeof raw !== 'object') return out;
     for (const [part] of SPOT_PARTS) {
       const list = [].concat(raw[part] || []).filter((s) => s && [s.x, s.y, s.r].every(Number.isFinite) && s.r > 0)
-        .map((s) => ({ x: clamp(s.x, 0, 1), y: clamp(s.y, 0, 1), r: clamp(s.r, 0.01, 0.5) }));
+        .map((s) => ({ x: clamp(s.x, 0, 1), y: clamp(s.y, 0, 1), r: clamp(s.r, SPOT_R_MIN, SPOT_R_MAX) }));
       if (list.length) out[part] = list.slice(0, SPOT_MAX[part] || 1);
     }
     return out;
   }
   function spots() { const c = conf(); return normalizeSpots(c && c.spots); }
-  const sizeOf = (r) => Object.keys(SPOT_R).reduce((a, k) => (Math.abs(SPOT_R[k] - r) < Math.abs(SPOT_R[a] - r) ? k : a), 'm');
 
   // ---------- ホームの上で合わせる ----------
   let draft = null; // 合わせている途中 { blob, w, h, alpha, scale, x, y, ui, spots, url }
@@ -234,8 +233,9 @@ const Portrait = (() => {
     layer.replaceChildren(...marks);
     for (const b of document.querySelectorAll('#portrait-spot-parts [data-part]')) b.setAttribute('aria-pressed', String(b.dataset.part === spotPart));
     const list = draft.spots[spotPart] || [];
-    const size = list.length ? sizeOf(list[0].r) : SPOT_DEFAULT[spotPart];
-    for (const b of document.querySelectorAll('#portrait-spot-sizes [data-size]')) b.setAttribute('aria-pressed', String(b.dataset.size === size));
+    const pct = Math.round((list.length ? list[0].r : SPOT_DEFAULT[spotPart]) * 100);
+    $('portrait-spot-size').value = String(pct);
+    $('portrait-spot-size-value').textContent = `${pct}%`;
     $('portrait-spot-clear').disabled = !list.length;
     renderSpotHint();
   }
@@ -263,7 +263,7 @@ const Portrait = (() => {
     if (!(x >= 0 && x <= 1 && y >= 0 && y <= 1)) { $('portrait-editor-status').textContent = '画像の上を押してください'; return; }
     $('portrait-editor-status').textContent = '';
     const list = draft.spots[spotPart] || [];
-    const rr = list.length ? list[0].r : SPOT_R[SPOT_DEFAULT[spotPart]];
+    const rr = list.length ? list[0].r : SPOT_DEFAULT[spotPart];
     const mark = { x, y, r: rr };
     const max = SPOT_MAX[spotPart] || 1;
     if (list.length < max) list.push(mark);
@@ -355,15 +355,14 @@ const Portrait = (() => {
       b.addEventListener('click', () => { spotPart = part; renderSpots(); });
       return b;
     }));
-    for (const b of document.querySelectorAll('#portrait-spot-sizes [data-size]')) {
-      b.addEventListener('click', () => {
-        if (!draft) return;
-        const list = draft.spots[spotPart] || [];
-        if (list.length) for (const s of list) s.r = SPOT_R[b.dataset.size];
-        else SPOT_DEFAULT[spotPart] = b.dataset.size; // まだ印がなければ、次に置く印の大きさ
-        renderSpots();
-      });
-    }
+    $('portrait-spot-size').addEventListener('input', (e) => {
+      if (!draft) return;
+      const r = clamp(Number(e.target.value) / 100, SPOT_R_MIN, SPOT_R_MAX);
+      const list = draft.spots[spotPart] || [];
+      if (list.length) for (const s of list) s.r = r;
+      else SPOT_DEFAULT[spotPart] = r; // まだ印がなければ、次に置く印の大きさ
+      renderSpots();
+    });
     $('portrait-spot-clear').addEventListener('click', () => {
       if (!draft) return;
       delete draft.spots[spotPart];

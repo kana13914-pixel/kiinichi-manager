@@ -288,9 +288,9 @@ body.has-photo:has(#view-home:not([hidden])) .tabbar { background: color-mix(in 
 }
 .portrait-spot.on { box-shadow: inset 0 0 0 2px var(--color-lime); color: var(--color-lime); }
 .spot-parts { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--space-1); margin-top: var(--space-2); }
-.spot-sizes { display: grid; grid-template-columns: 3fr 1fr; gap: var(--space-2); margin-top: var(--space-2); }
-.spot-size-chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-1); }
-.spot-parts .cut-btn, .spot-sizes .cut-btn { margin-top: 0; min-width: 0; padding: 0; }
+.spot-sizes { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: var(--space-3); }
+.spot-parts .cut-btn { margin-top: 0; min-width: 0; padding: 0; }
+.spot-sizes .cut-btn { margin-top: 0; min-width: var(--tap); padding: 0 var(--space-3); }
 /* 触る場所を選んでいる間は、ホームの部品を隠して画像だけを見せる（印を置く所が分かるように） */
 body.portrait-spots #view-home > :not(.portrait-layer):not(.portrait-editor), body.portrait-spots .tabbar { visibility: hidden; }
 .portrait-spot-hint { position: absolute; top: calc(var(--safe-top) + var(--space-2)); left: var(--space-4); margin: 0; padding: var(--space-2) var(--space-3); background: var(--color-ink); color: var(--color-text); font-size: var(--fs-footnote); }

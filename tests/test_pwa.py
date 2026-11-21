@@ -2961,6 +2961,7 @@ class PwaTest(unittest.TestCase):
         page.click("#portrait-editor-show")
         self.assertTrue(page.is_hidden("#portrait-spot-hint"))
         sizes = page.eval_on_selector_all("#portrait-spots-panel button", "els => els.map(e => [Math.round(e.getBoundingClientRect().width), Math.round(e.getBoundingClientRect().height)])")
+        self.assertLessEqual(page.evaluate("document.getElementById('portrait-editor-panel').scrollWidth"), 393)
         self.assertTrue(all(w >= 44 and h >= 44 for w, h in sizes), sizes)
         self.assertTrue(page.is_hidden("#portrait-place-panel"))
         self.assertEqual(page.eval_on_selector_all("#portrait-spot-parts [data-part]", "els => els.map(e => e.textContent)"), ["頭", "顔", "首", "手", "体", "足"])
@@ -2973,7 +2974,10 @@ class PwaTest(unittest.TestCase):
         page.mouse.click(*at(0.72, 0.33))  # 3つ目は近いほう（右手）を置き直す
         marks = page.eval_on_selector_all(".portrait-spot", "els => els.map(e => [e.dataset.part, e.classList.contains('on')])")
         self.assertEqual(marks, [["head", False], ["hand", True], ["hand", True]])
-        page.click("#portrait-spot-sizes [data-size=l]")
+        self.assertEqual(page.input_value("#portrait-spot-size"), "5")  # 手の初めの大きさ
+        page.fill("#portrait-spot-size", "13")  # スライダーで大きさ（3〜40%。D-087）
+        self.assertEqual(page.text_content("#portrait-spot-size-value"), "13%")
+        self.assertEqual([page.get_attribute("#portrait-spot-size", k) for k in ("min", "max")], ["3", "40"])
         page.click("#portrait-spot-parts [data-part=foot]")
         self.assertTrue(page.is_disabled("#portrait-spot-clear"))
         page.mouse.click(*at(0.5, 0.2))

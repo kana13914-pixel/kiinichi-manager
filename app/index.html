@@ -125,12 +125,10 @@
           <div id="portrait-spots-panel" hidden>
             <p class="note">部位を選んで画像を押すと印を置きます（手・足は2か所まで）。板の下は「全体を見る」で。</p>
             <div id="portrait-spot-parts" class="spot-parts" role="group" aria-label="部位"></div>
-            <div class="spot-sizes" role="group" aria-label="印の大きさ">
-              <span id="portrait-spot-sizes" class="spot-size-chips">
-                <button type="button" class="cut-btn quiet chip" data-size="s" aria-pressed="false" aria-label="印の大きさ 小">小</button>
-                <button type="button" class="cut-btn quiet chip" data-size="m" aria-pressed="true" aria-label="印の大きさ 中">中</button>
-                <button type="button" class="cut-btn quiet chip" data-size="l" aria-pressed="false" aria-label="印の大きさ 大">大</button>
-              </span>
+            <!-- 印の大きさ：画像の幅に対する % を、選んでいる部位の印にすぐ当てる（3〜40%。D-087） -->
+            <label for="portrait-spot-size">印の大きさ <span id="portrait-spot-size-value">8%</span></label>
+            <div class="spot-sizes">
+              <input id="portrait-spot-size" class="range" type="range" min="3" max="40" step="1" value="8">
               <button id="portrait-spot-clear" type="button" class="cut-btn quiet chip" aria-label="この部位の印を消す">消す</button>
             </div>
           </div>
