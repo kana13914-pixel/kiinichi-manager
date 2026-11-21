@@ -1365,7 +1365,7 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(page.input_value("#task-due"), "2026-11-10")
         page.click("#task-submit")
         self.assertEqual(self.open_titles(page), ["資料を送る"])
-        self.assertEqual(page.text_content("#task-list .task-due"), "明日まで")
+        self.assertEqual(page.text_content("#task-list .task-due"), "明日まで ・ 完了したら日報へ")  # はじめからオン（D-091）
         self.assertEqual(page.text_content("#tasks-say-line"), "残りはこれだけだ。一つずつ片づけろ。")  # 0件のときとは別の一言
         self.assertTrue(page.is_hidden("#task-form"))
         page.reload()
