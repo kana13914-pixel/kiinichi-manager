@@ -165,8 +165,19 @@ const Portrait = (() => {
     labelArt(el, '立ち絵（写真から選んだ画像）');
     showPhoto(homeUrl, c);
   }
-  // 画面の向き・大きさが変わったら置き直す（位置は画面に対する % なので、同じ見えかたになる）
-  window.addEventListener('resize', () => { if (shown) place($('portrait-photo'), shown); });
+  // 画面の向き・大きさが変わったら置き直す（位置は画面に対する % なので、同じ見えかたになる）。
+  // iPhone は、横向きのまま通知から開いたときや裏から戻ったときに、向きが変わっても合図が来ない・来ても大きさがまだ古いことがある
+  // （横向きの比で計算したまま縦に戻り、立ち絵が細くなった。2026-11-21 の実機報告）。合図のたびに、次の描画と少しあとの2回置き直す
+  function relayout() {
+    if (shown) place($('portrait-photo'), shown);
+    if (draft) renderSpots(); // 合わせている途中なら印も
+  }
+  const relayoutSoon = () => { requestAnimationFrame(relayout); setTimeout(relayout, 300); };
+  window.addEventListener('resize', relayoutSoon);
+  window.addEventListener('orientationchange', relayoutSoon);
+  window.addEventListener('pageshow', relayoutSoon);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') relayoutSoon(); });
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', relayoutSoon);
 
   // ---------- 設定 ----------
   function renderSettings() {

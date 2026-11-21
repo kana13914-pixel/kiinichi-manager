@@ -2980,6 +2980,22 @@ class PwaTest(unittest.TestCase):
         page.click("#portrait-mode-spots")
         self.assertEqual(len(page.query_selector_all(".portrait-spot")), 0)
 
+    def test_portrait_relayout_after_rotation_and_resume(self):
+        """横向きのまま開いてから縦に戻ったとき・裏から戻ったときに、立ち絵を今の画面の比で置き直す（2026-11-21 の実機の不具合）"""
+        page = self.portrait_page()
+        self.choose_photo(page, make_png(800, 1200, (40, 120, 90, 255)))
+        page.click("#portrait-save")
+        page.wait_for_selector("#portrait-editor", state="hidden")
+        page.wait_for_function("document.getElementById('portrait-photo').naturalWidth > 0", timeout=3_000)
+        size = lambda: page.eval_on_selector("#portrait-photo", "e => [e.style.width, e.style.height]")
+        good = size()
+        for ev in ("window.dispatchEvent(new Event('orientationchange'))", "window.dispatchEvent(new Event('pageshow'))",
+                   "document.dispatchEvent(new Event('visibilitychange'))"):
+            page.evaluate("() => { const i = document.getElementById('portrait-photo'); i.style.width = '30%'; i.style.height = '100%'; }")  # 横向きの比で置いたまま、のつもり
+            page.evaluate(ev)
+            page.wait_for_timeout(400)
+            self.assertEqual(size(), good, ev)
+
     def test_portrait_broken_image_falls_back_to_emblem(self):
         """保存した画像が読めないときは「？」のままにせず、紋章に戻して選び直しを頼む"""
         page = self.portrait_page()
