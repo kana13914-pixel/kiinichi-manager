@@ -115,7 +115,8 @@ const Schedule = (() => {
     if (total === 0) return 'screen_empty.schedule';
     const today = plans(now);
     if (today.length === 0) return 'schedule_status.today_none';
-    return today.some((e) => e.allDay || e.at > now) ? 'schedule_status.today_left' : 'schedule_status.today_done';
+    // 終日の予定は「残っている」に数えない。時刻のある予定がこの先にあるときだけ残っている（終日だけの日は済んだ側。D-093）
+    return today.some((e) => !e.allDay && e.at > now) ? 'schedule_status.today_left' : 'schedule_status.today_done';
   }
 
   // ---------- リスト ----------

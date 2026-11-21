@@ -2083,6 +2083,20 @@ class PwaTest(unittest.TestCase):
         self.assertTrue(page.is_visible("#schedule-say"))
         self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-row.none")), 8)
 
+    def test_schedule_line_ignores_all_day_events(self):
+        """終日の予定は「今日の分はまだ残っている」に数えない（D-093）"""
+        page = self.schedule_page(hour=10)
+        line = lambda: page.text_content("#schedule-say-line")
+        stub = """(evs) => { SampleData.eventsOn = (d) => d.getDate() === 9 ? evs.map((e) => ({ ...e, kind: 'event', at: new Date(e.at) })) : [];
+          Schedule.refresh(); }"""
+        allday = {"at": "2026-11-09T00:00:00", "title": "出張", "allDay": True}
+        page.evaluate(stub, [allday])  # 終日だけ
+        self.assertEqual(line(), "今日の分はもう過ぎた。先の分を見ておけ。")
+        page.evaluate(stub, [allday, {"at": "2026-11-09T15:00:00", "title": "会議", "allDay": False}])  # 時刻のある予定がこの先に
+        self.assertEqual(line(), "今日の分はまだ残っている。時間だけ見ておけ。")
+        page.evaluate(stub, [allday, {"at": "2026-11-09T09:00:00", "title": "朝会", "allDay": False}])  # 時刻のある予定は過ぎた
+        self.assertEqual(line(), "今日の分はもう過ぎた。先の分を見ておけ。")
+
     def cal_cell(self, page, date):
         return page.eval_on_selector(f"#cal-grid .cal-cell[data-date='{date}']", """e => ({
           date: e.querySelector('.cal-date').textContent, tags: [...e.querySelectorAll('.cal-tag')].map(t => t.textContent),
