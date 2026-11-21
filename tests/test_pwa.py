@@ -499,7 +499,7 @@ class PwaTest(unittest.TestCase):
         return cond["lines"]
 
     def test_idle_line_follows_time_of_day(self):
-        for hour, period in [(7, "morning"), (13, "day"), (19, "evening"), (23, "night")]:
+        for hour, period in [(7, "morning"), (13, "day"), (17, "evening"), (19, "night"), (23, "night")]:  # 区切りは D-088
             with self.subTest(hour=hour):
                 page = self.clock_page(hour, 0)
                 page.wait_for_function("document.getElementById('bubble-text').textContent !== '…'", timeout=3_000)
@@ -619,6 +619,17 @@ class PwaTest(unittest.TestCase):
         s = stop_at(now + 2 * 3_600_000)  # 1時間以上あけてから
         self.assertIsNone(t(s + 4 * 60_000))
         self.assertEqual(t(s + 6 * 60_000), "touch.return")  # 5分に戻っている
+
+    def test_touch_mute_survives_reopen(self):
+        """打ち切りの黙る時間は、アプリを開き直しても続く（D-088）"""
+        page = self.scene_page(10, 0)
+        t = lambda ms: page.evaluate("(ms) => Touch.touch(null, false, ms)", ms)
+        now = page.evaluate("Date.now()")
+        s = next(now + 300 * i for i in range(12) if t(now + 300 * i) == "touch.stop")
+        page.reload()
+        page.wait_for_function("dialogue !== null")
+        self.assertIsNone(t(s + 2 * 60_000))  # 開き直しても、まだ黙っている
+        self.assertEqual(t(s + 6 * 60_000), "touch.return")
 
     def test_touch_place_alternates_with_time_and_hold(self):
         """場所の印に入れば場所のセリフと時間帯のセリフを交互に。長押しは場所の長押しのセリフ。印の外は時間帯だけ"""

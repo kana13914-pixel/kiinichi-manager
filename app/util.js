@@ -69,6 +69,7 @@ const DB = {
   stats: 'db.stats',             // { days: { 日付: { notified, missed, skipped, unused } }, closedThrough, lineShown } … 内部の記録（D-060 ⑩。この端末だけ・見せない）
   portrait: 'db.portrait',     // { w, h, alpha, scale, x, y, ui, at } … 写真から選んだ立ち絵の置き方と部品の透け具合（D-066, D-067。画像は IndexedDB。この端末だけ）
   evening: 'db.evening',         // { date } … 夕方の提案をホームで出した日（その日1回だけにするため。D-073。この端末だけ）
+  touch: 'db.touch',             // { mutedUntil, stoppedAt, muteLevel, lastAt } … 触る段階の打ち切りの黙る時間（D-087, D-088。閉じても覚える。この端末だけ）
   scenes: 'db.scenes',           // { first, since, shown: { キー: 日付 }, tasksSeen: { date, done } } … ホームを開いたときの場面（D-083。この端末だけ）
   notify: 'db.notify',           // { 予約したキー: { at, body } } … 送信サーバーに予約した声掛け（D-049。この端末だけ）
 };

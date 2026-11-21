@@ -31,6 +31,13 @@ const Touch = (() => {
   let stoppedAt = 0;
   let muteLevel = 0;    // 続けて打ち切りになった回数（黙る時間を延ばす）
   let lastAt = 0;       // 最後に触った時刻
+  // 打ち切りの黙る時間は、アプリを閉じても覚えておく（開き直しで5分に戻らないように。D-088）
+  (() => {
+    const s = Store.read(DB.touch, {}) || {};
+    mutedUntil = Number(s.mutedUntil) || 0; stoppedAt = Number(s.stoppedAt) || 0;
+    muteLevel = Number(s.muteLevel) || 0; lastAt = Number(s.lastAt) || 0;
+  })();
+  const remember = () => Store.write(DB.touch, { mutedUntil, stoppedAt, muteLevel, lastAt });
   let placeFirst = true; // 通常タッチで、場所のセリフを先に出すか（交互）
 
   const say = (key, vars) => showLine(key, { vars });
@@ -55,6 +62,9 @@ const Touch = (() => {
   }
   // 触った（hold は長押し）。出したセリフのキー、黙ったときは null
   function touch(part = null, hold = false, now = Date.now()) {
+    try { return touchStep(part, hold, now); } finally { remember(); }
+  }
+  function touchStep(part, hold, now) {
     if (lastAt && now - lastAt > CALM_MS) muteLevel = 0; // しばらく触らなかった：黙る時間は5分に戻る
     lastAt = now;
     if (now < mutedUntil) return null; // 打ち切りのあいだは黙る

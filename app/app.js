@@ -163,8 +163,8 @@ setInterval(tick, 1000);
 function periodOf(now = new Date()) {
   const h = now.getHours();
   if (h >= 5 && h < 10) return 'morning';
-  if (h >= 10 && h < 17) return 'day';
-  if (h >= 17 && h < 22) return 'evening';
+  if (h >= 10 && h < 16) return 'day';     // 区切りは D-088（利用者の指定 2026-11-21）：朝 5〜10・昼 10〜16・夕方 16〜19・夜 19〜翌5時
+  if (h >= 16 && h < 19) return 'evening';
   return 'night';
 }
 function applyPeriod(now = new Date()) {
