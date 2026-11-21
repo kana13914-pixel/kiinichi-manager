@@ -47,7 +47,7 @@
 | 通知のセリフのずれの予防 | **実装済み・実機確認待ち**（phase3-v19。D-081） | roadmap「通知のセリフのずれの予防」 |
 | 話し方3つ・触ったときの反応 | **作っている途中**（D-082・D-083）。v20 で土台（セリフ集の話し方ごとの文、先週のひとことの指示）を公開。送信サーバーの貼り替え H-027 待ち。**文面は利用者の別タブ（「修正案と追加のセリフ」「甘やかし版のセリフ」）待ち**。作業ブランチ `claude/epic-wright-x2ogfm` に、設定の話し方の切り替え・タッチと開いたときの場面の仕組み（`app/touch.js`）・部位の印（立ち絵を合わせる →「触る場所」）がある。**画像の確認待ちで main には未反映**。OK が出たら版を phase3-v21 にして main へ push | roadmap「話し方3つと、触ったときの反応」 |
 | 人間待ち | H-027（送信サーバーの貼り替え。急がない）。ほかは完了 | `NEEDS_HUMAN.md` |
-| 利用者の確認待ちのセリフ（仮案） | `idle_greeting`、`screen_empty.*`（`schedule` を含む）、`report_saved.*`、`tasks_status.*`、`record_done.*`（D-046）、`event_before.*`・`calendar_today.*`（D-054）、`work_end_check.left`・`postponed`・`kept`（D-059。`tired`・`evening` と `work_end_mood.*` は D-074 で確定）・`task_done.*`・`timer_start.*`（D-059）、`timer_status.*`、`schedule_status.*`、`report_status.*`（この3つは 2026-11-16 に「いったん修正なしで OK」。仮案のまま）（`timer_done.*` は確定済み。D-029） | `data/dialogue_template.yaml` の description に「仮案」と書いてある項目 |
+| 利用者の確認待ちのセリフ（仮案） | D-085 で全部の文を利用者の文面に入れ替えた。確認待ちは、Claude が言い換えた9文だけ（D-085 ③。報告の一覧） | `data/dialogue_template.yaml`、`docs/decisions.md` D-085 |
 
 ## 3. 次の作業の要点（フェーズ2：データ設計）
 

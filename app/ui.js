@@ -65,14 +65,14 @@ function makeSay(lineEl) {
     dialogueReady.then(() => {
       if (shown !== key || reacting) return;
       const picked = pickLine(key);
-      lineEl.textContent = picked ? picked.text : '…';
+      lineEl.textContent = picked ? kinichOnly(picked.text) : '…'; // アハウの合いの手はホームだけ（D-085）
     });
   };
   say.react = (key, vars = {}) => {
     reacting = true;
     dialogueReady.then(() => {
       const picked = pickLine(key); // 候補が2つ以上なら、続けて同じ言い回しにしない（C1-02）
-      if (picked) lineEl.textContent = fillLine(picked.text, vars);
+      if (picked) lineEl.textContent = kinichOnly(fillLine(picked.text, vars));
     });
   };
   return say;

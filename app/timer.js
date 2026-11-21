@@ -73,7 +73,7 @@ const Timer = (() => {
     const query = run.line === null ? '' : `&trigger=timer_done.${run.kind}&line=${run.line}&h=${lineHash(run.text)}`; // h は文の印（D-081）
     const body = {
       key: NOTIFY_KEY, at: run.endAt, notBefore: true, // 終わる前には届けない
-      title: 'キィニチ', body: run.text,
+      title: 'キィニチ', body: kinichOnly(run.text),
       url: new URL('index.html?source=webpush' + query + '#timer', location.href).href,
     };
     apiChain = apiChain.then(() => Settings.api('/api/schedule', { method: 'POST', body }))

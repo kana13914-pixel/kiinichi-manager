@@ -15,6 +15,9 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
+# 画面のテストは、文面を固定したセリフ集（2026-11-20 までの文）で動きを確かめる。文面を直してもテストを書き直さずに済むように。
+# 本物のセリフ集（app/data/dialogue.json）は test_dialogue.py と、/real/ の下を開くテスト（話し方・アハウ）で確かめる
+FIXTURE_DIALOGUE = Path(__file__).resolve().parent / "fixtures" / "dialogue_fixture.json"
 MOOD_NORMAL = "localStorage.setItem('db.reports', JSON.stringify({ '2026-11-09': { mood: 'normal', done: '', left: '', tomorrow: '', savedAt: 1 } }));"  # 今日の調子を聞いたあと（D-073）
 ADD_NONE = "#task-list .task-group[data-priority=none] .add-plus, #task-list .task-slot[data-priority=none] .add-slot"  # 優先度なしの「追加」（タスクがあれば見出しの ＋、なければ点線の欄。D-070）
 
@@ -64,7 +67,18 @@ class QuietHandler(SimpleHTTPRequestHandler):
         if self.path.startswith("/strict/"):
             self.path = self.path[len("/strict"):]
             return super().do_GET()
+        real = self.path.startswith("/real/")  # 本物のセリフ集で開く
+        if real:
+            self.path = self.path[len("/real"):]
         name = self.path.split("?")[0].split("#")[0]
+        if name == "/data/dialogue.json" and not real:
+            body = FIXTURE_DIALOGUE.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return None
         if name in ("/index.html", "/send.html"):
             body = (APP_DIR / name[1:]).read_bytes().replace(b"script-src 'self';", b"script-src 'self' 'unsafe-eval';", 1)
             self.send_response(200)
@@ -480,7 +494,7 @@ class PwaTest(unittest.TestCase):
 
     # ---------- セリフの選び方（T05, D-019 Q4=出す） ----------
     def idle_lines(self, period):
-        data = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))
+        data = json.loads(FIXTURE_DIALOGUE.read_text(encoding="utf-8"))
         cond = [c for c in data["idle_greeting"]["conditions"] if c["id"] == period][0]
         return cond["lines"]
 
@@ -554,7 +568,7 @@ class PwaTest(unittest.TestCase):
     }
 
     def scene_page(self, hour, minute=0, init="", day=9, size=(393, 852)):
-        data = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))
+        data = json.loads(FIXTURE_DIALOGUE.read_text(encoding="utf-8"))
         for trigger, items in self.SCENE_LINES.items():
             data[trigger] = {"conditions": [{"id": x.split(":", 1)[0], "lines": [x.split(":", 1)[1]]} for x in items]}
         body = json.dumps(data, ensure_ascii=False)
@@ -679,6 +693,41 @@ class PwaTest(unittest.TestCase):
         page.wait_for_function("dialogue !== null")
         page.wait_for_timeout(150)
         self.assertNotEqual(self.bubble(page), "レア")
+
+    def test_real_lines_by_tone_and_ahau_bubble(self):
+        """本物のセリフ集（D-085）：話し方ごとの文が出る。アハウの合いの手はホームの小さな吹き出しに分け、次のセリフ・ほかの画面で消える。通知はキィニチの文だけ"""
+        ctx = self.browser.new_context(permissions=["notifications"], viewport={"width": 375, "height": 667})
+        self.addCleanup(ctx.close)
+        ctx.add_init_script(READY)
+        page = ctx.new_page()
+        errors = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        self.addCleanup(lambda: self.assertEqual(errors, [], "JSエラーが出ている"))
+        page.goto(self.base + "real/index.html?mode=standalone")
+        page.wait_for_function("dialogue !== null && dialogue.touch")
+        real = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))
+        cond = lambda t, i: next(c for c in real[t]["conditions"] if c["id"] == i)
+        self.assertEqual(page.evaluate("candidates('record_done.breakfast')"), cond("record_done", "breakfast")["lines"])
+        page.evaluate("Prefs.set('tone', 'sweet')")
+        self.assertEqual(page.evaluate("candidates('record_done.breakfast')"), cond("record_done", "breakfast")["lines_sweet"])
+        page.evaluate("Prefs.set('tone', 'client')")
+        rapid = cond("touch", "rapid")["lines"][2]
+        kinich, ahau = [x.strip() for x in rapid.split("／ アハウ：")]
+        page.evaluate("showLine('touch.rapid', { index: 2 })")
+        self.assertEqual(page.text_content("#bubble-text"), kinich)
+        self.assertTrue(page.is_visible("#ahau-line"))
+        self.assertEqual(page.text_content("#ahau-text"), ahau)
+        box = page.eval_on_selector_all("#ahau-line, .dialogue", "els => els.map(e => e.getBoundingClientRect()).map(r => [r.left, r.right, r.bottom, r.top])")
+        self.assertLessEqual(box[0][2], box[1][3] + 1)  # セリフの面に重ならない（上に出る）
+        self.assertLessEqual(box[0][1], 375)
+        page.evaluate("showLine('touch.day')")
+        self.assertTrue(page.is_hidden("#ahau-line"))  # 合いの手のないセリフでは消える
+        page.evaluate("showLine('touch.rapid', { index: 2 })")
+        page.evaluate("location.hash = '#tasks'")
+        self.assertTrue(page.is_hidden("#ahau-line"))  # ほかの画面へ移ったら消える
+        self.assertEqual(page.evaluate("kinichOnly(%s)" % json.dumps(rapid)), kinich)  # 通知・ほかの画面はキィニチの文だけ
+        bodies = page.evaluate("Object.values(Voice.plan(new Date())).map((v) => v.body)")
+        self.assertFalse(any("アハウ" in b for b in bodies), bodies)
 
     def test_notification_finds_same_line_when_order_changed(self):
         """通知の URL の h（文の印）で、セリフ集の並びが変わっても通知と同じ文を出す。見つからなければ選び直す（D-081）"""
@@ -814,7 +863,7 @@ class PwaTest(unittest.TestCase):
         self.assertLessEqual(sw, cw)
 
     def lines_of(self, trigger, cond_id):
-        data = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))
+        data = json.loads(FIXTURE_DIALOGUE.read_text(encoding="utf-8"))
         return [c for c in data[trigger]["conditions"] if c["id"] == cond_id][0]["lines"]
 
     # ---------- 開いたときの判定し直し（T10） ----------
@@ -1251,7 +1300,7 @@ class PwaTest(unittest.TestCase):
         page = self.tasks_page()
         page.wait_for_function("document.getElementById('tasks-say-line').textContent !== '…'", timeout=3_000)
         self.assertTrue(page.is_visible("#tasks-say"))
-        data = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))
+        data = json.loads(FIXTURE_DIALOGUE.read_text(encoding="utf-8"))
         lines = data["screen_empty"]["conditions"][0]["lines"]
         self.assertIn(page.text_content("#tasks-say-line"), lines)
         self.assertTrue(page.is_hidden("#done-section"))
@@ -1352,7 +1401,7 @@ class PwaTest(unittest.TestCase):
         page.click("#task-list li[data-id='2'] .task-done-btn")
         page.wait_for_function("document.getElementById('tasks-say-line').textContent.startsWith('残り')", timeout=3_000)
         page.click("#task-list li[data-id='3'] .task-done-btn")  # 全部終わったら 0件のときの一言
-        lines = json.loads((APP_DIR / "data" / "dialogue.json").read_text(encoding="utf-8"))["screen_empty"]["conditions"][0]["lines"]
+        lines = json.loads(FIXTURE_DIALOGUE.read_text(encoding="utf-8"))["screen_empty"]["conditions"][0]["lines"]
         page.wait_for_function("lines => lines.includes(document.getElementById('tasks-say-line').textContent)", arg=lines, timeout=3_000)
 
     def test_done_tasks_show_date_and_vanish_after_a_week(self):

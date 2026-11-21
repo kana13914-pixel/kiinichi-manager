@@ -181,7 +181,7 @@ const Report = (() => {
     dialogueReady.then(() => {
       const picked = pickLine('report_saved.' + (entry.mood === 'good' || entry.mood === 'tired' ? entry.mood : 'normal'));
       if (!picked) return;
-      $('report-reply-line').textContent = picked.text;
+      $('report-reply-line').textContent = kinichOnly(picked.text); // アハウの合いの手はホームだけ（D-085）
       $('report-reply').hidden = false;
       renderSay();
     });

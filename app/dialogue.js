@@ -36,6 +36,13 @@ function lineHash(text) {
 }
 
 // hash があれば（通知から開いたとき）：番号の文の印が合えばそれ、合わなければ同じ印の文を探す。見つからなければ選び直す
+// セリフの「 ／ アハウ：」から後は、アハウの合いの手（D-085）。ホームでは小さな吹き出しに分けて出し、通知とほかの画面ではキィニチの文だけ出す
+function splitAhau(text) {
+  const i = String(text).indexOf('／ アハウ：');
+  return i < 0 ? { kinich: String(text), ahau: '' } : { kinich: text.slice(0, i).trim(), ahau: text.slice(i + '／ アハウ：'.length).trim() };
+}
+const kinichOnly = (text) => splitAhau(text).kinich;
+
 function pickLine(key, { index, hash } = {}) {
   const lines = candidates(key);
   if (!lines) return null;

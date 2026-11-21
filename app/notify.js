@@ -36,7 +36,7 @@ const Voice = (() => {
     if (!line) return null;
     const extra = vars && vars.title ? `&title=${encodeURIComponent(vars.title)}` : '';
     const url = new URL(`index.html?source=webpush&trigger=${trigger}&line=${line.index}&h=${lineHash(line.text)}${extra}`, location.href).href;
-    return [key, { at, title: 'キィニチ', body: fillLine(line.text, vars || {}), url }];
+    return [key, { at, title: 'キィニチ', body: kinichOnly(fillLine(line.text, vars || {})), url }]; // 通知にはアハウを入れない（D-085）
   }
   // 予定の印（キーに使える文字だけ。id がなければ名前と時刻から）
   function mark(ev) {

@@ -92,6 +92,7 @@
 | `scripts/ntfy_send.py` | PC から ntfy に通知を送る（予備経路） |
 | `tests/` | 自動テスト。`python3 -m unittest discover -s tests` と `node --test tests/worker.test.mjs tests/sw.test.mjs tests/gas.test.mjs` |
 | `tests/test_pwa.py` | 画面の動き（ヘッドレス Chrome） |
+| `tests/fixtures/dialogue_fixture.json` | 画面のテスト用の、文面を固定したセリフ集（2026-11-20 までの文。文面を直してもテストを書き直さずに済むように。本物は `/real/` の下で確かめる。D-085） |
 | `tests/test_style.py` | トークン・コントラスト・装飾画像のキャッシュ |
 | `tests/test_dialogue.py` | セリフ集の YAML と JSON の一致 |
 | `tests/test_ntfy_send.py` | ntfy 送信スクリプト |

@@ -178,13 +178,22 @@ function showLine(key, { index, hash, vars, extra } = {}) {
   const picked = pickLine(key, { index, hash });
   if (!picked) return false;
   const bubble = document.getElementById('bubble-text');
-  bubble.textContent = fillLine(picked.text, vars) + (extra || '');
+  const { kinich, ahau } = splitAhau(fillLine(picked.text, vars));
+  bubble.textContent = kinich + (extra || '');
+  showAhau(ahau);
   document.getElementById('bubble-choices').hidden = true; // 選択肢は、それを出したセリフのときだけ
   document.getElementById('bubble-mood').hidden = true;
   if (typeof placeToast === 'function' && document.getElementById('toast').classList.contains('in-dialogue')) { homeToast.hide(); placeToast(); }
   bubble.classList.remove('line-enter'); void bubble.offsetWidth; bubble.classList.add('line-enter'); // CR-M01：入りの動きをやり直す
   return true;
 }
+
+// アハウの合いの手（D-085）：あるときだけ、セリフの面の上に小さな吹き出しで出す。次のセリフ・ほかの画面へ移ったら消す
+function showAhau(text) {
+  document.getElementById('ahau-text').textContent = text || '';
+  document.getElementById('ahau-line').hidden = !text;
+}
+window.addEventListener('hashchange', () => showAhau(''));
 
 // 通知や記録の反応がないときの時間帯の一言（D-019 Q4 = 出す）。出せなければ「…」（沈黙）
 function showIdle(now = new Date()) {
@@ -451,7 +460,7 @@ function undoRecord({ kind, prevLine, reactionLine }) {
   Records.unset(kind);
   // 押した直後の取り消しで、セリフがまだ反応のままなら、押す前のセリフに戻す
   const bubble = document.getElementById('bubble-text');
-  if (prevLine !== undefined && bubble.textContent === reactionLine) bubble.textContent = prevLine;
+  if (prevLine !== undefined && bubble.textContent === reactionLine) { bubble.textContent = prevLine; showAhau(''); }
   applyRecords();
 }
 // 記録する（ホームのボタン・一覧から）。反応のセリフを出す。保存できたら true
