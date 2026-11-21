@@ -407,7 +407,7 @@ const Tasks = (() => {
   function setPriorityChip(scope, p) {
     for (const c of document.querySelectorAll(`${scope} .prio-chips .chip`)) c.setAttribute('aria-pressed', String((c.dataset.priority || null) === (p || null)));
   }
-  let toReport = false; // 完了したら日報に入れる（D-059）。作るたびにオフから
+  let toReport = true; // 完了したら日報に入れる（D-059）。作るたびにオンから（D-091）
   function setToReport(on) {
     toReport = on;
     $('task-report').setAttribute('aria-checked', String(on));
@@ -428,7 +428,7 @@ const Tasks = (() => {
     chosenDue = null;
     setChip('none');
     setPriorityChip('#task-form', priority);
-    setToReport(false);
+    setToReport(true);
     $('task-title').focus();
     $('task-form').scrollIntoView({ block: 'nearest' }); // 見えていれば動かさない
   }
