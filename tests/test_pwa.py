@@ -1356,6 +1356,29 @@ class PwaTest(unittest.TestCase):
         self.assertIn(page.text_content("#tasks-say-line"), lines)
         self.assertTrue(page.is_hidden("#done-section"))
 
+    def test_add_task_with_subtasks_from_the_start(self):
+        """主のタスクを作るときに、ミニタスクも一緒に入れられる（D-092）。空の名前は保存しない。開き直すと空から"""
+        page = self.tasks_page()
+        page.click(ADD_NONE)
+        self.assertEqual(page.text_content("#task-sub-count"), "0/10")
+        page.fill("#task-title", "資料をまとめる")
+        for name in ("下書き", "", "見直し"):
+            page.click("#task-sub-add")
+            page.fill("#task-subs li:last-child input", name)
+        self.assertEqual(page.text_content("#task-sub-count"), "3/10")
+        page.click("#task-subs li:nth-child(2) .task-del")  # 消せる
+        self.assertEqual(page.text_content("#task-sub-count"), "2/10")
+        page.click("#task-submit")
+        t = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
+        self.assertEqual([x["title"] for x in t["subtasks"]], ["下書き", "見直し"])
+        self.assertEqual(len({x["id"] for x in t["subtasks"]}), 2)
+        self.assertEqual(page.text_content("#task-list .sub-count"), "0/2")
+        page.click(ADD_NONE)
+        self.assertEqual(page.eval_on_selector_all("#task-subs li", "els => els.length"), 0)
+        for _ in range(10):
+            page.click("#task-sub-add")
+        self.assertTrue(page.is_hidden("#task-sub-add"))  # 10個まで
+
     def test_add_task_with_due_chip_and_persist(self):
         page = self.tasks_page()
         page.click(ADD_NONE)

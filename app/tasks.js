@@ -391,16 +391,49 @@ const Tasks = (() => {
     });
     return added;
   }
-  function add(title, due, toReport = false, priority = null) {
+  function add(title, due, toReport = false, priority = null, subtasks = []) {
     const list = load();
     const at = Date.now();
-    list.push({ id: newId(), title, due: due || null, priority: PRIORITIES.includes(priority) ? priority : null, subtasks: [], done: false, doneAt: null, createdAt: at, updatedAt: at, toReport });
+    list.push({ id: newId(), title, due: due || null, priority: PRIORITIES.includes(priority) ? priority : null, subtasks, done: false, doneAt: null, createdAt: at, updatedAt: at, toReport });
     if (!Store.write(KEY, list)) return false;
     render();
     return true;
   }
 
-  // ---------- 追加フォーム ----------
+  // ミニタスクの名前を並べて入れる欄（追加フォームと編集で共通。10個まで）。空の名前は保存しない
+  function subEditor(ulId, addId, countId) {
+    let subs = []; // { id, title, done, doneAt }
+    function draw() {
+      $(ulId).replaceChildren(...subs.map((sub, i) => {
+        const li = document.createElement('li');
+        li.className = 'edit-sub';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.maxLength = 100;
+        input.value = sub.title;
+        input.setAttribute('aria-label', `ミニタスク ${i + 1} の名前`);
+        input.addEventListener('input', () => { sub.title = input.value; });
+        li.append(input, trashButton(`ミニタスク「${sub.title}」を消す`, () => { subs.splice(i, 1); draw(); }));
+        return li;
+      }));
+      $(addId).hidden = subs.length >= SUB_MAX;
+      $(countId).textContent = `${subs.length}/${SUB_MAX}`;
+    }
+    $(addId).addEventListener('click', () => {
+      if (subs.length >= SUB_MAX) return;
+      subs.push({ id: newId(), title: '', done: false, doneAt: null });
+      draw();
+      const inputs = $(ulId).querySelectorAll('input');
+      inputs[inputs.length - 1].focus();
+    });
+    return {
+      set(list) { subs = list.map((x) => ({ ...x })); draw(); },
+      get: () => subs.map((x) => ({ ...x, title: x.title.trim().slice(0, 100) })).filter((x) => x.title).slice(0, SUB_MAX),
+    };
+  }
+
+  // ---------- 追加フォーム（ミニタスクも作るときに入れられる。D-092） ----------
+  const newSubs = subEditor('task-subs', 'task-sub-add', 'task-sub-count');
   let chosenDue = null; // 'YYYY-MM-DD' または null
   let chosenPriority = null; // 'high' | 'mid' | 'low' | null
   let formAt = null; // フォームを開いている優先度の欄（'high'・'mid'・'low'・'none'）
@@ -429,6 +462,7 @@ const Tasks = (() => {
     setChip('none');
     setPriorityChip('#task-form', priority);
     setToReport(true);
+    newSubs.set([]);
     $('task-title').focus();
     $('task-form').scrollIntoView({ block: 'nearest' }); // 見えていれば動かさない
   }
@@ -462,7 +496,7 @@ const Tasks = (() => {
       $('task-form-status').textContent = 'やることを入力してください';
       return;
     }
-    if (!add(title.slice(0, 100), chosenDue, toReport, chosenPriority)) { // 入力を残したまま知らせる
+    if (!add(title.slice(0, 100), chosenDue, toReport, chosenPriority, newSubs.get())) { // 入力を残したまま知らせる
       $('task-form-status').textContent = SAVE_FAILED;
       return;
     }
@@ -499,7 +533,7 @@ const Tasks = (() => {
   let editDue = null;
   let editPriority = null;
   let editReport = false;
-  let editSubs = []; // { id, title, done, doneAt }
+  const editSubs = subEditor('edit-subs', 'edit-sub-add', 'edit-sub-count');
   const editChips = () => document.querySelectorAll('#task-edit .due-chips .chip');
   function setEditDueChip(kind) { for (const c of editChips()) c.setAttribute('aria-pressed', String(c.dataset.due === kind)); }
   function dueKind(due, now = new Date()) {
@@ -512,37 +546,19 @@ const Tasks = (() => {
     $('edit-report').setAttribute('aria-checked', String(on));
     $('edit-report').textContent = on ? 'オン' : 'オフ';
   }
-  function renderEditSubs() {
-    const ul = $('edit-subs');
-    ul.replaceChildren(...editSubs.map((sub, i) => {
-      const li = document.createElement('li');
-      li.className = 'edit-sub';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.maxLength = 100;
-      input.value = sub.title;
-      input.setAttribute('aria-label', `ミニタスク ${i + 1} の名前`);
-      input.addEventListener('input', () => { sub.title = input.value; });
-      li.append(input, trashButton(`ミニタスク「${sub.title}」を消す`, () => { editSubs.splice(i, 1); renderEditSubs(); }));
-      return li;
-    }));
-    $('edit-sub-add').hidden = editSubs.length >= SUB_MAX;
-    $('edit-sub-count').textContent = `${editSubs.length}/${SUB_MAX}`;
-  }
   function openEdit(id) {
     const t = load().find((x) => x.id === id);
     if (!t) return;
     editId = id;
     editDue = t.due || null;
     editPriority = t.priority;
-    editSubs = t.subtasks.map((x) => ({ ...x }));
     $('edit-title').value = t.title;
     $('edit-due').value = editDue || '';
     setEditDueChip(dueKind(editDue));
     setPriorityChip('#task-edit', editPriority);
     setEditReport(!!t.toReport);
     $('task-edit-status').textContent = '';
-    renderEditSubs();
+    editSubs.set(t.subtasks);
     $('task-edit').showModal();
   }
   for (const chip of editChips()) {
@@ -558,19 +574,12 @@ const Tasks = (() => {
     chip.addEventListener('click', () => { editPriority = chip.dataset.priority || null; setPriorityChip('#task-edit', editPriority); });
   }
   $('edit-report').addEventListener('click', () => setEditReport(!editReport));
-  $('edit-sub-add').addEventListener('click', () => {
-    if (editSubs.length >= SUB_MAX) return;
-    editSubs.push({ id: newId(), title: '', done: false, doneAt: null });
-    renderEditSubs();
-    const inputs = $('edit-subs').querySelectorAll('input');
-    inputs[inputs.length - 1].focus();
-  });
   $('task-edit-cancel').addEventListener('click', () => $('task-edit').close());
   $('task-edit-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const title = $('edit-title').value.trim();
     if (!title) { $('task-edit-status').textContent = 'やることを入力してください'; return; }
-    const subs = editSubs.map((x) => ({ ...x, title: x.title.trim().slice(0, 100) })).filter((x) => x.title).slice(0, SUB_MAX);
+    const subs = editSubs.get();
     const ok = update(editId, (t) => {
       t.title = title.slice(0, 100);
       t.due = editDue;
