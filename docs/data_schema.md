@@ -18,7 +18,7 @@
 | `db.tasks` | `[ { id, title, due, priority, subtasks, done, doneAt, createdAt, updatedAt, toReport } ]` | タスク。`priority` は `high`／`mid`／`low`／`null`（なし）。`subtasks` はミニタスク `[ { id, title, done, doneAt } ]`（1段だけ、10個まで。D-070）。どちらもない古いデータは「なし」「ミニタスクなし」として読む。`toReport` は完了したら日報に入れるか（D-059。ないものは false）。`due` は日付か `null`。`updatedAt` は最後に変えた時点（同期で「どちらが新しいか」を決める） |
 | `db.reports` | `{ 日付: { mood, done, left, tomorrow, savedAt } }` | 日報。1日1件。`mood` は `good`／`normal`／`tired`／`null` |
 | `db.records` | `{ 日付: { 種類: 値 } }` | 毎日の記録。値はふつう `{ time, at }`（`time` は押した時刻、`at` はその時点）、休憩は `[ { time, at }, … ]`（押した回数だけ）、「今日はなし」は `{ skipped: true, at }`（D-046）。時刻を手で入れたものは `manual: true` が付き、`time`・`at` は入れた時刻（1項目につき1日1回。休憩は時刻の順に並べる。D-079）。種類は下の表 |
-| `db.routine` | `{ weekday: { 項目: 'HH:MM' か null }, holiday: { … }, holidays: [曜日の番号], updatedAt }` | 毎日の時刻（D-048）。項目は `wake`・`breakfast`・`work_start`・`lunch`・`work_end`・`dinner`・`bath`・`sleep`。曜日は 0＝日〜6＝土 |
+| `db.routine` | `{ weekday: { 項目: 'HH:MM' か null }, holiday: { … }, holidays: [曜日の番号], publicHolidays: true か false, updatedAt }` | 毎日の時刻（D-048）。項目は `wake`・`breakfast`・`work_start`・`lunch`・`work_end`・`dinner`・`bath`・`sleep`。曜日は 0＝日〜6＝土。`publicHolidays` は祝日も休日にするか（ないときはオン。D-094） |
 | `db.routineOverrides` | `{ 'YYYY-MM-DD': { 項目: 'HH:MM' か null } }` | 毎日の時刻をその日だけ変えたもの（D-060 ⑭, D-061）。null は「この日はなし」。60日より前は消す。スプレッドシートには「毎日の時刻」のシートに今日以降の分を1日1行で送る |
 | `db.timer` の `custom` | `[ { id, name, minutes } ]` | 利用者が作ったタイマー |
 | `db.timer` の `builtin` | `{ 用途別の id: 分数 }` | 用途別のタイマー（`work`・`break`・`bath`・`brush`）のうち、利用者が時間を変えたものだけ（D-044）。ないものは初めの時間 |
