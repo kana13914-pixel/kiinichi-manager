@@ -132,6 +132,20 @@ const Touch = (() => {
     return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom ? { part: null } : null;
   }
 
+  // 触った所に金の波紋を広げる（D-096）。動きを減らす設定では出さない。押しても反応しない所には出さない
+  function ripple(x, y) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const r = document.createElement('span');
+    r.className = 'touch-ripple';
+    r.setAttribute('aria-hidden', 'true');
+    r.style.left = x + 'px';
+    r.style.top = y + 'px';
+    document.body.append(r);
+    const gone = () => r.remove();
+    r.addEventListener('animationend', gone);
+    setTimeout(gone, 1000); // animationend が来なくても消す
+  }
+
   let down = null;
   function cancel() { if (down) clearTimeout(down.timer); down = null; }
   const home = $('view-home');
@@ -140,6 +154,7 @@ const Touch = (() => {
     cancel();
     const h = hit(e);
     if (!h) return;
+    ripple(e.clientX, e.clientY);
     down = { x: e.clientX, y: e.clientY, part: h.part, held: false };
     down.timer = setTimeout(() => { if (down) { down.held = true; touch(down.part, true); } }, HOLD_MS);
   });

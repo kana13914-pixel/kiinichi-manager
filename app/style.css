@@ -50,6 +50,7 @@
   --switch-knob: 22px;     /* つまみの大きさ */
   --switch-gap: 4px;       /* 溝の端とつまみの間 */
   --size-record: 52px;
+  --size-ripple: 72px;     /* ホームを触ったときの波紋（D-096） */
   --size-btn-primary: 48px;
   --size-icon: 24px;
   --size-icon-s: 16px;
@@ -965,6 +966,18 @@ input:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 1
 .view > .sub-header {
   padding-bottom: var(--space-2);
   background: linear-gradient(90deg, var(--color-gold-line), transparent) left bottom / 100% 1px no-repeat;
+}
+
+/* ---------- ホームを触ったときの波紋（D-096） ---------- */
+.touch-ripple {
+  position: fixed; z-index: var(--z-tabbar); width: var(--size-ripple); height: var(--size-ripple);
+  margin: calc(var(--size-ripple) / -2) 0 0 calc(var(--size-ripple) / -2);
+  border: 2px solid var(--color-accent); border-radius: 50%; pointer-events: none;
+  animation: touch-ripple 600ms ease-out forwards;
+}
+@keyframes touch-ripple {
+  from { transform: scale(0.2); opacity: 0.9; }
+  to { transform: scale(1.4); opacity: 0; }
 }
 
 /* ---------- 動きを減らす設定（I3-04） ---------- */

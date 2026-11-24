@@ -662,6 +662,24 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(self.bubble(page), "頭の長押し")
         self.assertEqual(t("neck", False, base + 80000), "touch.night")  # 文面のない場所は時間帯のセリフ
 
+    def test_touch_ripple_where_tapped(self):
+        """触った所に波紋（D-096）。反応しない所（セリフの面など）には出さない。動きを減らす設定では出さない。しばらくで消える"""
+        page = self.scene_page(10, 0)
+        page.evaluate("""() => { window.__ripples = []; new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes)
+          if (n.classList && n.classList.contains('touch-ripple')) window.__ripples.push([n.style.left, n.style.top]); })
+          .observe(document.body, { childList: true }); }""")
+        box = page.eval_on_selector("#portrait", "e => { const r = e.getBoundingClientRect(); return [Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)]; }")
+        page.mouse.click(*box)
+        self.assertEqual(page.evaluate("window.__ripples"), [[f"{box[0]}px", f"{box[1]}px"]])
+        page.click("#bubble-text")
+        self.assertEqual(len(page.evaluate("window.__ripples")), 1)
+        page.clock.run_for(1200)
+        self.assertEqual(page.eval_on_selector_all(".touch-ripple", "els => els.length"), 0)
+        page.emulate_media(reduced_motion="reduce")
+        page.mouse.click(*box)
+        self.assertEqual(len(page.evaluate("window.__ripples")), 1)
+        self.assertEqual(self.bubble(page), "昼のタッチ")  # 反応はする
+
     def test_touch_by_tapping_emblem_but_not_parts_or_during_evening_offer(self):
         """紋章を押すと反応する。セリフの面・記録のボタンの上、夕方の提案中は反応しない"""
         page = self.scene_page(10, 0)
