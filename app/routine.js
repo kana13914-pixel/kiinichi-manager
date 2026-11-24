@@ -22,11 +22,63 @@ function logicalMinutes(now = new Date()) {
   return (h < DAY_STARTS_AT ? h + 24 : h) * 60 + now.getMinutes();
 }
 
+// 日本の祝日（国民の祝日・振替休日・国民の休日。行事や記念日は入れない。D-094）。その日の祝日の名前、祝日でなければ null。
+// 外から取らずに決まりで計算する（2020年以降の法律。春分・秋分は計算式で、正式には前の年の2月に決まる）
+const JpHoliday = (() => {
+  const cache = new Map();
+  const nthMonday = (y, m, n) => { const first = new Date(y, m - 1, 1).getDay(); return 1 + ((8 - first) % 7) + (n - 1) * 7; };
+  const equinox = (y, base) => Math.floor(base + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4));
+  function fixed(y) { // その年の祝日（振替・国民の休日を除く）{ 'M-D': 名前 }
+    const h = {};
+    const put = (m, d, name) => { h[`${m}-${d}`] = name; };
+    put(1, 1, '元日');
+    put(1, nthMonday(y, 1, 2), '成人の日');
+    put(2, 11, '建国記念の日');
+    if (y >= 2020) put(2, 23, '天皇誕生日');
+    put(3, equinox(y, 20.8431), '春分の日');
+    put(4, 29, '昭和の日');
+    put(5, 3, '憲法記念日'); put(5, 4, 'みどりの日'); put(5, 5, 'こどもの日');
+    if (y === 2020) { put(7, 23, '海の日'); put(7, 24, 'スポーツの日'); put(8, 10, '山の日'); }
+    else if (y === 2021) { put(7, 22, '海の日'); put(7, 23, 'スポーツの日'); put(8, 8, '山の日'); }
+    else { put(7, nthMonday(y, 7, 3), '海の日'); put(8, 11, '山の日'); put(10, nthMonday(y, 10, 2), 'スポーツの日'); }
+    put(9, nthMonday(y, 9, 3), '敬老の日');
+    put(9, equinox(y, 23.2488), '秋分の日');
+    put(11, 3, '文化の日');
+    put(11, 23, '勤労感謝の日');
+    return h;
+  }
+  function year(y) {
+    if (cache.has(y)) return cache.get(y);
+    const base = fixed(y);
+    const out = {};
+    const name = (d) => base[`${d.getMonth() + 1}-${d.getDate()}`] || null;
+    for (let d = new Date(y, 0, 1); d.getFullYear() === y; d.setDate(d.getDate() + 1)) {
+      const key = dateStr(d);
+      const n = name(d);
+      if (n) { out[key] = n; continue; }
+      const prev = new Date(d); prev.setDate(prev.getDate() - 1);
+      const next = new Date(d); next.setDate(next.getDate() + 1);
+      if (d.getDay() !== 0 && name(prev) && name(next)) out[key] = '国民の休日'; // 祝日にはさまれた平日
+    }
+    // 振替休日：日曜の祝日のあと、最初の祝日でない日
+    for (const key of Object.keys(out).sort()) {
+      const d = parseDay(key);
+      if (d.getDay() !== 0 || !base[`${d.getMonth() + 1}-${d.getDate()}`]) continue;
+      const s = new Date(d);
+      do { s.setDate(s.getDate() + 1); } while (out[dateStr(s)]);
+      if (s.getFullYear() === y) out[dateStr(s)] = '振替休日';
+    }
+    cache.set(y, out);
+    return out;
+  }
+  return { nameOf: (day) => year(day.getFullYear())[dateStr(day)] || null };
+})();
+
 const Routine = {
   // 既定値：平日は今までの仮データの時刻。休日は同じ時刻で仕事なし。休日は土日
   defaults() {
     const weekday = { wake: '07:00', breakfast: '07:30', work_start: '09:00', lunch: '12:00', work_end: '18:30', dinner: '19:30', bath: '22:30', sleep: '23:30' };
-    return { weekday, holiday: { ...weekday, work_start: null, work_end: null }, holidays: [0, 6] };
+    return { weekday, holiday: { ...weekday, work_start: null, work_end: null }, holidays: [0, 6], publicHolidays: true }; // publicHolidays：祝日も休日にする（D-094）
   },
   load() {
     const d = this.defaults();
@@ -44,11 +96,16 @@ const Routine = {
       weekday: pattern(r.weekday, d.weekday),
       holiday: pattern(r.holiday, d.holiday),
       holidays: Array.isArray(r.holidays) ? [...new Set(r.holidays.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6))].sort() : d.holidays,
+      publicHolidays: typeof r.publicHolidays === 'boolean' ? r.publicHolidays : d.publicHolidays,
     };
   },
   save(r) { return Store.write(DB.routine, { ...r, updatedAt: Date.now() }); },
   // その日（0時の Date。1日の区切りは朝4時なので logicalDay() の値を渡す）が平日か休日か
-  typeOf(day) { return this.load().holidays.includes(day.getDay()) ? 'holiday' : 'weekday'; },
+  // 「祝日も休日にする」がオンなら、日本の祝日も休日（D-094）
+  typeOf(day) {
+    const r = this.load();
+    return r.holidays.includes(day.getDay()) || (r.publicHolidays && JpHoliday.nameOf(day)) ? 'holiday' : 'weekday';
+  },
   // その日だけの変更 { 'YYYY-MM-DD': { wake: '08:30', breakfast: null } }（D-060 ⑭）
   overrides() {
     const o = Store.read(DB.routineOverrides, {});
@@ -168,7 +225,10 @@ Routine.prune();
       });
       return b;
     }));
+    $('routine-public').setAttribute('aria-checked', String(r.publicHolidays));
+    $('routine-public').textContent = r.publicHolidays ? 'オン' : 'オフ';
   }
+  $('routine-public').addEventListener('click', () => { update((x) => { x.publicHolidays = !x.publicHolidays; }); render(); });
   $('routine-mode-weekday').addEventListener('click', () => { mode = 'weekday'; render(); });
   $('routine-mode-holiday').addEventListener('click', () => { mode = 'holiday'; render(); });
   // 予定の画面の「毎日の時刻」のボタンで開く・閉じる（D-060 ⑭）
@@ -202,7 +262,8 @@ const RoutineDay = (() => {
     const base = Routine.baseTimesFor(day)[ev.id];
     const over = Routine.overrideOf(day, ev.id);
     $('routine-day-title').textContent = `${labelShort(day)}の${ev.title}`;
-    $('routine-day-base').textContent = `${Routine.typeOf(day) === 'holiday' ? '休日' : '平日'}の時刻：${base || 'なし'}${over ? `（この日だけ${over.value === null ? 'なし' : over.value}にしています）` : ''}`;
+    const holidayName = Routine.load().publicHolidays && JpHoliday.nameOf(day);
+    $('routine-day-base').textContent = `${Routine.typeOf(day) === 'holiday' ? '休日' : '平日'}${holidayName ? `（${holidayName}）` : ''}の時刻：${base || 'なし'}${over ? `（この日だけ${over.value === null ? 'なし' : over.value}にしています）` : ''}`;
     $('routine-day-time').value = (over ? over.value : base) || base || '';
     $('routine-day-reset').hidden = !over;
     $('routine-day-status').textContent = '';

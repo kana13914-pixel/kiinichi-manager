@@ -45,7 +45,7 @@ const Sync = (() => {
     })));
     const r = Routine.load();
     const row = (name, times) => [name, ...ROUTINE_ITEMS.map(([id]) => times[id] || 'なし')];
-    const routine = [row('平日', r.weekday), row('休日', r.holiday), ['休日の曜日', r.holidays.map((n) => WEEK_LABELS[n]).join('・')]];
+    const routine = [row('平日', r.weekday), row('休日', r.holiday), ['休日の曜日', r.holidays.map((n) => WEEK_LABELS[n]).join('・')], ['祝日', r.publicHolidays ? '休日' : '平日のまま']];
     // その日だけ変えた時刻（今日以降。D-060 ⑭）。変えていない項目は空
     const today = todayKey();
     for (const [date, o] of Object.entries(Routine.overrides()).filter(([d]) => d >= today).sort()) {

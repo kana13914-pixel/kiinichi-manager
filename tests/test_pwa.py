@@ -2753,6 +2753,27 @@ class PwaTest(unittest.TestCase):
                                           "els => els.map((b) => { const r = b.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; })")
         self.assertTrue(all(w >= 44 and h >= 44 for w, h in sizes), sizes)
 
+    def test_public_holidays_use_holiday_times(self):
+        """祝日も休日の時刻（D-094）。決まりで計算した祝日・振替休日・国民の休日。設定でオフにできる"""
+        page = self.clock_page(9, 30, day=23)  # 2026-11-23（月）勤労感謝の日
+        names = page.evaluate("""() => ['2026-11-23', '2026-11-24', '2026-05-06', '2026-09-22', '2026-03-20', '2027-03-22', '2026-02-03']
+          .map((d) => JpHoliday.nameOf(parseDay(d)))""")
+        self.assertEqual(names, ["勤労感謝の日", None, "振替休日", "国民の休日", "春分の日", "振替休日", None])  # 節分などの行事は入れない
+        self.assertNotIn("work_start", self.docked(page))
+        self.assertEqual(page.evaluate("Routine.typeOf(parseDay('2026-11-24'))"), "weekday")
+        page.evaluate("location.hash = '#schedule'")
+        page.click("#routine-open")
+        self.assertEqual(page.get_attribute("#routine-public", "aria-checked"), "true")
+        page.click("#routine-public")
+        self.assertEqual(page.get_attribute("#routine-public", "aria-checked"), "false")
+        self.assertFalse(json.loads(page.evaluate("localStorage.getItem('db.routine')"))["publicHolidays"])
+        page.evaluate("location.hash = '#home'")
+        self.assertIn("work_start", self.docked(page))  # オフなら祝日も平日の時刻
+        page.evaluate("location.hash = '#schedule'")
+        page.click("#routine-public")
+        page.click(self.routine_row(page, "2026-11-23", "起床"))
+        self.assertIn("休日（勤労感謝の日）の時刻", page.text_content("#routine-day-base"))
+
     def test_wake_line_depends_on_planned_time(self):
         for (h, m), cond in (((6, 30), "early"), ((7, 10), "on_time"), ((7, 40), "late")):
             with self.subTest(cond=cond):
