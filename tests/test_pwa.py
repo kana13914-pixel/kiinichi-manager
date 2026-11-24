@@ -2097,6 +2097,35 @@ class PwaTest(unittest.TestCase):
         page.evaluate(stub, [allday, {"at": "2026-11-09T09:00:00", "title": "朝会", "allDay": False}])  # 時刻のある予定は過ぎた
         self.assertEqual(line(), "今日の分はもう過ぎた。先の分を見ておけ。")
 
+    def test_task_due_dates_on_schedule(self):
+        """未完了のタスクの期限を、予定のリストと月表示に出す（D-095）。完了したもの・期限なしは出さない。予定の数や一言には数えない"""
+        tasks = [
+            {"id": "a", "title": "見積もり", "due": "2026-11-10", "done": False, "createdAt": 1},
+            {"id": "b", "title": "済んだ", "due": "2026-11-10", "done": True, "doneAt": 1, "createdAt": 2},
+            {"id": "c", "title": "期限なし", "due": None, "done": False, "createdAt": 3},
+            {"id": "d", "title": "請求書", "due": "2026-11-12", "done": False, "createdAt": 4},
+        ]
+        init = "localStorage.setItem('db.tasks', %s)" % json.dumps(json.dumps(tasks))
+        page = self.clock_page(10, 0, "#schedule", init_script=init)
+        page.wait_for_selector("#view-schedule", state="visible")
+        rows = [r[:2] for r in self.schedule_rows(page, "2026-11-10")]
+        self.assertEqual(rows[0], ["期限", "見積もりタスク"])
+        self.assertEqual(sum(1 for r in rows if r[0] == "期限"), 1)
+        page.evaluate("""() => { const orig = SampleData.eventsOn;
+          SampleData.eventsOn = (d) => d.getDate() === 12 ? [] : orig(d); Schedule.refresh(); }""")
+        self.assertEqual([r[:2] for r in self.schedule_rows(page, "2026-11-12")], [["期限", "請求書タスク"]])  # 予定なしの行は出さない
+        # ほかの画面で期限を変えてから開き直すと合う
+        page.evaluate("location.hash = '#tasks'")
+        page.evaluate("""() => { const l = JSON.parse(localStorage.getItem('db.tasks')); l[0].due = '2026-11-11'; localStorage.setItem('db.tasks', JSON.stringify(l)); }""")
+        page.evaluate("location.hash = '#schedule'")
+        self.assertEqual(self.schedule_rows(page, "2026-11-11")[0][:2], ["期限", "見積もりタスク"])
+        page.click("#schedule-mode-month")
+        cell = self.cal_cell(page, "2026-11-12")
+        self.assertIn("□ 請求書", cell["tags"])
+        self.assertIn("タスクの期限1件", page.get_attribute("#cal-grid .cal-cell[data-date='2026-11-12']", "aria-label"))
+        page.click("#cal-grid .cal-cell[data-date='2026-11-12']")
+        self.assertEqual(page.eval_on_selector_all("#cal-day-list .schedule-row", "els => els.map((e) => e.textContent)"), ["期限請求書タスク"])
+
     def cal_cell(self, page, date):
         return page.eval_on_selector(f"#cal-grid .cal-cell[data-date='{date}']", """e => ({
           date: e.querySelector('.cal-date').textContent, tags: [...e.querySelectorAll('.cal-tag')].map(t => t.textContent),

@@ -98,6 +98,29 @@ const Schedule = (() => {
     return li;
   }
 
+  // タスクの期限（D-095）：未完了のタスクを、期限の日に「期限」の行・月のマスのタグで出す。予定の数や一言には数えない
+  function dueTasks(date) {
+    if (typeof Tasks === 'undefined') return [];
+    const key = dateStr(date);
+    return Tasks.load().filter((t) => !t.done && t.due === key);
+  }
+  function taskRow(t) {
+    const li = document.createElement('li');
+    li.className = 'schedule-row task-due';
+    const time = document.createElement('span');
+    time.className = 'schedule-time allday';
+    time.textContent = '期限';
+    const title = document.createElement('span');
+    title.className = 'schedule-title';
+    title.textContent = t.title;
+    const tag = document.createElement('small');
+    tag.className = 'tag routine-tag';
+    tag.textContent = 'タスク';
+    title.append(tag);
+    li.append(time, title);
+    return li;
+  }
+
   function noneRow() {
     const li = document.createElement('li');
     li.className = 'schedule-row none';
@@ -127,6 +150,7 @@ const Schedule = (() => {
       const date = dayAt(now, i);
       const events = SampleData.eventsOn(date);
       const skipped = Routine.skippedFor(date);
+      const tasks = dueTasks(date);
       const sec = document.createElement('section');
       sec.className = 'schedule-day';
       sec.dataset.date = dateStr(date);
@@ -135,7 +159,7 @@ const Schedule = (() => {
       h.textContent = (i === 0 ? '今日 ' : i === 1 ? '明日 ' : '') + dayLabel(date);
       const ul = document.createElement('ul');
       ul.className = 'schedule-list';
-      ul.append(...(events.length ? events.map((e) => row(e, now, next)) : [noneRow()]), ...skipped.map(skippedRow));
+      ul.append(...tasks.map(taskRow), ...(events.length ? events.map((e) => row(e, now, next)) : tasks.length ? [] : [noneRow()]), ...skipped.map(skippedRow));
       sec.append(h, ul);
       days.push(sec);
     }
@@ -145,6 +169,8 @@ const Schedule = (() => {
   // ---------- 月 ----------
   function cell(date, now) {
     const events = SampleData.eventsOn(date).filter((e) => e.kind === 'event');
+    const tasks = dueTasks(date);
+    const tags = [...events.map((e) => ({ text: e.title })), ...tasks.map((t) => ({ text: '□ ' + t.title, task: true }))];
     const b = document.createElement('button');
     b.type = 'button';
     const today = dateStr(date) === dateStr(now);
@@ -152,21 +178,21 @@ const Schedule = (() => {
     b.className = 'cal-cell' + (date.getMonth() !== cursor.getMonth() ? ' out' : '') + (today ? ' today' : '');
     b.dataset.date = dateStr(date);
     b.setAttribute('aria-pressed', String(picked));
-    b.setAttribute('aria-label', `${today ? '今日 ' : ''}${dayLabel(date)} 予定${events.length}件`);
+    b.setAttribute('aria-label', `${today ? '今日 ' : ''}${dayLabel(date)} 予定${events.length}件${tasks.length ? ` タスクの期限${tasks.length}件` : ''}`);
     const num = document.createElement('span');
     num.className = 'cal-date';
     num.textContent = String(date.getDate());
     b.append(num);
-    for (const e of events.slice(0, CELL_TAGS)) {
+    for (const e of tags.slice(0, CELL_TAGS)) {
       const tag = document.createElement('span');
-      tag.className = 'cal-tag';
-      tag.textContent = e.title;
+      tag.className = 'cal-tag' + (e.task ? ' task' : '');
+      tag.textContent = e.text;
       b.append(tag);
     }
-    if (events.length > CELL_TAGS) {
+    if (tags.length > CELL_TAGS) {
       const more = document.createElement('span');
       more.className = 'cal-more';
-      more.textContent = `+${events.length - CELL_TAGS}`;
+      more.textContent = `+${tags.length - CELL_TAGS}`;
       b.append(more);
     }
     b.addEventListener('click', () => {
@@ -186,9 +212,10 @@ const Schedule = (() => {
     $('cal-grid').replaceChildren(...cells);
 
     const events = SampleData.eventsOn(selected).filter((e) => e.kind === 'event');
+    const tasks = dueTasks(selected);
     const next = nextEvent(now);
     $('cal-day-title').textContent = dayLabel(selected);
-    $('cal-day-list').replaceChildren(...(events.length ? events.map((e) => row(e, now, next)) : [noneRow()]));
+    $('cal-day-list').replaceChildren(...tasks.map(taskRow), ...(events.length || tasks.length ? events.map((e) => row(e, now, next)) : [noneRow()]));
   }
   function moveMonth(n, now = new Date()) {
     cursor = new Date(cursor.getFullYear(), cursor.getMonth() + n, 1);
@@ -351,7 +378,7 @@ const Schedule = (() => {
   $('cal-next').addEventListener('click', () => moveMonth(1));
   $('cal-today').addEventListener('click', () => { cursor = null; render(new Date(), true); });
 
-  onShow('schedule', () => render());
+  onShow('schedule', () => render(new Date(), true)); // 開くたびに作り直す（ほかの画面でタスクの期限を変えたときも合うように）
   setInterval(() => { if (location.hash === '#schedule') render(); }, 1000);
   window.addEventListener('routinechange', () => render(new Date(), true)); // 毎日の時刻を変えたら描き直す
   window.addEventListener('routineday', (e) => { $('routine-msg').textContent = e.detail; }); // その日だけ変えた知らせ // 「あと何分」と過ぎた予定を、分が変わったら直す
