@@ -3269,6 +3269,50 @@ class PwaTest(unittest.TestCase):
         page.wait_for_timeout(1200)
         self.assertEqual(len(calls), 4)
 
+    def test_call_modes_per_item(self):
+        """毎日の時刻の項目ごとの声掛け（D-098）：ちょうど／30分後／なし。はじめは今までと同じ（食事は30分後・就寝はちょうど）。
+        文のない項目は送らない。記録したら送らない"""
+        page = self.clock_page(6, 0, "#settings")
+        plan = lambda: page.evaluate("Object.fromEntries(Object.entries(Voice.plan(new Date())).map(([k, v]) => [k, [new Date(v.at).toTimeString().slice(0, 5), v.body]]))")
+        pressed = lambda: page.eval_on_selector_all("#call-list li", "els => els.map((li) => [li.dataset.id, li.querySelector('[aria-pressed=true]').dataset.call])")
+        self.assertEqual(pressed(), [["wake", "off"], ["breakfast", "late"], ["work_start", "off"], ["lunch", "late"],
+                                     ["work_end", "off"], ["dinner", "late"], ["bath", "off"], ["sleep", "on"]])
+        before = plan()
+        self.assertEqual(sorted(before), ["meal:2026-11-09:breakfast", "meal:2026-11-09:dinner", "meal:2026-11-09:lunch", "night:2026-11-09", "sleep:2026-11-09"])
+        self.assertEqual(before["meal:2026-11-09:breakfast"][0], "08:00")
+        self.assertEqual(before["sleep:2026-11-09"][0], "23:30")
+        # 起床をちょうどに（文がなければ送らない → 文を足すと送る）
+        page.click("#call-list li[data-id=wake] [data-call=on]")
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.prefs')"))["callModes"]["wake"], "on")
+        self.assertNotIn("call:2026-11-09:wake", plan())
+        page.evaluate("""() => { dialogue.call_on_time = { conditions: [{ id: 'wake', lines: ['起床の時刻だ。'] }] };
+          dialogue.call_late = { conditions: [{ id: 'sleep', lines: ['まだ起きているのか。'] }, { id: 'bath', lines: ['風呂はまだか。'] }] };
+          dialogue.call_on_time.conditions.push({ id: 'breakfast', lines: ['朝食の時刻だ。'] }); }""")
+        self.assertEqual(plan()["call:2026-11-09:wake"], ["07:00", "起床の時刻だ。"])
+        # 朝食をちょうどに・入浴と就寝を30分後に
+        page.click("#call-list li[data-id=breakfast] [data-call=on]")
+        page.click("#call-list li[data-id=bath] [data-call=late]")
+        page.click("#call-list li[data-id=sleep] [data-call=late]")
+        got = plan()
+        self.assertEqual(got["meal:2026-11-09:breakfast"], ["07:30", "朝食の時刻だ。"])
+        self.assertEqual(got["call:2026-11-09:bath"], ["23:00", "風呂はまだか。"])
+        self.assertEqual(got["sleep:2026-11-09"], ["00:00", "まだ起きているのか。"])
+        # 夕食をなしに
+        page.click("#call-list li[data-id=dinner] [data-call=off]")
+        self.assertNotIn("meal:2026-11-09:dinner", plan())
+        sizes = page.eval_on_selector_all("#call-list button", "els => els.map((b) => b.getBoundingClientRect().height)")
+        self.assertTrue(all(h >= 44 for h in sizes), sizes)
+        # 起床を記録したら送らない
+        page.evaluate("location.hash = '#home'")
+        page.click(".act[data-record=wake]")
+        self.assertNotIn("call:2026-11-09:wake", plan())
+
+    def test_call_modes_fit_small_screen(self):
+        page = self.clock_page(10, 0, "#settings", size=(375, 667), safe=(20, 0))
+        self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
+        rows = page.eval_on_selector_all("#call-list li", "els => els.map((li) => li.scrollWidth <= li.clientWidth)")
+        self.assertTrue(all(rows))
+
     def test_voice_updates_when_recording(self):
         page, calls = self.voice_page(10, 0)
         self.wait_calls(page, calls, 4)
@@ -3860,7 +3904,7 @@ class PwaTest(unittest.TestCase):
         notes = page.eval_on_selector_all("#view-settings .card > p.note", "els => els.map(e => [e.textContent, Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight || 20))])")
         texts = [t for t, _ in notes]
         self.assertIn("週が明けたら、先週の日報からキィニチが短く振り返ります。", texts)
-        self.assertIn("食事・休憩・夜・就寝前・予定の前に、アプリを閉じていても声を掛けます。記録すれば取り消します。", texts)
+        self.assertIn("アプリを閉じていても声を掛けます。記録すれば取り消します。", texts)
         self.assertIn("オフにすると、タスク・タイマー・予定・日報の一言を出しません。", texts)
         for sel in ("#view-settings .card .more",):
             self.assertGreaterEqual(len(page.query_selector_all(sel)), 3)

@@ -47,7 +47,7 @@
 | `db.meta` | `{ schema, migratedAt }` 形の版 |
 | `db.reportDraft` | 日報の書きかけ（D-033） |
 | `db.evening` | 夕方の提案（D-073）をホームで出した日 `{ date }`。その日はもう出さない |
-| `db.prefs` | 端末ごとの好み。`screenLines`（キィニチの一言を出すか。既定 true。D-047）、`voice`（声掛けの通知。既定 true。D-049）、`weekly`（週次コメント。既定 true。D-058）、`taskFolded`（タスクのたたんだ優先度 `['high', 'none', …]`。既定 []。D-070）、`tone`（キィニチの話し方 `client`＝依頼人版・`friend`＝友人版・`sweet`＝甘やかし版。既定 `client`。D-082） |
+| `db.prefs` | 端末ごとの好み。`screenLines`（キィニチの一言を出すか。既定 true。D-047）、`voice`（声掛けの通知。既定 true。D-049）、`weekly`（週次コメント。既定 true。D-058）、`taskFolded`（タスクのたたんだ優先度 `['high', 'none', …]`。既定 []。D-070）、`tone`（キィニチの話し方 `client`＝依頼人版・`friend`＝友人版・`sweet`＝甘やかし版。既定 `client`。D-082）、`callModes`（毎日の時刻の項目ごとの声掛け `{ wake: 'on' / 'late' / 'off', … }`。ない項目は既定：食事は late・就寝は on・ほかは off。D-098） |
 | `db.sync` | `{ url, token, lastAt, lastSig, dirty, error }` スプレッドシートへの控えの送り先・合言葉・最後に送った時点・まだ送っていない変更があるか（D-050） |
 | `db.calendar` | `{ fetchedAt, from, to, events: [ { id, calendarId, title, start, end, allDay, editable } ], error }` Google カレンダーの予定の控え（D-053。読むだけ。同期しない）。`db.calendarError` は一度も取れていないときの理由 |
 | `db.weekly` | `{ 週の初め（月曜）の日付: { text, at, firstSeen, reply } }` 週次コメント（D-058）。`reply` は利用者の返事 `{ text, at, edits }`（300字まで。`edits` が 1 になったら書き直せない。D-063。下の節）。`firstSeen` は初めて日報画面で見せた日（朝4時区切り）。その日だけ日報の上に出す（R5、CR-G05。ないものはまだ見せていない。R5 の参考実装 `round5_app.patch` を当ててから使われる）。スプレッドシートにはまだ送らない |

@@ -774,6 +774,11 @@ input:focus, textarea:focus { border-color: var(--color-accent); }
 .routine-row input { flex: none; width: auto; min-width: 7em; }
 .routine-row .cut-btn { margin-top: 0; padding: 0 var(--space-3); }
 .routine-days { margin-top: var(--space-1); }
+/* 設定の「毎日の時刻ごとの声掛け」（D-098）：項目名と、ちょうど／30分後／なし */
+.call-head { margin: var(--space-3) 0 0; font-size: var(--fs-subhead); }
+.call-row .call-name { flex: 1; min-width: 0; }
+.call-modes { display: flex; gap: var(--space-1); }
+.call-modes .cut-btn { min-width: var(--tap); padding: 0 var(--space-2); }
 .routine-days .cut-btn { margin-top: 0; min-width: var(--tap); padding: 0; }
 
 /* 設定の一番下の「仕様関連 ›」（D-051）。控えめなボタンの見た目で、押すと別の画面へ */

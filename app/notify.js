@@ -1,15 +1,16 @@
 // 声掛けの通知予約（D-015, D-049）。アプリは閉じている間に動けないので、記録や毎日の時刻が変わるたびに、
 // 「今日このあと送る通知」を作り直して送信サーバーに予約・更新・取り消しする。サーバーは時刻が来たら送るだけ。
-//   食事   meal:<日付>:<朝食|昼食|夕食>  予定時刻の30分後。記録か「今日はなし」で取り消す
+//   毎日の時刻の項目ごとに、設定で「時刻ちょうど」「30分後」「なし」を選ぶ（D-098）。記録か「今日はなし」で取り消す
+//     食事 meal:<日付>:<項目>／就寝 sleep:<日付>／ほか call:<日付>:<項目>
+//     セリフ：食事の30分後 midday_check.meal_overdue、就寝ちょうど before_sleep.default、ほかは call_on_time.<項目>・call_late.<項目>（文がなければ送らない）
 //   休憩   break:<日付>                 仕事開始（または最後の休憩）から90分後。仕事終わりの予定より前だけ
 //   夜     night:<日付>                 就寝の1時間前。夕食・入浴・歯磨きの残りの数でセリフを変える。残りがなければ送らない
-//   就寝前 sleep:<日付>                 就寝の予定時刻。就寝を記録したら取り消す
 //   予定   event:<日付>:<印>            カレンダーの時刻のある予定の30分前（D-054）。予定の名前を本文に差し込む
 // 通知の種類（tag）はキーの最初の「:」より前（worker.js）。同じ種類は新しい通知で置き換わる。
 // app.js（Records・plannedMinutes・repairPush）、routine.js、dialogue.js、settings.js の後に読み込む。
 
 const Voice = (() => {
-  const MEAL_AFTER = 30;   // 分
+  const LATE_AFTER = 30;   // 分。「30分後」の声掛け（D-098）
   const BREAK_AFTER = 90;  // 分
   const NIGHT_BEFORE = 60; // 分
   const EVENT_BEFORE = 30; // 分
@@ -54,8 +55,14 @@ const Voice = (() => {
     const planned = plannedMinutes(now);
     const st = (id) => Records.status(id, day).state; // none / done / skipped
     const add = (entry) => { if (entry && entry[1].at > now.getTime() + MIN_LEAD_MS) out[entry[0]] = entry[1]; };
-    for (const [id] of MEALS) {
-      if (planned[id] !== null && st(id) === 'none') add(item(`meal:${date}:${id}`, atOf(now, planned[id] + MEAL_AFTER), 'midday_check.meal_overdue'));
+    for (const [id] of ROUTINE_ITEMS) {
+      const mode = Prefs.callMode(id);
+      if (mode === 'off' || planned[id] === null || st(id) !== 'none') continue;
+      const meal = MEALS.some(([m]) => m === id);
+      const key = meal ? `meal:${date}:${id}` : id === 'sleep' ? `sleep:${date}` : `call:${date}:${id}`;
+      const trigger = meal && mode === 'late' ? 'midday_check.meal_overdue'
+        : id === 'sleep' && mode === 'on' ? 'before_sleep.default' : `call_${mode === 'on' ? 'on_time' : 'late'}.${id}`;
+      add(item(key, atOf(now, planned[id] + (mode === 'late' ? LATE_AFTER : 0)), trigger));
     }
     if (planned.work_start !== null && planned.work_end !== null && st('work_start') === 'done' && st('work_end') === 'none') {
       const v = day.break;
@@ -67,7 +74,6 @@ const Voice = (() => {
     if (planned.sleep !== null && st('sleep') === 'none') {
       const left = ['dinner', 'bath', 'brush'].filter((id) => (id === 'brush' || planned[id] !== null) && st(id) === 'none').length;
       if (left > 0) add(item(`night:${date}`, atOf(now, planned.sleep - NIGHT_BEFORE), left >= 3 ? 'night_check.many_left' : 'night_check.some_left'));
-      add(item(`sleep:${date}`, atOf(now, planned.sleep), 'before_sleep.default'));
     }
     // カレンダーの時刻のある予定（今日のこのあと。朝4時まで）の30分前（D-054）
     const dayEnd = atOf(now, (24 + DAY_STARTS_AT) * 60);

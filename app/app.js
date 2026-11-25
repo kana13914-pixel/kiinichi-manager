@@ -732,6 +732,41 @@ document.getElementById('pref-voice').addEventListener('click', () => {
   window.dispatchEvent(new Event('routinechange'));
 });
 setSwitch('pref-voice', Prefs.get('voice'));
+// 毎日の時刻の項目ごとの声掛け（D-098）：ちょうど／30分後／なし
+const CALL_LABELS = [['on', 'ちょうど'], ['late', '30分後'], ['off', 'なし']];
+function renderCalls() {
+  document.getElementById('call-list').replaceChildren(...ROUTINE_ITEMS.map(([id, label]) => {
+    const li = document.createElement('li');
+    li.className = 'routine-row call-row';
+    const name = document.createElement('span');
+    name.className = 'call-name';
+    name.id = 'call-name-' + id;
+    name.textContent = label;
+    const group = document.createElement('div');
+    group.className = 'call-modes';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-labelledby', name.id);
+    group.append(...CALL_LABELS.map(([mode, text]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cut-btn quiet chip';
+      b.dataset.call = mode;
+      b.textContent = text;
+      b.setAttribute('aria-pressed', String(Prefs.callMode(id) === mode));
+      b.addEventListener('click', () => {
+        if (Prefs.callMode(id) === mode) return;
+        Prefs.setCallMode(id, mode);
+        renderCalls();
+        window.dispatchEvent(new Event('routinechange')); // 声掛けの予約を作り直す
+      });
+      return b;
+    }));
+    li.dataset.id = id;
+    li.append(name, group);
+    return li;
+  }));
+}
+renderCalls();
 // 週次コメントのオン・オフ（D-058）
 document.getElementById('pref-weekly').addEventListener('click', () => {
   Prefs.set('weekly', !Prefs.get('weekly'));

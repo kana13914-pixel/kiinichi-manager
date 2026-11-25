@@ -114,7 +114,9 @@ function migrateData() {
 migrateData();
 
 // ---------- 端末ごとの好み（D-047）。決まっていないものは既定値 ----------
-const PREF_DEFAULTS = { screenLines: true, voice: true, weekly: true, taskFolded: [], tone: 'client' }; // taskFolded：タスクのたたんだ優先度（D-070）。tone：話し方（D-082）
+// callModes：毎日の時刻の項目ごとの声掛け 'on'（時刻ちょうど）・'late'（30分後、まだ記録がなければ）・'off'（D-098）。はじめは今までと同じ
+const CALL_DEFAULTS = { wake: 'off', breakfast: 'late', work_start: 'off', lunch: 'late', work_end: 'off', dinner: 'late', bath: 'off', sleep: 'on' };
+const PREF_DEFAULTS = { screenLines: true, voice: true, weekly: true, taskFolded: [], tone: 'client', callModes: CALL_DEFAULTS }; // taskFolded：タスクのたたんだ優先度（D-070）。tone：話し方（D-082）
 const Prefs = {
   get(name) {
     const p = Store.read(DB.prefs, {});
@@ -124,4 +126,10 @@ const Prefs = {
     const p = Store.read(DB.prefs, {});
     return Store.write(DB.prefs, { ...(p && typeof p === 'object' ? p : {}), [name]: value });
   },
+  // 項目ごとの声掛け（D-098）。知らない値・ない項目は既定値
+  callMode(id) {
+    const m = this.get('callModes');
+    return m && ['on', 'late', 'off'].includes(m[id]) ? m[id] : CALL_DEFAULTS[id];
+  },
+  setCallMode(id, mode) { return this.set('callModes', { ...CALL_DEFAULTS, ...this.get('callModes'), [id]: mode }); },
 };
