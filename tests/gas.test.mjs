@@ -175,3 +175,12 @@ test('1日の輪に置いた時間は「輪に置いた時間」のシートに�
   g.post(base({})); // 送らないときは書き換えない
   assert.equal(g.rows('輪に置いた時間').length, 2);
 });
+
+test('タスクから始めたタイマーの記録は「タイマーの記録」のシートに書き直す（D-117）', () => {
+  const g = loadGas();
+  g.post(base({ timerLog: [['2026-11-30', '14:00', '14:25', 25, '最後まで', 'a', '資料']] }));
+  assert.deepEqual(JSON.parse(JSON.stringify(g.sheets['タイマーの記録'].cells()[0])), ['日付', '始めた時刻', '終えた時刻', '分', '終わり方', 'タスクのid', 'タスク']);
+  assert.deepEqual(JSON.parse(JSON.stringify(g.rows('タイマーの記録'))), [['2026-11-30', '14:00', '14:25', '25', '最後まで', 'a', '資料']]);
+  g.post(base({}));
+  assert.equal(g.rows('タイマーの記録').length, 1);
+});

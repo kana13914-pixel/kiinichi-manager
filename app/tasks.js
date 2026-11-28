@@ -52,12 +52,17 @@ const Tasks = (() => {
     return { text: `${label}まで`, overdue: false };
   }
   // 見込み時間とやる日の表示（D-105）。やる日は期限の日と違うときだけ出す
-  function estimateText(min) { return min >= 60 ? `${min / 60}時間${min % 60 ? `${min % 60}分` : ''}`.replace(/\.5時間/, '時間30分') : `${min}分`; }
+  function estimateText(min) { const h = Math.floor(min / 60), m = min % 60; return h ? `${h}時間${m ? `${m}分` : ''}` : `${m}分`; }
   function planText(t, now = new Date()) {
     if (!t.plan || t.plan === t.due) return '';
     const today = todayKey(now);
     const tomorrow = dateStr(addDays(logicalDay(now), 1));
     return t.plan === today ? '今日やる' : t.plan === tomorrow ? '明日やる' : `${labelShort(parseDay(t.plan))}にやる`;
+  }
+  // 見込みと実際（D-117）：「見込み 2時間 ・ 実際 1時間30分（タイマー3回）」。どちらもなければ空
+  function timeText(t) {
+    const actual = typeof Timer !== 'undefined' ? Timer.actualFor(t.id) : { minutes: 0, count: 0 };
+    return [t.estimate && `見込み ${estimateText(t.estimate)}`, actual.count && `実際 ${estimateText(actual.minutes)}（タイマー${actual.count}回）`].filter(Boolean).join(' ・ ');
   }
   // その日にやるタスク（未完了。やる日、なければ期限の日）（D-105）
   function onDay(key) { return load().filter((t) => !t.done && (t.plan || t.due) === key); }
@@ -165,10 +170,11 @@ const Tasks = (() => {
     const ul = document.createElement('ul');
     ul.className = 'sub-list';
     ul.setAttribute('aria-label', `「${task.title}」のミニタスク`);
-    if (task.estimate) { // 見込み時間は、ミニタスクを開いたときにだけ出す（D-107）
+    const time = timeText(task);
+    if (time) { // 見込み時間と実際の時間は、ミニタスクを開いたときにだけ出す（D-107・D-117）
       const meta = document.createElement('li');
       meta.className = 'sub-meta';
-      meta.textContent = `見込み時間 ${estimateText(task.estimate)}`;
+      meta.textContent = time;
       ul.append(meta);
     }
     for (const sub of subs) {
@@ -558,6 +564,9 @@ const Tasks = (() => {
     if (!t) return;
     actionId = id;
     $('task-actions-title').textContent = t.title;
+    const time = timeText(t);
+    $('task-actions-time').textContent = time;
+    $('task-actions-time').hidden = !time;
     $('task-act-start').hidden = t.done; // 完了したタスクは始めない
     $('task-act-start-min').textContent = `作業のタイマー ${Timer.workMinutes()}分`;
     $('task-actions').showModal();
@@ -572,7 +581,7 @@ const Tasks = (() => {
     if (!t) return;
     const running = Timer.runningName();
     if (running && !(await confirmDialog(`動いているタイマー「${running}」を止めて、「${t.title}」を始めますか？`, '始める', false))) return;
-    if (Timer.startFor(t.title)) location.hash = '#timer';
+    if (Timer.startFor(t.title, t.id)) location.hash = '#timer'; // どのタスクかを覚え、実際の時間に数える（D-117）
   });
   $('task-act-delete').addEventListener('click', () => { $('task-actions').close(); remove(actionId); });
 

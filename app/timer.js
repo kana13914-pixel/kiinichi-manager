@@ -107,12 +107,34 @@ const Timer = (() => {
     if (state.cancelPending && !state.running) sendCancel();
   }
 
+  // ---------- タイマーの記録（D-117） ----------
+  // タスクから始めたタイマーだけ、終わったとき・途中で止めたときに1回分を残す（実際にかかった時間。決めた時間までを数える）
+  const LOG_KEEP_DAYS = 90;
+  function logLoad() { const l = Store.read(DB.timerLog, []); return Array.isArray(l) ? l.filter((x) => x && x.taskId && Number.isFinite(x.minutes)) : []; }
+  function logRun(run, end, how) {
+    if (!run || !run.taskId) return;
+    const start = Number.isFinite(run.startedAt) ? run.startedAt : run.endAt - run.minutes * 60000;
+    const minutes = Math.round((Math.min(end, run.endAt) - start) / 60000);
+    if (minutes < 1) return; // 1分未満は数えない（押し間違い）
+    const limit = Date.now() - LOG_KEEP_DAYS * 24 * 3600 * 1000;
+    const list = logLoad().filter((x) => x.end >= limit);
+    list.push({ id: newId(), taskId: run.taskId, name: run.name, start, end: Math.min(end, run.endAt), minutes, how });
+    Store.write(DB.timerLog, list);
+  }
+  // そのタスクに実際に使った時間（分）と回数
+  function actualFor(taskId) {
+    const list = logLoad().filter((x) => x.taskId === taskId);
+    return { minutes: list.reduce((s, x) => s + x.minutes, 0), count: list.length };
+  }
+
   // ---------- 開始・停止・終了 ----------
-  function start(name, minutes, kind) {
+  function start(name, minutes, kind, taskId = null) {
     const picked = pickLine('timer_done.' + kind); // 通知の本文と、終了の画面に出すセリフを同じにする
     const state = load();
+    if (state.running) logRun(state.running, Date.now(), 'stopped'); // 動いていたものを止めて始める
+    const now = Date.now();
     state.running = {
-      name, minutes, kind, endAt: Date.now() + minutes * 60000,
+      name, minutes, kind, endAt: now + minutes * 60000, startedAt: now, taskId,
       line: picked ? picked.index : null, text: picked ? picked.text : FALLBACK_LINE,
       notify: 'pending', notifyError: '',
     };
@@ -127,11 +149,12 @@ const Timer = (() => {
   }
   // タスクの「タスクを開始」（D-071）：タスクの名前で、作業のタイマー（変えた時間があればその時間）を始める
   const workMinutes = () => builtins(load()).find((t) => t.id === 'work').minutes;
-  const startFor = (name) => start(name, workMinutes(), 'work');
+  const startFor = (name, taskId = null) => start(name, workMinutes(), 'work', taskId);
   const runningName = () => { const r = load().running; return r ? r.name : null; };
   function stop() {
     const state = load();
     if (!state.running) return;
+    logRun(state.running, Date.now(), 'stopped');
     state.running = null;
     save(state);
     cancelReserve();
@@ -147,6 +170,7 @@ const Timer = (() => {
   function settle(state, now) {
     let changed = false;
     if (state.running && now >= state.running.endAt) {
+      logRun(state.running, state.running.endAt, 'done');
       state.done = { ...state.running, cleared: false };
       state.running = null;
       changed = true;
@@ -360,5 +384,5 @@ const Timer = (() => {
   render();
   retryCancel(); // 前回届かなかった取り消しをやり直す
 
-  return { load, builtins, parseMinutes, clockText, render, startFor, workMinutes, runningName };
+  return { load, builtins, parseMinutes, clockText, render, startFor, workMinutes, runningName, actualFor, logLoad };
 })();

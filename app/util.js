@@ -71,12 +71,13 @@ const DB = {
   evening: 'db.evening',         // { date } … 夕方の提案をホームで出した日（その日1回だけにするため。D-073。この端末だけ）
   touch: 'db.touch',             // { mutedUntil, stoppedAt, muteLevel, lastAt } … 触る段階の打ち切りの黙る時間（D-087, D-088。閉じても覚える。この端末だけ）
   scenes: 'db.scenes',           // { first, since, shown: { キー: 日付 }, tasksSeen: { date, done } } … ホームを開いたときの場面（D-083。この端末だけ）
+  timerLog: 'db.timerLog',       // [ { id, taskId, name, start, end, minutes, how } ] … タスクから始めたタイマーの記録（D-117。90日。スプレッドシートに控え）
   blocks: 'db.blocks',           // [ { id, date, start, end, kind, title, taskId, color } ] … 1日の輪に置いた時間（D-112。スプレッドシートに控え）
   notify: 'db.notify',           // { 予約したキー: { at, body } } … 送信サーバーに予約した声掛け（D-049。この端末だけ）
 };
 const SCHEMA = 2;
 // スプレッドシートに控えるデータ（D-050）
-const SYNCED = [DB.tasks, DB.reports, DB.records, DB.routine, DB.routineOverrides, DB.timer, DB.blocks]; // blocks：1日の輪に置いた時間（D-112）
+const SYNCED = [DB.tasks, DB.reports, DB.records, DB.routine, DB.routineOverrides, DB.timer, DB.blocks, DB.timerLog]; // blocks：1日の輪に置いた時間（D-112）。timerLog：タイマーの記録（D-117）
 const MIGRATIONS = {
   // 1（フェーズ1の仮の保存先）→ 2：キーを db.* に移す。記録は当日分だけだったものを、日付ごとの履歴にする
   2() {

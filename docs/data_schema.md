@@ -19,6 +19,7 @@
 | `db.reports` | `{ 日付: { mood, done, left, tomorrow, savedAt } }` | 日報。1日1件。`mood` は `good`／`normal`／`tired`／`null` |
 | `db.records` | `{ 日付: { 種類: 値 } }` | 毎日の記録。値はふつう `{ time, at }`（`time` は押した時刻、`at` はその時点）、休憩は `[ { time, at }, … ]`（押した回数だけ）、「今日はなし」は `{ skipped: true, at }`（D-046）。時刻を手で入れたものは `manual: true` が付き、`time`・`at` は入れた時刻（1項目につき1日1回。休憩は時刻の順に並べる。D-079）。種類は下の表 |
 | `db.blocks` | `[ { id, date, start, end, kind, title, taskId, color, createdAt, updatedAt } ]` | 1日の輪に置いた時間（D-112）。`date` は暦日 `YYYY-MM-DD`、`start`・`end` は `HH:MM`（同じ日の中）、`kind` は `task`（タスクをやる時間。`taskId`）・`free`（自由時間）・`other`（そのほか。`color` は `c1`〜`c8`）。60日より前は消す。Google カレンダーには入れない。スプレッドシートの「輪に置いた時間」に控え |
+| `db.timerLog` | `[ { id, taskId, name, start, end, minutes, how } ]` | タスクから始めたタイマーの記録（D-117）。`start`・`end` はミリ秒、`minutes` は実際に動いた分（決めた時間まで）、`how` は `done`（最後まで）か `stopped`（途中で止めた）。90日より前は消す。スプレッドシートの「タイマーの記録」に控え |
 | `db.routine` | `{ weekday: { 項目: 'HH:MM' か null }, holiday: { … }, holidays: [曜日の番号], publicHolidays: true か false, updatedAt }` | 毎日の時刻（D-048）。項目は `wake`・`breakfast`・`work_start`・`lunch`・`work_end`・`dinner`・`bath`・`sleep`。曜日は 0＝日〜6＝土。`publicHolidays` は祝日も休日にするか（ないときはオン。D-094） |
 | `db.routineOverrides` | `{ 'YYYY-MM-DD': { 項目: 'HH:MM' か null } }` | 毎日の時刻をその日だけ変えたもの（D-060 ⑭, D-061）。null は「この日はなし」。60日より前は消す。スプレッドシートには「毎日の時刻」のシートに今日以降の分を1日1行で送る |
 | `db.timer` の `custom` | `[ { id, name, minutes } ]` | 利用者が作ったタイマー |

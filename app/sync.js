@@ -60,7 +60,11 @@ const Sync = (() => {
     // 1日の輪に置いた時間（D-112）：端末の今の中身で書き直す
     const blocks = Blocks.load().sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
       .map((b) => [b.date, b.start, b.end, BLOCK_KINDS[b.kind], b.title, b.taskId || '']);
-    return { app: APP_VERSION, records, reports, tasks, subtasks, routine, timers, blocks };
+    // タスクから始めたタイマーの記録（D-117）：端末の今の中身で書き直す
+    const titles = Object.fromEntries(taskList.map((t) => [t.id, t.title]));
+    const timerLog = Timer.logLoad().sort((a, b) => a.start - b.start)
+      .map((x) => [todayKey(new Date(x.start)), hm(new Date(x.start)), hm(new Date(x.end)), x.minutes, x.how === 'done' ? '最後まで' : '途中で止めた', x.taskId, titles[x.taskId] || x.name]);
+    return { app: APP_VERSION, records, reports, tasks, subtasks, routine, timers, blocks, timerLog };
   }
 
   function show() {

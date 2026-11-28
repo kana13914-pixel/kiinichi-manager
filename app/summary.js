@@ -175,10 +175,27 @@ const Summary = (() => {
       }
     }
     const from = days[0].getTime(), to = addDays(today, 1).getTime();
-    const tasksDone = Tasks.load().filter((t) => t.done && t.doneAt >= from && t.doneAt < to).length;
+    const doneList = Tasks.load().filter((t) => t.done && t.doneAt >= from && t.doneAt < to);
+    const tasksDone = doneList.length;
+    // 見込みと実際（D-117）：今週完了したタスクのうち、見込み時間とタイマーの記録の両方があるもの
+    let estSum = 0, actSum = 0, paired = 0;
+    for (const t of doneList) {
+      const a = Timer.actualFor(t.id);
+      if (!t.estimate || !a.count) continue;
+      estSum += t.estimate; actSum += a.minutes; paired++;
+    }
     const moods = days.map((d) => ({ day: d, mood: (reports[dateStr(d)] || {}).mood || null }));
-    return { days, reportDays: days.filter((d) => reports[dateStr(d)]).length, planned, done, tasksDone, moods };
+    return { estSum, actSum, paired, days, reportDays: days.filter((d) => reports[dateStr(d)]).length, planned, done, tasksDone, moods };
   }
+
+  // 見込みに対して実際にかかった時間の言い方（D-117）：「見込みより2割多い（3件）」など。1割未満の差は「ほぼ見込みどおり」
+  function ratioText(r, n) {
+    const tenth = Math.round(Math.abs(r - 1) * 10);
+    if (tenth === 0) return `ほぼ見込みどおり（${n}件）`;
+    if (tenth >= 10) return `見込みの${Math.round(r * 10) / 10}倍（${n}件）`; // 2倍以上
+    return `見込みより${tenth}割${r > 1 ? '多い' : '少ない'}（${n}件）`;
+  }
+
 
   // ---------- 描く ----------
   const openDays = new Set(); // 中身を開いている来週の日（開き直すとたたむ）
@@ -195,6 +212,7 @@ const Summary = (() => {
       ['日報', `${r.reportDays} / ${r.days.length}日`],
       ['記録', rate === null ? '—' : `${rate}%（${r.done} / ${r.planned}）`],
       ['完了したタスク', `${r.tasksDone}件`],
+      ...(r.paired ? [['見込みと実際', ratioText(r.actSum / r.estSum, r.paired)]] : []),
     ];
     $('summary-facts').replaceChildren(...facts.flatMap(([k, v]) => [el('dt', '', k), el('dd', '', v)]));
     $('summary-moods').replaceChildren(...r.moods.map(({ day, mood }) => {

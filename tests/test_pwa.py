@@ -1305,6 +1305,50 @@ class PwaTest(unittest.TestCase):
         page.click("#done-list li[data-id=b] .task-main")
         self.assertTrue(page.is_hidden("#task-act-start"))
 
+    def test_timer_log_actual_time_for_task(self):
+        """タイマーの記録（D-117）：タスクから始めたタイマーだけ、終わったとき・途中で止めたときに実際の分を残す（決めた時間まで）。
+        操作の一覧とミニタスクに「見込み ・ 実際」、週次サマリーに見込みとの差"""
+        tasks = [{"id": "a", "title": "資料", "due": None, "estimate": 60, "done": False, "createdAt": 1,
+                  "subtasks": [{"id": "s", "title": "下書き", "done": False}]}]
+        init = "localStorage.setItem('db.timer', JSON.stringify({ custom: [], builtin: { work: 25 }, running: null, done: null }))"
+        page = self.clock_page(10, 0, "#tasks", init_script="localStorage.setItem('db.tasks', %s);" % json.dumps(json.dumps(tasks)) + init)
+        log = lambda: json.loads(page.evaluate("localStorage.getItem('db.timerLog') || '[]'"))
+        page.click("#task-list li[data-id=a] .task-main")
+        self.assertEqual(page.text_content("#task-actions-time"), "見込み 1時間")
+        page.click("#task-act-start")
+        page.wait_for_selector("#view-timer", state="visible")
+        page.clock.run_for(25 * 60_000 + 2_000)  # 最後まで
+        page.wait_for_function("JSON.parse(localStorage.getItem('db.timerLog') || '[]').length === 1", timeout=5_000)
+        self.assertEqual([(x["taskId"], x["minutes"], x["how"]) for x in log()], [("a", 25, "done")])
+        # もう一度始めて、10分で止める
+        page.evaluate("location.hash = '#tasks'")
+        page.click("#task-list li[data-id=a] .task-main")
+        page.click("#task-act-start")
+        page.wait_for_selector("#view-timer", state="visible")
+        page.clock.run_for(10 * 60_000)
+        page.click("#timer-stop")
+        self.assertEqual([(x["minutes"], x["how"]) for x in log()], [(25, "done"), (10, "stopped")])
+        # タスクからではないタイマーは数えない
+        page.fill("#timer-quick-min", "5")
+        page.click("#timer-quick-start")
+        page.clock.run_for(3 * 60_000)
+        page.click("#timer-stop")
+        self.assertEqual(len(log()), 2)
+        page.evaluate("location.hash = '#tasks'")
+        page.click("#task-list li[data-id=a] .task-main")
+        self.assertEqual(page.text_content("#task-actions-time"), "見込み 1時間 ・ 実際 35分（タイマー2回）")
+        page.click("#task-actions-close")
+        page.click("#task-list li[data-id=a] .sub-bar")
+        self.assertEqual(page.text_content("#task-list .sub-meta"), "見込み 1時間 ・ 実際 35分（タイマー2回）")
+        # 完了すると、週次サマリーに見込みとの差（35 / 60 → 4割少ない）
+        page.click("#task-list li[data-id=a] .task-done-btn")
+        page.wait_for_function("JSON.parse(localStorage.getItem('db.tasks'))[0].done === true", timeout=3_000)
+        page.evaluate("location.hash = '#summary'")
+        facts = page.eval_on_selector_all("#summary-facts dt, #summary-facts dd", "els => els.map(e => e.textContent)")
+        self.assertIn("見込みと実際", facts)
+        self.assertEqual(facts[facts.index("見込みと実際") + 1], "見込みより4割少ない（1件）")
+        self.assertEqual(page.evaluate("Tasks.estimateText(90)"), "1時間30分")
+
     def test_subtasks_open_check_add_and_limit(self):
         """ミニタスク：行の下に「済み/全部」の帯と ▾。開くと親の下に並び、最後に「＋ ミニタスクを追加」。10個まで（D-070）。"""
         subs = [{"id": f"s{i}", "title": f"小{i}", "done": i < 2, "doneAt": None} for i in range(5)]
@@ -1450,7 +1494,7 @@ class PwaTest(unittest.TestCase):
         page.evaluate("""() => { const l = JSON.parse(localStorage.getItem('db.tasks')); l[0].subtasks = [{ id: 's', title: '下書き', done: false }]; localStorage.setItem('db.tasks', JSON.stringify(l)); Tasks.render(); }""")
         self.assertEqual(page.eval_on_selector_all("#task-list .sub-meta", "els => els.length"), 0)
         page.click("#task-list .sub-bar")
-        self.assertEqual(page.text_content("#task-list .sub-meta"), "見込み時間 30分")
+        self.assertEqual(page.text_content("#task-list .sub-meta"), "見込み 30分")
         # 予定の一覧：やる日に終日の予定として出す（期限の日には出さない。D-107）
         page.evaluate("location.hash = '#schedule'")
         rows = lambda d: [r[:2] for r in self.schedule_rows(page, d)]
