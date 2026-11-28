@@ -219,8 +219,8 @@ const Summary = (() => {
     const typeLabel = Routine.typeOf(day) === 'holiday' ? '休日' : '平日';
     // 日付 ｜ 1行目「予定◯件 ・ 空き◯」、2行目「気になる点 ◯」（あるときだけ）
     const body = el('span', 'summary-day-body');
-    const taskMin = est(Tasks.onDay(key));
-    body.append(el('span', 'summary-day-info', [`予定${events.length}件`, taskMin && `タスク${dur(taskMin)}`, `空き${dur(result.free)}`].filter(Boolean).join(' ・ ')));
+    const taskN = Tasks.onDay(key).length;
+    body.append(el('span', 'summary-day-info', [`予定${events.length}件`, taskN && `タスク${taskN}件`].filter(Boolean).join(' ・ '))); // 空き時間は出さない（D-107）
     if (result.problems.length) body.append(el('span', 'summary-day-flag', `気になる点 ${result.problems.length}`));
     btn.append(el('span', 'summary-day-date', labelShort(day)), body);
     btn.append(el('span', 'summary-day-mark', open ? '▴' : '▾'));
@@ -234,9 +234,7 @@ const Summary = (() => {
       const last = [...ROUTINE_ITEMS].reverse().find(([id]) => times[id]);
       if (first) ul.append(el('li', 'summary-item routine', `毎日の時刻（${typeLabel}）：${first[1]} ${times[first[0]]} 〜 ${last[1]} ${times[last[0]]}`));
       for (const e of events) ul.append(el('li', 'summary-item', e.allDay ? `終日　${e.title}` : `${span(e.ref)}　${e.title}`));
-      for (const t of Tasks.load().filter((x) => !x.done && (x.due === key || x.plan === key))) {
-        ul.append(el('li', 'summary-item task', `${t.due === key ? '期限' : 'やる'}　${t.title}${t.estimate ? `（${Tasks.estimateText(t.estimate)}）` : ''}`));
-      }
+      for (const t of Tasks.onDay(key)) ul.append(el('li', 'summary-item task', `終日　${t.title}（タスク）`));
       if (!ul.children.length) ul.append(el('li', 'summary-item', '予定なし'));
       li.append(ul);
     }

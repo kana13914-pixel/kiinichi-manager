@@ -122,10 +122,10 @@ const Tasks = (() => {
     body.append(title);
     const info = dueInfo(task.due, now);
     const plan = planText(task, now);
-    if ((info || plan || task.estimate || task.toReport) && !task.done) {
+    if ((info || plan || task.toReport) && !task.done) { // 見込み時間は見出しに出さず、ミニタスクを開いたときに出す（D-107）
       const due = document.createElement('span');
       due.className = 'task-due' + (info && info.overdue ? ' overdue' : '');
-      due.textContent = [info && info.text, plan, task.estimate && estimateText(task.estimate), task.toReport && '完了したら日報へ'].filter(Boolean).join(' ・ ');
+      due.textContent = [info && info.text, plan, task.toReport && '完了したら日報へ'].filter(Boolean).join(' ・ ');
       body.append(due);
     }
     if (task.done && task.doneAt) {
@@ -165,6 +165,12 @@ const Tasks = (() => {
     const ul = document.createElement('ul');
     ul.className = 'sub-list';
     ul.setAttribute('aria-label', `「${task.title}」のミニタスク`);
+    if (task.estimate) { // 見込み時間は、ミニタスクを開いたときにだけ出す（D-107）
+      const meta = document.createElement('li');
+      meta.className = 'sub-meta';
+      meta.textContent = `見込み時間 ${estimateText(task.estimate)}`;
+      ul.append(meta);
+    }
     for (const sub of subs) {
       const li = document.createElement('li');
       li.className = 'sub-row' + (sub.done ? ' done' : '');

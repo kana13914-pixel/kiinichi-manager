@@ -99,22 +99,20 @@ const Schedule = (() => {
   }
 
   // タスクの期限（D-095）：未完了のタスクを、期限の日に「期限」の行・月のマスのタグで出す。予定の数や一言には数えない
-  // やる日（D-105）が期限の日と違えば、やる日にも「やる」の行を出す
+  // やる日（D-105）があれば、期限の日ではなくやる日に出す。どちらも終日の予定として「終日」の行（時刻・見込み時間は出さない。D-107）
   function dueTasks(date) {
     if (typeof Tasks === 'undefined') return [];
-    const key = dateStr(date);
-    return Tasks.load().filter((t) => !t.done && (t.due === key || t.plan === key))
-      .map((t) => ({ ...t, label: t.due === key ? '期限' : 'やる' }));
+    return Tasks.onDay(dateStr(date));
   }
   function taskRow(t) {
     const li = document.createElement('li');
     li.className = 'schedule-row task-due';
     const time = document.createElement('span');
     time.className = 'schedule-time allday';
-    time.textContent = t.label || '期限';
+    time.textContent = '終日';
     const title = document.createElement('span');
     title.className = 'schedule-title';
-    title.textContent = t.title + (t.estimate ? `（${Tasks.estimateText(t.estimate)}）` : '');
+    title.textContent = t.title;
     const tag = document.createElement('small');
     tag.className = 'tag routine-tag';
     tag.textContent = 'タスク';

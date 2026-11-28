@@ -1415,7 +1415,7 @@ class PwaTest(unittest.TestCase):
         page.click("#task-submit")
         t = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
         self.assertEqual([t["due"], t["estimate"], t["plan"]], ["2026-11-10", 60, "2026-11-09"])
-        self.assertEqual(page.text_content("#task-list .task-due"), "明日まで ・ 今日やる ・ 1時間 ・ 完了したら日報へ")
+        self.assertEqual(page.text_content("#task-list .task-due"), "明日まで ・ 今日やる ・ 完了したら日報へ")  # 見込み時間は見出しに出さない（D-107）
         # 編集：やる日を日付で選ぶ・見込みを変える
         page.click("#task-list .task-main")
         page.click("#task-act-edit")
@@ -1428,12 +1428,17 @@ class PwaTest(unittest.TestCase):
         page.click("#task-edit-save")
         t = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
         self.assertEqual([t["estimate"], t["plan"]], [30, "2026-11-12"])
-        self.assertEqual(page.text_content("#task-list .task-due"), "明日まで ・ 11/12(木)にやる ・ 30分 ・ 完了したら日報へ")
-        # 予定の一覧：やる日に「やる」、期限の日に「期限」
+        self.assertEqual(page.text_content("#task-list .task-due"), "明日まで ・ 11/12(木)にやる ・ 完了したら日報へ")
+        # 見込み時間はミニタスクを開いたときに出す（D-107）
+        page.evaluate("""() => { const l = JSON.parse(localStorage.getItem('db.tasks')); l[0].subtasks = [{ id: 's', title: '下書き', done: false }]; localStorage.setItem('db.tasks', JSON.stringify(l)); Tasks.render(); }""")
+        self.assertEqual(page.eval_on_selector_all("#task-list .sub-meta", "els => els.length"), 0)
+        page.click("#task-list .sub-bar")
+        self.assertEqual(page.text_content("#task-list .sub-meta"), "見込み時間 30分")
+        # 予定の一覧：やる日に終日の予定として出す（期限の日には出さない。D-107）
         page.evaluate("location.hash = '#schedule'")
         rows = lambda d: [r[:2] for r in self.schedule_rows(page, d)]
-        self.assertEqual(rows("2026-11-12")[0], ["やる", "資料（30分）タスク"])
-        self.assertEqual(rows("2026-11-10")[0], ["期限", "資料（30分）タスク"])
+        self.assertEqual(rows("2026-11-12")[0], ["終日", "資料タスク"])
+        self.assertNotIn(["終日", "資料タスク"], rows("2026-11-10"))
         # 「期限の日」に戻すと、やる日はなくなる
         page.evaluate("location.hash = '#tasks'")
         page.click("#task-list .task-main")
@@ -2187,7 +2192,7 @@ class PwaTest(unittest.TestCase):
         rows = page.eval_on_selector_all("#summary-next .summary-day", "els => els.map((e) => e.dataset.date)")
         self.assertEqual(rows, ["2026-11-%d" % d for d in range(16, 23)])
         info = page.text_content("#summary-next .summary-day[data-date='2026-11-21'] .summary-day-info")
-        self.assertEqual(info, "予定1件 ・ 空き15時間30分")  # 土曜は休日の時刻：起床7:00〜就寝23:30 の 16時間30分 − 1時間
+        self.assertEqual(info, "予定1件")  # 空き時間は出さない（D-107）
         page.click("#summary-next .summary-day[data-date='2026-11-16'] .summary-day-btn")
         items = page.eval_on_selector_all("#summary-next .summary-day[data-date='2026-11-16'] .summary-item", "els => els.map((e) => e.textContent)")
         self.assertEqual(items[0], "毎日の時刻（平日）：起床 07:00 〜 就寝 23:30")
@@ -2240,7 +2245,7 @@ class PwaTest(unittest.TestCase):
         page.wait_for_selector("#view-summary", state="visible")
         page.evaluate(self.SUMMARY_EVENTS, [[16, 10, 0, 11, 0, "会議"]])  # 月曜：仕事 9:00〜18:30 の 9時間30分 − 1時間 ＝ 8時間30分
         page.evaluate("Summary.render()")
-        self.assertEqual(page.text_content("#summary-next .summary-day[data-date='2026-11-16'] .summary-day-info"), "予定1件 ・ タスク10時間 ・ 空き15時間30分")
+        self.assertEqual(page.text_content("#summary-next .summary-day[data-date='2026-11-16'] .summary-day-info"), "予定1件 ・ タスク4件")  # 空き時間・見込みの合計は出さない（D-107）
         probs = page.eval_on_selector_all("#summary-problems .summary-problem", "els => els.map((e) => [e.className.split(' ')[1], e.querySelector('.summary-problem-text').textContent])")
         load = [t for k, t in probs if k == "load"]
         self.assertEqual(load, ["作業に使える時間8時間30分に、タスクの見込みが10時間（3件）入っています"])
@@ -2348,22 +2353,22 @@ class PwaTest(unittest.TestCase):
         page = self.clock_page(10, 0, "#schedule", init_script=init)
         page.wait_for_selector("#view-schedule", state="visible")
         rows = [r[:2] for r in self.schedule_rows(page, "2026-11-10")]
-        self.assertEqual(rows[0], ["期限", "見積もりタスク"])
-        self.assertEqual(sum(1 for r in rows if r[0] == "期限"), 1)
+        self.assertEqual(rows[0], ["終日", "見積もりタスク"])
+        self.assertEqual(sum(1 for r in rows if r[0] == "終日" and "タスク" in r[1]), 1)
         page.evaluate("""() => { const orig = SampleData.eventsOn;
           SampleData.eventsOn = (d) => d.getDate() === 12 ? [] : orig(d); Schedule.refresh(); }""")
-        self.assertEqual([r[:2] for r in self.schedule_rows(page, "2026-11-12")], [["期限", "請求書タスク"]])  # 予定なしの行は出さない
+        self.assertEqual([r[:2] for r in self.schedule_rows(page, "2026-11-12")], [["終日", "請求書タスク"]])  # 予定なしの行は出さない
         # ほかの画面で期限を変えてから開き直すと合う
         page.evaluate("location.hash = '#tasks'")
         page.evaluate("""() => { const l = JSON.parse(localStorage.getItem('db.tasks')); l[0].due = '2026-11-11'; localStorage.setItem('db.tasks', JSON.stringify(l)); }""")
         page.evaluate("location.hash = '#schedule'")
-        self.assertEqual(self.schedule_rows(page, "2026-11-11")[0][:2], ["期限", "見積もりタスク"])
+        self.assertEqual(self.schedule_rows(page, "2026-11-11")[0][:2], ["終日", "見積もりタスク"])
         page.click("#schedule-mode-month")
         cell = self.cal_cell(page, "2026-11-12")
         self.assertIn("□ 請求書", cell["tags"])
         self.assertIn("タスク1件", page.get_attribute("#cal-grid .cal-cell[data-date='2026-11-12']", "aria-label"))
         page.click("#cal-grid .cal-cell[data-date='2026-11-12']")
-        self.assertEqual(page.eval_on_selector_all("#cal-day-list .schedule-row", "els => els.map((e) => e.textContent)"), ["期限請求書タスク"])
+        self.assertEqual(page.eval_on_selector_all("#cal-day-list .schedule-row", "els => els.map((e) => e.textContent)"), ["終日請求書タスク"])
 
     def cal_cell(self, page, date):
         return page.eval_on_selector(f"#cal-grid .cal-cell[data-date='{date}']", """e => ({
