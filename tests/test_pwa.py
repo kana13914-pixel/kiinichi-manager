@@ -1105,7 +1105,10 @@ class PwaTest(unittest.TestCase):
         page, calls = self.weekly_page(self.WEEK_REPORTS, view="report")  # 日報の画面を開いても作る
         page.wait_for_selector("#weekly-entry", state="visible", timeout=5_000)
         self.assertEqual(len(calls), 1)
-        self.assertEqual(page.text_content("#weekly-entry"), "先週のひとことは週次サマリーへ›")
+        self.assertEqual(page.text_content("#weekly-entry"), "先週のひとこと ›")  # 短く小さく（D-115）
+        box = page.eval_on_selector("#weekly-entry", "e => { const r = e.getBoundingClientRect(); return [r.width, r.height]; }")
+        self.assertLess(box[0], 200)
+        self.assertGreaterEqual(box[1], 44)
         self.assertTrue(page.is_hidden("#weekly"))  # 日報の画面には出さない
         page.click("#weekly-entry")
         page.wait_for_selector("#view-summary", state="visible")

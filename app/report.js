@@ -352,7 +352,8 @@ const Report = (() => {
     const which = week.current ? '今週' : '先週';
     $('weekly').hidden = !(on && saved);
     $('weekly-entry').hidden = !(on && saved); // 日報の画面の入口（D-114）
-    $('weekly-entry').firstChild.textContent = `${which}のひとことは週次サマリーへ`;
+    $('weekly-entry').firstChild.textContent = `${which}のひとこと`; // 短く小さく（D-115）
+    $('weekly-entry').setAttribute('aria-label', `${which}のひとことを週次サマリーで見る`);
     if (on && saved) {
       $('weekly-title').textContent = `${which}のひとこと（${labelShort(week.days[0])}〜${labelShort(week.days[6])}）`;
       $('weekly-line').textContent = saved.text;

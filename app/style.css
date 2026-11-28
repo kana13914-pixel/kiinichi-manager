@@ -876,7 +876,8 @@ body:not(.calendar-on) #event-add { display: none; }
 /* キィニチの一言をオフにしたとき：各機能画面の一言の面を出さない（ホームのセリフは出す） */
 body.no-screen-lines .dialogue-mini:not(.weekly-say) { display: none; } /* 週次コメントは別の設定（D-058） */
 .weekly-say { margin-top: var(--space-4); } /* 週次サマリーの振り返りの中（D-114） */
-.weekly-entry { margin-top: var(--space-4); }
+.weekly-entry-row { display: flex; justify-content: flex-end; margin-top: var(--space-3); } /* 日報の画面の入口は右寄せの小さなチップ（D-115） */
+.weekly-entry { text-decoration: none; display: inline-flex; align-items: center; }
 .weekly-title { margin: 0 0 var(--space-1); font-size: var(--fs-footnote); color: var(--color-text-secondary); }
 #weekly-status:empty { display: none; }
 
