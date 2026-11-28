@@ -112,15 +112,7 @@ self.addEventListener('push', (event) => {
 // 通知タップ：開いている画面があれば前面に出して移動、なければホーム画面のアプリとして開く
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const data = event.notification.data || {};
-  // 通知のボタンの試し（D-097）：「あとで」はアプリを開かずに、受け取った知らせの通知を出す。「記録する」は押したボタンを付けて開く
-  if (data.test && event.action === 'later') {
-    event.waitUntil(self.registration.showNotification('キィニチ（試し）', {
-      body: '「あとで」を受け取りました。アプリを開かずに、通知の中だけで動きました。', icon: 'icons/icon-192.png', tag: 'action-test',
-    }));
-    return;
-  }
-  const url = data.test && event.action ? appUrl(`${data.url}&action=${encodeURIComponent(event.action)}`) : appUrl(data.url);
+  const url = appUrl(event.notification.data && event.notification.data.url);
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of all) {

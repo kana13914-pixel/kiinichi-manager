@@ -185,25 +185,3 @@ test('通知の種類（tag）：届いた種類を使い、なければ共通�
   await fire(handlers.push, { data: { json: () => ({ title: 't', body: 'b' }) } });
   assert.deepEqual(shown.map((x) => x.opts.tag), ['timer', 'kiinichi']);
 });
-
-test('通知のボタンの試し（D-097）：「あとで」は画面を開かずに知らせの通知、「記録する」は押したボタンを付けて開く', async () => {
-  const data = { url: SCOPE + 'index.html?source=action-test', test: true };
-  let sw = loadSw();
-  await fire(sw.handlers.notificationclick, { action: 'later', notification: { close() {}, data } });
-  assert.deepEqual(sw.opened, []);
-  assert.equal(sw.shown.length, 1);
-  assert.match(sw.shown[0].opts.body, /あとで/);
-  sw = loadSw();
-  await fire(sw.handlers.notificationclick, { action: 'record', notification: { close() {}, data } });
-  assert.deepEqual(sw.opened, [SCOPE + 'index.html?source=action-test&action=record']);
-  sw = loadSw(); // ボタンではない所を押した
-  await fire(sw.handlers.notificationclick, { action: '', notification: { close() {}, data } });
-  assert.deepEqual(sw.opened, [SCOPE + 'index.html?source=action-test']);
-});
-
-test('ふつうの通知では、ボタンの印が来ても試しの扱いをしない', async () => {
-  const sw = loadSw();
-  await fire(sw.handlers.notificationclick, { action: 'later', notification: { close() {}, data: { url: SCOPE + 'index.html?source=webpush' } } });
-  assert.deepEqual(sw.opened, [SCOPE + 'index.html?source=webpush']);
-  assert.equal(sw.shown.length, 0);
-});

@@ -1616,21 +1616,6 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(st[0], "0px")
         self.assertIn("polygon", st[1])
 
-    def test_action_notification_test_button(self):
-        """通知のボタンの試し（D-097）：ボタン付きの通知を出し、ボタンの上限の申告を見せる。押したボタンは「開いた経路」に出る"""
-        page = self.clock_page(10, 0, "#system")
-        page.wait_for_selector("#view-system", state="visible")
-        page.evaluate("""() => { window.__shown = []; navigator.serviceWorker.ready.then((reg) => {
-          reg.showNotification = async (t, o) => { window.__shown.push([t, o.actions.map((a) => a.title), o.data.test]); }; }); }""")
-        page.click("#action-test")
-        page.wait_for_function("document.getElementById('action-test-status').textContent !== ''", timeout=5_000)
-        self.assertIn("ボタンの上限の申告", page.text_content("#action-test-status"))
-        self.assertIn("出しました", page.text_content("#action-test-status"))
-        self.assertEqual(page.evaluate("window.__shown"), [["キィニチ（試し）", ["記録する", "あとで"], True]])
-        page.goto(self.base + "index.html?mode=standalone&source=action-test&action=record#system")
-        page.wait_for_selector("#view-system", state="visible")
-        self.assertEqual(page.text_content("#source"), "試しの通知のボタン「記録する」")
-
     def test_system_fields_are_not_black_holes(self):
         """仕様関連の入力欄も、ほかの画面と同じ「地より少し明るい面」。最奥の黒にしない（D-064 ⑦、CR-F01）"""
         page = self.clock_page(10, 0, "#system")
@@ -3563,7 +3548,7 @@ class PwaTest(unittest.TestCase):
         page.wait_for_selector("#view-system", state="visible")
         self.assertTrue(page.is_hidden("#view-settings"))
         cards = page.eval_on_selector_all("#view-system .card h2", "els => els.map(e => e.textContent)")
-        self.assertEqual(cards, ["起動状態（確認用）", "通知の再設定", "通知のボタンの試し", "スプレッドシートへの控え"])  # 試しは確かめ終えたら外す（D-097）
+        self.assertEqual(cards, ["起動状態（確認用）", "通知の再設定", "スプレッドシートへの控え"])
         self.assertEqual(page.text_content("#app-version"), page.evaluate("APP_VERSION"))
         page.click("#view-system .back")
         page.wait_for_selector("#view-settings", state="visible")

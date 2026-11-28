@@ -37,10 +37,6 @@ function describeSource() {
   if (src === 'ntfy') return '通知（ntfy）のタップ';
   if (src === 'webpush') return '通知（Web Push）のタップ';
   if (src === 'homescreen') return 'ホーム画面のアイコン';
-  if (src === 'action-test') { // 試しの通知（D-097）。どこを押して開いたか
-    const a = new URLSearchParams(location.search).get('action');
-    return a ? `試しの通知のボタン「${a === 'record' ? '記録する' : a}」` : '試しの通知の本体（ボタンではない所）';
-  }
   return 'URLを直接開いた';
 }
 
@@ -895,25 +891,6 @@ document.getElementById('enable-push').addEventListener('click', () => {
   enablePush()
     .then(() => setText('push-status', '有効（送信サーバーに登録済み）', 'ok'))
     .catch((e) => setText('push-status', '失敗: ' + explainError(e), 'ng'));
-});
-
-// 通知のボタンの試し（D-097）。この端末のブラウザが申告するボタンの上限（maxActions）も出す
-document.getElementById('action-test').addEventListener('click', () => {
-  const max = typeof Notification !== 'undefined' && 'maxActions' in Notification ? Notification.maxActions : '不明';
-  if (typeof Notification === 'undefined' || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) {
-    setText('action-test-status', `通知が許可されていません（ボタンの上限の申告：${max}）`, 'status ng');
-    return;
-  }
-  navigator.serviceWorker.ready
-    .then((reg) => reg.showNotification('キィニチ（試し）', {
-      body: 'ボタンが出るかの試しです。「記録する」を押すとアプリが開きます。「あとで」は開かずに、もう1つ通知を出します。',
-      icon: 'icons/icon-192.png',
-      tag: 'action-test',
-      actions: [{ action: 'record', title: '記録する' }, { action: 'later', title: 'あとで' }],
-      data: { url: new URL('index.html?source=action-test', location.href).href, test: true },
-    }))
-    .then(() => setText('action-test-status', `出しました（ボタンの上限の申告：${max}）。通知を見てください`, 'status ok'))
-    .catch((e) => setText('action-test-status', `出せませんでした：${e.message}（ボタンの上限の申告：${max}）`, 'status ng'));
 });
 
 if ('serviceWorker' in navigator) {
