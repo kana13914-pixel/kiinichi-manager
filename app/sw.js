@@ -19,6 +19,7 @@ const ASSETS = [
   './sync.js',
   './portrait.js',
   './touch.js',
+  './summary.js',
   './style.css',
   './img/canopy-emblem.svg',
   './img/canopy-vines.svg',

@@ -2105,6 +2105,83 @@ class PwaTest(unittest.TestCase):
         self.assertTrue(page.is_visible("#schedule-say"))
         self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-row.none")), 8)
 
+    # ---------- 週次サマリー（D-102） ----------
+    SUMMARY_EVENTS = """(evs) => { const ms = (d, h, m = 0) => new Date(2026, 10, d, h, m).getTime();
+      const list = evs.map(([d, h1, m1, h2, m2, title]) => ({ title, start: ms(d, h1, m1), end: ms(d, h2, m2), allDay: false }));
+      Calendar.ready = () => true;
+      Calendar.eventsOn = (date) => list.filter((e) => new Date(e.start).toDateString() === date.toDateString())
+        .map((e) => ({ at: new Date(e.start), title: e.title, kind: 'event', allDay: false, ref: e })); }"""
+
+    def test_summary_finds_problems_next_week(self):
+        """来週の予定の気になる点（D-102）：重なり・予定の間の短さ・毎日の時刻との重なり・就寝より遅い・休憩をはさめない続き"""
+        page = self.clock_page(10, 0, "#summary")  # 2026-11-09（月）。来週は 11/16〜11/22
+        page.wait_for_selector("#view-summary", state="visible")
+        self.assertIn("11/16(月)〜11/22(日)", page.text_content("#summary-next-title"))
+        self.assertTrue(page.is_visible("#summary-no-calendar"))  # カレンダーをつなぐまでは調べない
+        page.evaluate(self.SUMMARY_EVENTS, [
+            [16, 10, 0, 11, 0, "会議A"], [16, 10, 30, 11, 30, "会議B"],          # 重なり30分
+            [17, 14, 0, 15, 0, "面談"], [17, 15, 5, 16, 0, "外出"],              # 間が5分
+            [18, 11, 30, 13, 0, "昼の打ち合わせ"],                                # 昼食 12:00 と重なる
+            [19, 22, 0, 23, 59, "夜の作業"],                                      # 就寝 23:30 より遅い・入浴 22:30 と重なる
+            [20, 13, 0, 14, 0, "作業1"], [20, 14, 10, 15, 30, "作業2"],          # 13:00〜15:30 休憩をはさめない（10分の間はつなぐ）
+            [21, 10, 0, 11, 0, "買い物"],                                         # 土曜：問題なし
+        ])
+        page.evaluate("Summary.render()")
+        texts = page.eval_on_selector_all("#summary-problems .summary-problem", "els => els.map((e) => [e.className.split(' ')[1], e.querySelector('.summary-problem-day').textContent, e.querySelector('.summary-problem-text').textContent])")
+        kinds = [(k, d) for k, d, _ in texts]
+        self.assertIn(("overlap", "11/16(月)"), kinds)
+        self.assertIn(("gap", "11/17(火)"), kinds)
+        self.assertIn(("routine", "11/18(水)"), kinds)
+        self.assertIn(("break", "11/20(金)"), kinds)
+        joined = "\n".join(t for _, _, t in texts)
+        self.assertIn("「会議A」（10:00〜11:00）と「会議B」（10:30〜11:30）が30分重なっています", joined)
+        self.assertIn("「面談」が終わってから「外出」まで5分しかありません", joined)
+        self.assertIn("昼食の時刻（12:00）と重なっています", joined)
+        self.assertIn("就寝の時刻（23:30）より遅くまであります", joined)
+        self.assertIn("入浴の時刻（22:30）と重なっています", joined)
+        self.assertIn("13:00〜15:30の2時間30分、休憩をはさむ空きがありません", joined)
+        self.assertNotIn("11/21(土)", [d for _, d, _ in texts])
+        self.assertEqual(page.text_content("#summary-problems-count"), str(len(texts)))
+        # 1日1行。押すと中身が開く
+        rows = page.eval_on_selector_all("#summary-next .summary-day", "els => els.map((e) => e.dataset.date)")
+        self.assertEqual(rows, ["2026-11-%d" % d for d in range(16, 23)])
+        info = page.text_content("#summary-next .summary-day[data-date='2026-11-21'] .summary-day-info")
+        self.assertEqual(info, "予定1件 ・ 空き15時間30分")  # 土曜は休日の時刻：起床7:00〜就寝23:30 の 16時間30分 − 1時間
+        page.click("#summary-next .summary-day[data-date='2026-11-16'] .summary-day-btn")
+        items = page.eval_on_selector_all("#summary-next .summary-day[data-date='2026-11-16'] .summary-item", "els => els.map((e) => e.textContent)")
+        self.assertEqual(items[0], "毎日の時刻（平日）：起床 07:00 〜 就寝 23:30")
+        self.assertIn("10:00〜11:00　会議A", items)
+        # 予定がなければ「見つかりませんでした」
+        page.evaluate(self.SUMMARY_EVENTS, [])
+        page.evaluate("Summary.render()")
+        self.assertIn("見つかりませんでした", page.text_content("#summary-problems"))
+
+    def test_summary_review_and_entry(self):
+        """今週の振り返りの数字（D-102）と、ホームの入口（日曜の16時から月曜は目立たせる）"""
+        reports = {"2026-11-09": {"mood": "good", "done": "a", "savedAt": 1}, "2026-11-10": {"mood": "tired", "savedAt": 1}}
+        records = {"2026-11-09": {"wake": {"time": "07:00", "at": 1}, "breakfast": {"skipped": True, "at": 1}},
+                   "2026-11-10": {"wake": {"time": "07:05", "at": 1}}}
+        weekly = {"2026-11-02": {"text": "先週はよく回した。", "at": 1}}
+        init = ("localStorage.setItem('db.reports', %s); localStorage.setItem('db.records', %s); localStorage.setItem('db.weekly', %s)"
+                % tuple(json.dumps(json.dumps(x)) for x in (reports, records, weekly)))
+        page = self.clock_page(20, 0, day=10, init_script=init)  # 火曜の夜
+        self.assertFalse(page.evaluate("document.getElementById('summary-entry').classList.contains('attention')"))
+        page.click("#summary-entry")
+        page.wait_for_selector("#view-summary", state="visible")
+        facts = page.eval_on_selector_all("#summary-facts dt, #summary-facts dd", "els => els.map((e) => e.textContent)")
+        self.assertEqual(facts[:2], ["日報", "2 / 2日"])
+        self.assertEqual(facts[2:4], ["記録", "19%（3 / 16）"])  # 平日は1日8項目（休憩・歯磨きは数えない）。「今日はなし」も記録に数える
+        moods = page.eval_on_selector_all("#summary-moods li", "els => els.map((e) => e.textContent)")
+        self.assertEqual(moods, ["月元気", "火疲れた"])
+        self.assertEqual(page.text_content("#summary-comment-text"), "先週はよく回した。")
+        page.click("#view-summary .back")
+        page.wait_for_selector("#view-home", state="visible")
+        page = self.clock_page(17, 0, day=15)  # 日曜の夕方
+        self.assertTrue(page.evaluate("document.getElementById('summary-entry').classList.contains('attention')"))
+        for size in ((393, 852), (375, 667)):
+            page = self.clock_page(10, 0, "#summary", size=size)
+            self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), size[0])
+
     def test_routine_view_compact_hidden_all(self):
         """予定の一覧での毎日の時刻の出し方（D-101）：はじめは「まとめる」（1行。押すと開く）。「出さない」「すべて」に切り替えられる。データは変えない"""
         init = "localStorage.setItem('db.prefs', JSON.stringify({ voice: false }))"  # routineView なし＝はじめの状態

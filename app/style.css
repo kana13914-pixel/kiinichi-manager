@@ -427,6 +427,16 @@ body.from-notification .dialogue { --dlg-top: var(--color-accent); }
   width: var(--tap); height: var(--tap); margin-right: calc(var(--space-2) * -1);
   color: var(--color-text-secondary); border-radius: var(--radius-pill);
 }
+/* ホーム右上：週次サマリーの入口と設定（D-102）。右端のボタンだけ端に寄せる */
+.home-header-acts { display: flex; align-items: center; }
+.home-header-acts .icon-btn:not(:last-child) { margin-right: 0; }
+.summary-entry { position: relative; }
+/* 週の変わり目は、金の細い色の点だけ（主ボタンの金の塗りと競わない。V3-08） */
+.summary-entry.attention { color: var(--color-text); }
+.summary-entry.attention::after {
+  content: ""; position: absolute; top: var(--space-2); right: var(--space-2);
+  width: var(--space-2); height: var(--space-2); border-radius: 50%; background: var(--color-gold-line);
+}
 /* 子画面の戻る導線（I2-04）。「‹ ホーム」と 2 行の見出しの下端をそろえる（D-022 ⑥） */
 .sub-header { display: flex; align-items: flex-end; gap: var(--space-3); min-height: var(--tap); }
 .sub-header h1 { margin: 0; }
@@ -982,6 +992,37 @@ input:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 1
   padding-bottom: var(--space-2);
   background: linear-gradient(90deg, var(--color-gold-line), transparent) left bottom / 100% 1px no-repeat;
 }
+
+/* ---------- 週次サマリー（D-102） ---------- */
+.summary-facts { font-size: var(--fs-subhead); }
+.summary-facts dd { font-variant-numeric: tabular-nums; }
+.summary-moods { list-style: none; display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-1); margin: var(--space-1) 0 0; padding: 0; }
+.summary-mood { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: var(--space-1) 0; background: var(--color-surface-1); font-size: var(--fs-caption); color: var(--color-text-tertiary); }
+.summary-mood.good, .summary-mood.normal { color: var(--color-text); }
+.summary-mood.tired { color: var(--color-accent); }
+.summary-mood-day { font-weight: 700; }
+.summary-comment { margin-top: var(--space-3); padding: var(--space-2) var(--space-3); box-shadow: inset 2px 0 0 var(--color-gold-line); background: var(--color-surface-1); }
+.summary-comment-title { margin: 0; font-size: var(--fs-caption); color: var(--color-text-secondary); }
+.summary-comment-text { margin: var(--space-1) 0 0; font-size: var(--fs-subhead); }
+.summary-next, .summary-problems, .summary-day-items { list-style: none; margin: 0; padding: 0; }
+.summary-day { box-shadow: inset 0 -1px 0 var(--color-gold-faint); }
+.summary-day-btn {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%; min-height: var(--size-record); margin: 0;
+  padding: var(--space-2) 0; border: 0; border-radius: 0; background: transparent; color: var(--color-text); font: inherit; text-align: left;
+}
+.summary-day-date { flex: none; min-width: 5.2em; font-weight: 700; font-variant-numeric: tabular-nums; }
+.summary-day-info { flex: 1; min-width: 0; font-size: var(--fs-subhead); color: var(--color-text-secondary); }
+.summary-day-flag { flex: none; font-size: var(--fs-caption); font-weight: 700; color: var(--color-accent); }
+.summary-day-mark { flex: none; color: var(--color-text-tertiary); }
+.summary-day-items { padding: 0 0 var(--space-2) var(--space-3); }
+.summary-item { padding: var(--space-1) 0; font-size: var(--fs-subhead); overflow-wrap: anywhere; }
+.summary-item.routine, .summary-item.task { color: var(--color-text-secondary); }
+.summary-problem { padding: var(--space-2) var(--space-3); margin-top: var(--space-2); background: var(--color-surface-1); box-shadow: inset 2px 0 0 var(--color-accent); }
+.summary-problem.none { box-shadow: none; color: var(--color-text-secondary); font-size: var(--fs-subhead); }
+.summary-problem p { margin: 0; }
+.summary-problem-day { font-size: var(--fs-caption); font-weight: 700; color: var(--color-text-secondary); }
+.summary-problem-text { margin-top: var(--space-1); font-size: var(--fs-subhead); overflow-wrap: anywhere; }
+.summary-problem-impact { margin-top: var(--space-1); font-size: var(--fs-footnote); color: var(--color-text-secondary); }
 
 /* ---------- ホームを触ったときの波紋（D-096） ---------- */
 .touch-ripple {

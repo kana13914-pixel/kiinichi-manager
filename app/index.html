@@ -49,9 +49,15 @@
           <span id="clock-date" class="clock-date">-</span>
         </div>
         <!-- 設定は日常的に開かないので右上（D-019 Q1）。歯車は簡略化すると太陽に見えるためスライダー型 -->
-        <a class="icon-btn" href="#settings" data-view="settings" aria-label="設定">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
-        </a>
+        <div class="home-header-acts">
+          <!-- 週次サマリーの入口（D-102）。日曜の夕方〜月曜は金の点で目立たせる -->
+          <a id="summary-entry" class="icon-btn summary-entry" href="#summary" data-view="summary" aria-label="週次サマリー">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="1"/><path d="M4 10h16M9 3v4M15 3v4M8 15l2.5 2.5L16 13"/></svg>
+          </a>
+          <a class="icon-btn" href="#settings" data-view="settings" aria-label="設定">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>
+          </a>
+        </div>
       </header>
 
       <div class="stage">
@@ -497,6 +503,31 @@
       <a href="#system" class="cut-btn quiet sub-link" data-view="system">仕様関連<span aria-hidden="true">›</span></a>
     </section>
 
+    <!-- 週次サマリー（D-102。docs/weekly_summary_design.md 段階2）：今週の振り返り・来週の予定・気になる点。「‹ ホーム」で戻る -->
+    <section id="view-summary" class="view summary">
+      <header class="sub-header"><a href="#home" class="back">‹ ホーム</a><h1><span class="label-en" aria-hidden="true">WEEKLY</span>週次サマリー</h1></header>
+      <section class="card" aria-labelledby="summary-review-title">
+        <h2 id="summary-review-title">今週の振り返り</h2>
+        <dl id="summary-facts" class="summary-facts"></dl>
+        <span class="form-label" id="summary-moods-label">調子</span>
+        <ul id="summary-moods" class="summary-moods" aria-labelledby="summary-moods-label"></ul>
+        <div id="summary-comment" class="summary-comment" hidden>
+          <p class="summary-comment-title">先週のひとこと（キィニチ）</p>
+          <p id="summary-comment-text" class="summary-comment-text"></p>
+        </div>
+      </section>
+      <section class="card" aria-labelledby="summary-next-title">
+        <h2 id="summary-next-title">来週の予定</h2>
+        <p id="summary-no-calendar" class="note" hidden>Google カレンダーをつなぐと、来週の予定と気になる点をここにまとめます（設定 → 仕様関連 →「スプレッドシートへの控え」）。</p>
+        <ul id="summary-next" class="summary-next"></ul>
+      </section>
+      <section id="summary-problems-section" class="card" aria-labelledby="summary-problems-title">
+        <h2 id="summary-problems-title">気になる点 <span id="summary-problems-count" class="n">0</span></h2>
+        <ul id="summary-problems" class="summary-problems"></ul>
+        <details class="more"><summary>詳しく</summary><p class="note">来週の Google カレンダーの予定と毎日の時刻から、予定の重なり、予定の間が15分未満（移動や準備）、食事・入浴の時刻と重なる予定、就寝より遅い・起床より早い予定、仕事の時間に休憩をはさめないまま90分を超えて続く予定を探します。この端末の中だけで調べ、外には送りません。予定は変えません。</p></details>
+      </section>
+    </section>
+
     <!-- 仕様関連：起動状態（確認用）・通知の再設定・スプレッドシートへの控え。「‹ 設定」で戻る -->
     <section id="view-system" class="view">
       <header class="sub-header"><a href="#settings" class="back">‹ 設定</a><h1><span class="label-en" aria-hidden="true">SYSTEM</span>仕様関連</h1></header>
@@ -657,5 +688,6 @@
   <script src="sync.js"></script>
   <script src="portrait.js"></script>
   <script src="touch.js"></script>
+  <script src="summary.js"></script>
 </body>
 </html>

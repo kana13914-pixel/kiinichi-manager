@@ -83,7 +83,7 @@ if (window.visualViewport) window.visualViewport.addEventListener('resize', fixV
 }
 
 // ---------- 画面の切り替え（下のタブ5個＋右上の設定。URLの #home などで管理。D-019 Q1） ----------
-const VIEWS = ['home', 'schedule', 'tasks', 'timer', 'report', 'settings', 'system'];
+const VIEWS = ['home', 'schedule', 'tasks', 'timer', 'report', 'settings', 'system', 'summary'];
 let shownView = null;
 function showView() {
   const name = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home';
