@@ -670,5 +670,15 @@ const Tasks = (() => {
     const before = update(id, (t) => { t.plan = plan; });
     return before ? before.plan || null : undefined;
   }
-  return { load, dueInfo, sortOpen, tidy, render, dueLeft, postponeToTomorrow, onDay, estimateText, setPlan };
+  // 輪の時間にタスクを置く（D-112）：やる日をその日に。見込み時間が空なら置いた長さにそろえる。新しく作るときは id を返す
+  function place(id, date, minutes) {
+    const ok = update(id, (t) => { t.plan = date; if (!t.estimate) t.estimate = minutes; });
+    return ok ? id : null;
+  }
+  function addFor(title, date, minutes) {
+    if (!add(title.slice(0, 100), null, true, null, [], minutes, date)) return null;
+    const list = load();
+    return list[list.length - 1].id;
+  }
+  return { load, dueInfo, sortOpen, tidy, render, dueLeft, postponeToTomorrow, onDay, estimateText, setPlan, place, addFor };
 })();

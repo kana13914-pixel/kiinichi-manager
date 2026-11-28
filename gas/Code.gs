@@ -20,6 +20,7 @@ var SHEET = {
   subtasks: ['ミニタスク', ['親のid', '親のやること', 'id', '名前', '状態', '済みにした日時']],
   routine: ['毎日の時刻', ['区分', '起床', '朝食', '仕事開始', '昼食', '仕事終わり', '夕食', '入浴', '就寝']],
   timers: ['タイマー', ['名前', '分', '種類']],
+  blocks: ['輪に置いた時間', ['日付', '始まり', '終わり', '種類', '名前', 'タスクのid']], // D-112
   meta: ['同期', ['項目', '値']],
 };
 
@@ -45,6 +46,7 @@ function doPost(e) {
     if (p.subtasks) replace_(ss, SHEET.subtasks, p.subtasks.map(function (x) { return [x.parentId, x.parentTitle, x.id, x.title, x.state, x.doneAt]; }));
     if (p.routine) replace_(ss, SHEET.routine, p.routine);
     if (p.timers) replace_(ss, SHEET.timers, p.timers);
+    if (p.blocks) replace_(ss, SHEET.blocks, p.blocks); // 古いアプリ（送らない）からは書き換えない
     replace_(ss, SHEET.meta, [['最後に受け取った日時', p.sentAt || ''], ['アプリの版', p.app || '']]);
   } finally {
     lock.releaseLock();

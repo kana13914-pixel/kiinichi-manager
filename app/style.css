@@ -71,10 +71,15 @@
   --size-mini-emblem: 40px; /* 各画面の一言の面に添える紋章（D-059） */
   /* 1日の輪（D-108）：差し色を薄くして面積の決まりを守る。何もない時間はごく薄い地 */
   --ring-free: rgba(244, 241, 232, 0.06);
-  --ring-sleep: rgba(98, 184, 224, 0.30);
-  --ring-work: rgba(185, 227, 95, 0.28);
-  --ring-life: rgba(242, 161, 74, 0.55);
-  --ring-event: rgba(232, 196, 92, 0.70);
+  /* 輪の色の見本（D-111）。毎日のルーティンは青緑の濃淡（c1〜c4）、自分で入れたものは金の系統（c5〜c7）、c8 は空色 */
+  --ring-c1: rgba(46, 120, 130, 0.75);
+  --ring-c2: rgba(72, 150, 145, 0.55);
+  --ring-c3: rgba(110, 180, 165, 0.50);
+  --ring-c4: rgba(150, 205, 190, 0.40);
+  --ring-c5: rgba(232, 196, 92, 0.70);
+  --ring-c6: rgba(232, 196, 92, 0.42);
+  --ring-c7: rgba(242, 161, 74, 0.55);
+  --ring-c8: rgba(98, 184, 224, 0.50);
   --size-day-ring: 320px;
 
   /* 効果・動き */
@@ -1005,11 +1010,11 @@ input:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 1
 /* ---------- 予定の「1日」：24時間の輪（D-108）。文字の大きさは輪の座標（320 四方）で JS が付ける ---------- */
 .day-ring { width: 100%; max-width: var(--size-day-ring); margin: var(--space-2) auto 0; }
 .day-ring-svg { display: block; width: 100%; height: auto; overflow: visible; }
-.ring-seg.free { fill: var(--ring-free); }
-.ring-seg.sleep { fill: var(--ring-sleep); }
-.ring-seg.work { fill: var(--ring-work); }
-.ring-seg.life { fill: var(--ring-life); }
-.ring-seg.event { fill: var(--ring-event); }
+.ring-seg.empty { fill: var(--ring-free); }
+.ring-seg.c1, .swatch.c1 { fill: var(--ring-c1); --sw: var(--ring-c1); } .ring-seg.c2, .swatch.c2 { fill: var(--ring-c2); --sw: var(--ring-c2); }
+.ring-seg.c3, .swatch.c3 { fill: var(--ring-c3); --sw: var(--ring-c3); } .ring-seg.c4, .swatch.c4 { fill: var(--ring-c4); --sw: var(--ring-c4); }
+.ring-seg.c5, .swatch.c5 { fill: var(--ring-c5); --sw: var(--ring-c5); } .ring-seg.c6, .swatch.c6 { fill: var(--ring-c6); --sw: var(--ring-c6); }
+.ring-seg.c7, .swatch.c7 { fill: var(--ring-c7); --sw: var(--ring-c7); } .ring-seg.c8, .swatch.c8 { fill: var(--ring-c8); --sw: var(--ring-c8); }
 .ring-name { fill: var(--color-text); font-weight: 700; pointer-events: none; }
 .ring-hour { fill: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
 .ring-tick { stroke: var(--color-gold-line); stroke-width: 1; }
@@ -1018,9 +1023,15 @@ input:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 1
 .ring-center { fill: var(--color-text); font-weight: 300; font-variant-numeric: tabular-nums; }
 .ring-sub { fill: var(--color-text-secondary); }
 .day-legend { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-1) var(--space-3); margin: var(--space-2) 0 var(--space-3); padding: 0; font-size: var(--fs-caption); color: var(--color-text-secondary); }
-.day-legend i { display: inline-block; width: var(--size-mood-s); height: var(--size-mood-s); margin-right: var(--space-1); vertical-align: -1px; }
-.day-legend i.sleep { background: var(--ring-sleep); } .day-legend i.work { background: var(--ring-work); }
-.day-legend i.life { background: var(--ring-life); } .day-legend i.event { background: var(--ring-event); }
+.day-legend i { display: inline-block; width: var(--size-mood-s); height: var(--size-mood-s); margin-right: var(--space-1); vertical-align: -1px; background: var(--sw); }
+/* 色の見本のボタン（D-111）：押せる大きさの四角に色。選んでいるものは白い縁 */
+.swatches { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.swatch-btn { width: var(--tap); min-height: var(--tap); margin: 0; padding: var(--space-2); border: 0; border-radius: 0; background: transparent; }
+.swatch-btn .swatch { display: block; width: 100%; height: 100%; min-height: calc(var(--tap) - var(--space-2) * 2); background: var(--sw); }
+.swatch-btn[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--color-text); }
+.ring-color-row { display: flex; align-items: center; gap: var(--space-2); min-height: var(--size-record); box-shadow: inset 0 -1px 0 var(--color-gold-faint); }
+.ring-color-row .ring-color-name { flex: 1; }
+.ring-color-row .swatch-btn { flex: none; }
 
 /* ---------- 週次サマリー（D-102） ---------- */
 .summary-facts { font-size: var(--fs-subhead); }

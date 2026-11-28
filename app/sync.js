@@ -57,7 +57,10 @@ const Sync = (() => {
       ...Timer.builtins(timer).map((t) => [t.name, t.minutes, t.minutes === t.base ? '用途別' : `用途別（初めは${t.base}分）`]),
       ...timer.custom.map((t) => [t.name, t.minutes, '自分で作った']),
     ];
-    return { app: APP_VERSION, records, reports, tasks, subtasks, routine, timers };
+    // 1日の輪に置いた時間（D-112）：端末の今の中身で書き直す
+    const blocks = Blocks.load().sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
+      .map((b) => [b.date, b.start, b.end, BLOCK_KINDS[b.kind], b.title, b.taskId || '']);
+    return { app: APP_VERSION, records, reports, tasks, subtasks, routine, timers, blocks };
   }
 
   function show() {

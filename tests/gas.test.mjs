@@ -166,3 +166,12 @@ test('タスクの見込み時間（分）とやる日は、優先度の後ろ�
   assert.deepEqual(JSON.parse(JSON.stringify(g.sheets['タスク'].cells()[0].slice(8))), ['優先度', '見込み（分）', 'やる日']);
   assert.deepEqual(JSON.parse(JSON.stringify(g.rows('タスク').map((x) => [x[0], x[9], x[10]]))), [['a', '60', '2026-12-01'], ['b', '', '']]);
 });
+
+test('1日の輪に置いた時間は「輪に置いた時間」のシートに書き直す（D-112）', () => {
+  const g = loadGas();
+  g.post(base({ blocks: [['2026-11-30', '14:00', '15:30', 'タスク', '資料', 'a'], ['2026-11-30', '16:00', '17:00', '自由時間', '自由時間', '']] }));
+  assert.deepEqual(JSON.parse(JSON.stringify(g.sheets['輪に置いた時間'].cells()[0])), ['日付', '始まり', '終わり', '種類', '名前', 'タスクのid']);
+  assert.equal(g.rows('輪に置いた時間').length, 2);
+  g.post(base({})); // 送らないときは書き換えない
+  assert.equal(g.rows('輪に置いた時間').length, 2);
+});

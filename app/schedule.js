@@ -122,6 +122,29 @@ const Schedule = (() => {
     return li;
   }
 
+  // 輪に置いた時間の行（D-112）。押すと直す・消す
+  function blockRow(date, bl) {
+    const li = document.createElement('li');
+    li.className = 'schedule-row block-row';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'routine-summary-btn block-btn';
+    const time = document.createElement('span');
+    time.className = 'schedule-time';
+    time.textContent = bl.start;
+    const title = document.createElement('span');
+    title.className = 'schedule-title';
+    title.textContent = `${bl.title}（〜${bl.end}）`;
+    const tag = document.createElement('small');
+    tag.className = 'tag routine-tag';
+    tag.textContent = BLOCK_KINDS[bl.kind];
+    title.append(tag);
+    btn.append(time, title);
+    btn.addEventListener('click', () => Slot.open(date, bl));
+    li.append(btn);
+    return li;
+  }
+
   function noneRow() {
     const li = document.createElement('li');
     li.className = 'schedule-row none';
@@ -210,7 +233,10 @@ const Schedule = (() => {
       rows.push(routineSummaryRow(date, routines, skipped, now, next));
       if (openDays.has(dateStr(date))) rows.push(...routines.map((e) => row(e, now, next)).map((li) => { li.classList.add('routine-open'); return li; }), ...skipped.map(skippedRow));
     }
-    rows.push(...(view === 'compact' ? others.filter((e) => !e.allDay) : others).map((e) => row(e, now, next)));
+    // 時刻のある予定と、輪に置いた時間（D-112）を時刻順に
+    const timed = [...(view === 'compact' ? others.filter((e) => !e.allDay) : others).map((e) => ({ at: e.allDay ? -1 : e.at.getTime(), li: row(e, now, next) })),
+      ...Blocks.on(date).map((bl) => ({ at: Blocks.range(bl).start, li: blockRow(date, bl) }))].sort((x, y) => x.at - y.at);
+    rows.push(...timed.map((x) => x.li));
     if (view === 'all') rows.push(...skipped.map(skippedRow));
     if (!rows.length) rows.push(noneRow());
     return rows;
@@ -269,6 +295,9 @@ const Schedule = (() => {
     $('cal-day-list').replaceChildren(...tasks.map(taskRow), ...(events.length || tasks.length ? events.map((e) => row(e, now, next)) : [noneRow()]));
   }
   // ---------- 1日の輪（D-108） ----------
+  // 描く順（あとのものが上）と色（D-111。そのほかは置いたときに選んだ色）
+  const order = { sleep: 0, work: 1, meal: 2, bath: 2, task: 3, free: 3, other: 3, event: 4 };
+  const colorOf = (b) => (b.kind === 'other' ? (RING_COLORS[b.block && b.block.color] ? b.block.color : 'c6') : RingColors.of(b.kind));
   const SVG = 'http://www.w3.org/2000/svg';
   const RING = { c: 160, r0: 98, r1: 130, label: 146 };
   const LIFE_MIN = 30; // 食事・入浴は終わりの時刻がないので30分として描く
@@ -308,8 +337,9 @@ const Schedule = (() => {
     if (ws !== null && we !== null && we > ws) push({ kind: 'work', title: '仕事', start: ws, end: we });
     for (const [id, title] of [['breakfast', '朝食'], ['lunch', '昼食'], ['dinner', '夕食'], ['bath', '入浴']]) {
       const at = routineAt(startOfDay(date), t[id]);
-      if (at !== null) push({ kind: 'life', title, start: at, end: at + LIFE_MIN * 60000, routine: { id, title, day: dateStr(date) } });
+      if (at !== null) push({ kind: id === 'bath' ? 'bath' : 'meal', title, start: at, end: at + LIFE_MIN * 60000, routine: { id, title, day: dateStr(date) } });
     }
+    for (const b of Blocks.on(date)) push({ kind: b.kind, title: b.title, ...Blocks.range(b), block: b }); // 輪に置いた時間（D-112）
     for (const e of SampleData.eventsOn(date)) {
       if (e.kind !== 'event' || e.allDay) continue;
       const start = e.ref ? e.ref.start : e.at.getTime();
@@ -325,11 +355,10 @@ const Schedule = (() => {
     $('day-title').textContent = (isToday ? '今日 ' : '') + labelShort(date);
     const blocks = dayBlocks(date);
     const root = svg('svg', { viewBox: '0 0 320 320', class: 'day-ring-svg', role: 'img', 'aria-label': `${dayLabel(date)}の1日の輪。${blocks.map((b) => `${b.title} ${hm(new Date(b.start))}〜${hm(new Date(b.end))}`).join('、') || '予定なし'}` });
-    root.append(svg('path', { d: arc(0, 1439.99), class: 'ring-seg free' }));
-    const order = { sleep: 0, work: 1, life: 2, event: 3 };
+    root.append(svg('path', { d: arc(0, 1439.99), class: 'ring-seg empty' }));
     for (const b of [...blocks].sort((a, c) => order[a.kind] - order[c.kind])) {
       const m0 = (b.start - d0) / 60000, m1 = (b.end - d0) / 60000;
-      const seg = svg('path', { d: arc(m0, m1), class: 'ring-seg ' + b.kind });
+      const seg = svg('path', { d: arc(m0, m1), class: `ring-seg ${b.kind} ${colorOf(b)}` });
       root.append(seg);
       // 名前：上に重なるもの（睡眠・仕事の上の予定や食事）を除いた、いちばん長い所の真ん中に書く。1時間未満なら書かない
       const covers = blocks.filter((o) => order[o.kind] > order[b.kind] && o.end > b.start && o.start < b.end).sort((x, y) => x.start - y.start);
@@ -380,17 +409,21 @@ const Schedule = (() => {
       const hit = [...blocks].sort((a, c) => order[c.kind] - order[a.kind]).find((b) => b.start <= at && at < b.end && b.kind !== 'sleep' && b.kind !== 'work');
       if (hit && hit.kind === 'event') { if (hit.ref && hit.ref.editable) openForm(hit.ref); return; }
       if (hit && hit.routine) { RoutineDay.open(hit.routine); return; }
-      if (!Calendar.ready()) return;
-      openForm();
+      if (hit && hit.block) { Slot.open(date, hit.block); return; }
+      // 空いている所：何を入れるかを選ぶ（D-112）。押した時刻（30分単位）から1時間、次に何かある時刻の手前まで
       const startMin = Math.floor(min / 30) * 30;
-      const nextBusy = blocks.filter((b) => b.kind === 'event' && b.start > d0 + startMin * 60000).map((b) => (b.start - d0) / 60000).sort((a, c) => a - c)[0];
+      const nextBusy = blocks.filter((b) => b.kind !== 'sleep' && b.kind !== 'work' && b.start > d0 + startMin * 60000).map((b) => (b.start - d0) / 60000).sort((a, c) => a - c)[0];
       const endMin = Math.min(startMin + 60, nextBusy || Infinity, 1439);
-      $('event-date').value = dateStr(date);
-      $('event-end-date').value = dateStr(date);
-      $('event-start').value = `${pad(Math.floor(startMin / 60))}:${pad(startMin % 60)}`;
-      $('event-end').value = `${pad(Math.floor(endMin / 60))}:${pad(endMin % 60)}`;
+      Slot.open(date, null, startMin, endMin);
     });
     $('day-ring').replaceChildren(root);
+    $('day-legend').replaceChildren(...RING_ITEMS.map(([kind, name]) => {
+      const li = document.createElement('li');
+      const i = document.createElement('i');
+      i.className = 'swatch ' + RingColors.of(kind);
+      li.append(i, name);
+      return li;
+    }));
     // 下の一覧：その日の予定（毎日の時刻の出し方の設定に従う。行を押すと直す・その日だけ変える）
     const sec = document.createElement('section');
     sec.className = 'schedule-day';
@@ -434,6 +467,117 @@ const Schedule = (() => {
     try { localStorage.setItem(MODE_KEY, mode); } catch (_) {}
     render(new Date(), true);
   }
+
+  // ---------- 輪の空いている所に入れる（D-112） ----------
+  const Slot = (() => {
+    const dlg = $('slot');
+    let day = null;     // 入れる日（0時）
+    let editing = null; // 直している輪の時間（Blocks の1件）。新しく入れるときは null
+    let kind = null;
+    let taskId = null;
+    let color = 'c6';
+    const hhmm = (min) => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
+    function setKind(k) {
+      kind = k;
+      for (const b of dlg.querySelectorAll('.slot-kinds [data-kind]')) b.setAttribute('aria-pressed', String(b.dataset.kind === k));
+      $('slot-event-note').hidden = k !== 'event';
+      $('slot-task').hidden = k !== 'task';
+      $('slot-other').hidden = k !== 'other';
+      $('slot-save').textContent = k === 'event' ? '次へ' : editing ? '保存' : '入れる';
+    }
+    function renderTasks() {
+      const open = Tasks.load().filter((t) => !t.done);
+      $('slot-tasks').replaceChildren(...open.map((t) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'cut-btn quiet chip';
+        b.textContent = t.title;
+        b.setAttribute('aria-pressed', String(t.id === taskId));
+        b.addEventListener('click', () => { taskId = t.id; $('slot-task-new').value = ''; renderTasks(); });
+        return b;
+      }));
+    }
+    function renderColors() {
+      $('slot-colors').replaceChildren(...Object.entries(RING_COLORS).map(([c, name]) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'swatch-btn';
+        b.setAttribute('aria-label', name);
+        b.setAttribute('aria-pressed', String(c === color));
+        const sw = document.createElement('span');
+        sw.className = 'swatch ' + c;
+        b.append(sw);
+        b.addEventListener('click', () => { color = c; renderColors(); });
+        return b;
+      }));
+    }
+    function open(date, block = null, startMin = 0, endMin = 60) {
+      day = startOfDay(date);
+      editing = block;
+      taskId = block && block.taskId ? block.taskId : null;
+      color = block && block.color ? block.color : 'c6';
+      $('slot-heading').textContent = block ? `${labelShort(day)}の${BLOCK_KINDS[block.kind]}を直す` : `${labelShort(day)} この時間に入れる`;
+      $('slot-start').value = block ? block.start : hhmm(startMin);
+      $('slot-end').value = block ? block.end : hhmm(endMin);
+      $('slot-task-new').value = '';
+      $('slot-name').value = block && block.kind === 'other' ? block.title : '';
+      $('slot-status').textContent = '';
+      $('slot-delete').hidden = !block;
+      dlg.querySelector('[data-kind=event]').hidden = Boolean(block) || !Calendar.ready(); // 予定はカレンダーをつないでいるときだけ
+      setKind(block ? block.kind : null);
+      renderTasks();
+      renderColors();
+      dlg.showModal();
+    }
+    for (const b of dlg.querySelectorAll('.slot-kinds [data-kind]')) b.addEventListener('click', () => setKind(b.dataset.kind));
+    $('slot-task-new').addEventListener('input', () => { if ($('slot-task-new').value) { taskId = null; renderTasks(); } });
+    $('slot-cancel').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', (e) => { if (e.target === e.currentTarget) dlg.close(); });
+    function done(message) {
+      dlg.close();
+      $('routine-msg').textContent = message;
+      render(new Date(), true);
+      window.dispatchEvent(new Event('blockschange'));
+    }
+    $('slot-delete').addEventListener('click', () => {
+      if (!editing || !Blocks.remove(editing.id)) { $('slot-status').textContent = SAVE_FAILED; return; }
+      done(`「${editing.title}」を消しました`);
+    });
+    $('slot-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const start = $('slot-start').value, end = $('slot-end').value;
+      if (!ROUTINE_TIME.test(start) || !ROUTINE_TIME.test(end) || end <= start) { $('slot-status').textContent = '終わりは始まりより後にしてください（その日の中）'; return; }
+      if (!kind) { $('slot-status').textContent = '入れるものを選んでください'; return; }
+      const toMin = (v) => { const [h, m] = v.split(':').map(Number); return h * 60 + m; };
+      const minutes = toMin(end) - toMin(start);
+      const date = dateStr(day);
+      if (kind === 'event') { // 予定は今までの「予定を足す」へ（Google カレンダー）
+        dlg.close();
+        openForm();
+        $('event-date').value = date;
+        $('event-end-date').value = date;
+        $('event-start').value = start;
+        $('event-end').value = end;
+        return;
+      }
+      let title = BLOCK_KINDS[kind];
+      let tid = null;
+      if (kind === 'task') {
+        const name = $('slot-task-new').value.trim();
+        tid = name ? Tasks.addFor(name, date, minutes) : taskId && Tasks.place(taskId, date, minutes);
+        if (!name && !taskId) { $('slot-status').textContent = 'タスクを選ぶか、新しく作ってください'; return; }
+        if (!tid) { $('slot-status').textContent = SAVE_FAILED; return; }
+        title = (Tasks.load().find((t) => t.id === tid) || {}).title || name;
+      } else if (kind === 'other') {
+        title = $('slot-name').value.trim();
+        if (!title) { $('slot-status').textContent = '名前を入れてください'; return; }
+      }
+      const saved = Blocks.put({ ...(editing ? { id: editing.id } : {}), date, start, end, kind, title, taskId: tid, color: kind === 'other' ? color : null });
+      if (!saved) { $('slot-status').textContent = SAVE_FAILED; return; }
+      done(`${labelShort(day)} ${start}〜${end} に「${title}」を入れました`);
+    });
+    return { open };
+  })();
 
   // ---------- 予定を足す・直す・消す（D-054） ----------
   let editing = null; // 直している予定（Calendar の控えの1件）。足すときは null

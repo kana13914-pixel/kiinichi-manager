@@ -2271,6 +2271,15 @@ class PwaTest(unittest.TestCase):
         short = page.eval_on_selector_all("#summary-problems .summary-problem.short .summary-problem-text", "els => els.map((e) => e.textContent)")
         self.assertEqual(short, ["11/16(月)までが期限のタスクの見込みが8時間で、それまでに使える時間（6時間48分）を超えています"])
 
+    def test_summary_counts_held_time_as_busy(self):
+        """輪に置いた自由時間・そのほか（D-112）は、作業に使える時間から引く（気になる点には数えない）"""
+        page = self.clock_page(10, 0, "#summary")
+        r = page.evaluate("""() => { const d = parseDay('2026-11-16'); const t = Routine.timesFor(d);
+          const ms = (h, m) => new Date(2026, 10, 16, h, m).getTime();
+          const a = Summary.analyze(d, [], t), b = Summary.analyze(d, [], t, [{ start: ms(13, 0), end: ms(15, 0) }]);
+          return [a.cap / 60000, b.cap / 60000, b.problems.length]; }""")
+        self.assertEqual(r, [570, 450, 0])
+
     def test_summary_review_and_entry(self):
         """今週の振り返りの数字（D-102）と、ホームの入口（日曜の16時から月曜は目立たせる）"""
         reports = {"2026-11-09": {"mood": "good", "done": "a", "savedAt": 1}, "2026-11-10": {"mood": "tired", "savedAt": 1}}
@@ -2324,13 +2333,17 @@ class PwaTest(unittest.TestCase):
         self.assertTrue(page.is_visible("#event-form"))
         self.assertEqual(page.text_content("#event-form-title"), "予定を直す")
         page.click("#event-cancel")
-        tap(16, 10)  # 仕事の時間の中の空き → 16:00〜17:00 で足す
+        tap(16, 10)  # 仕事の時間の中の空き → 何を入れるかを選ぶ（D-112）。16:00〜17:00
+        self.assertTrue(page.is_visible("#slot"))
+        self.assertEqual([page.input_value("#slot-start"), page.input_value("#slot-end")], ["16:00", "17:00"])
+        page.click("#slot .slot-kinds [data-kind=event]")  # 予定 → 今までの「予定を足す」へ
+        page.click("#slot-save")
         self.assertEqual(page.text_content("#event-form-title"), "予定を足す")
         self.assertEqual([page.input_value("#event-date"), page.input_value("#event-start"), page.input_value("#event-end")], ["2026-11-30", "16:00", "17:00"])
         page.click("#event-cancel")
         tap(9, 45)  # 次の予定（10:00）の手前まで
-        self.assertEqual([page.input_value("#event-start"), page.input_value("#event-end")], ["09:30", "10:00"])
-        page.click("#event-cancel")
+        self.assertEqual([page.input_value("#slot-start"), page.input_value("#slot-end")], ["09:30", "10:00"])
+        page.click("#slot-cancel")
         tap(12, 10)  # 昼食 → その日だけ変える
         self.assertTrue(page.is_visible("#routine-day"))
         self.assertEqual(page.text_content("#routine-day-title"), "11/30(月)の昼食")
@@ -2345,6 +2358,74 @@ class PwaTest(unittest.TestCase):
         for size in ((393, 852), (375, 667)):
             page.set_viewport_size({"width": size[0], "height": size[1]})
             self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), size[0])
+
+    def test_ring_slot_task_free_other_and_colors(self):
+        """輪の空きに入れる（D-112）：タスク（選ぶ・新しく作る。やる日をその日に、見込み時間が空なら長さにそろえる）・自由時間・そのほか（名前と色）。
+        この端末に置き、輪と一覧に出る。押すと直す・消す。色は設定で項目ごとに変えられる（D-111）"""
+        tasks = [{"id": "a", "title": "資料", "due": "2026-12-02", "done": False, "createdAt": 1}]
+        page = self.clock_page(9, 41, "#schedule", day=30, init_script="localStorage.setItem('db.tasks', %s)" % json.dumps(json.dumps(tasks)))
+        page.click("#schedule-mode-day")
+        tap = lambda hh, mm: page.evaluate("""([h, m]) => { const svg = document.querySelector('#day-ring svg'); const r = svg.getBoundingClientRect();
+          const a = ((h * 60 + m) / 1440) * 2 * Math.PI - Math.PI / 2, rr = 114 / 320 * r.width;
+          svg.dispatchEvent(new MouseEvent('click', { clientX: r.left + r.width / 2 + rr * Math.cos(a), clientY: r.top + r.height / 2 + rr * Math.sin(a), bubbles: true })); }""", [hh, mm])
+        tap(14, 10)
+        self.assertTrue(page.is_hidden("#slot .slot-kinds [data-kind=event]"))  # カレンダーをつないでいないので予定はなし
+        page.click("#slot-save")
+        self.assertIn("選んで", page.text_content("#slot-status"))
+        page.click("#slot .slot-kinds [data-kind=task]")
+        page.click("#slot-tasks button:has-text('資料')")
+        page.fill("#slot-end", "15:30")
+        page.click("#slot-save")
+        self.assertTrue(page.is_hidden("#slot"))
+        blocks = json.loads(page.evaluate("localStorage.getItem('db.blocks')"))
+        self.assertEqual([(b["date"], b["start"], b["end"], b["kind"], b["title"], b["taskId"]) for b in blocks], [("2026-11-30", "14:00", "15:30", "task", "資料", "a")])
+        t = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
+        self.assertEqual([t["plan"], t["estimate"]], ["2026-11-30", 90])
+        self.assertIn("タスク 14:00〜15:30", page.get_attribute("#day-ring svg", "aria-label").replace("資料", "タスク"))
+        # 新しいタスクを作って置く
+        tap(20, 40)
+        page.click("#slot .slot-kinds [data-kind=task]")
+        page.fill("#slot-task-new", "読書")
+        page.click("#slot-save")
+        new = [x for x in json.loads(page.evaluate("localStorage.getItem('db.tasks')")) if x["title"] == "読書"][0]
+        self.assertEqual([new["plan"], new["estimate"], new["due"]], ["2026-11-30", 60, None])
+        # 自由時間・そのほか
+        tap(16, 10)
+        page.click("#slot .slot-kinds [data-kind=free]")
+        page.click("#slot-save")
+        tap(17, 10)
+        page.click("#slot .slot-kinds [data-kind=other]")
+        page.click("#slot-save")
+        self.assertIn("名前", page.text_content("#slot-status"))
+        page.fill("#slot-name", "散歩")
+        page.click("#slot-colors [aria-label=空色]")
+        page.fill("#slot-end", "17:45")
+        page.click("#slot-save")
+        blocks = {b["title"]: b for b in json.loads(page.evaluate("localStorage.getItem('db.blocks')"))}
+        self.assertEqual((blocks["自由時間"]["kind"], blocks["自由時間"]["start"], blocks["自由時間"]["end"]), ("free", "16:00", "17:00"))
+        self.assertEqual((blocks["散歩"]["kind"], blocks["散歩"]["color"], blocks["散歩"]["end"]), ("other", "c8", "17:45"))
+        self.assertIn("ring-seg other c8", page.eval_on_selector_all("#day-ring path", "els => els.map((e) => e.getAttribute('class')).join('|')"))
+        rows = [r[:2] for r in self.schedule_rows(page, "2026-11-30") if r[0] in ("14:00", "16:00", "17:00")]
+        self.assertEqual(rows, [["14:00", "資料（〜15:30）タスク"], ["16:00", "自由時間（〜17:00）自由時間"], ["17:00", "散歩（〜17:45）そのほか"]])
+        # 押して直す・消す
+        page.click("#schedule-days .block-btn:has-text('自由時間')")
+        self.assertEqual(page.text_content("#slot-heading"), "11/30(月)の自由時間を直す")
+        page.click("#slot-delete")
+        self.assertNotIn("自由時間", [b["title"] for b in json.loads(page.evaluate("localStorage.getItem('db.blocks')"))])
+        # 色（D-111）：はじめは毎日のルーティンが青緑の濃淡、自分で入れたものが金の系統。設定で変える
+        legend = page.eval_on_selector_all("#day-legend li", "els => els.map((e) => [e.textContent, e.querySelector('i').className])")
+        self.assertEqual(legend[:2], [["睡眠", "swatch c1"], ["仕事", "swatch c2"]])
+        self.assertEqual(legend[5], ["タスク", "swatch c6"])
+        page.evaluate("location.hash = '#settings'")
+        page.click("#ring-colors [data-ring=sleep]")
+        page.click("#ring-color-pick [aria-label=空色]")
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.prefs')"))["ringColors"], {"sleep": "c8"})
+        page.evaluate("location.hash = '#schedule'")
+        self.assertEqual(page.eval_on_selector("#day-legend li", "e => e.querySelector('i').className"), "swatch c8")
+        page.evaluate("location.hash = '#settings'")
+        page.click("#ring-colors [data-ring=sleep]")
+        page.click("#ring-color-reset")
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.prefs')"))["ringColors"], {})
 
     def test_routine_view_compact_hidden_all(self):
         """予定の一覧での毎日の時刻の出し方（D-101）：はじめは「まとめる」（1行。押すと開く）。「出さない」「すべて」に切り替えられる。データは変えない"""
@@ -3824,7 +3905,7 @@ class PwaTest(unittest.TestCase):
     def test_settings_daily_items_then_system_screen(self):
         page = self.clock_page(10, 0, "#settings")
         cards = page.eval_on_selector_all("#view-settings .card h2", "els => els.map(e => e.textContent)")
-        self.assertEqual(cards, ["キィニチの話し方", "声掛けの通知", "週次コメント", "キィニチの一言", "立ち絵"])  # 日常の設定だけ（毎日の時刻は予定の画面へ。D-060 ⑭。立ち絵は D-066。話し方は D-082）
+        self.assertEqual(cards, ["キィニチの話し方", "声掛けの通知", "1日の輪の色", "週次コメント", "キィニチの一言", "立ち絵"])  # 日常の設定だけ（毎日の時刻は予定の画面へ。D-060 ⑭。立ち絵は D-066。話し方は D-082）
         self.assertNotIn("移りました", page.text_content("#view-settings"))  # 移したときのお知らせは消した（D-064 ⑨）
         link = page.eval_on_selector("#view-settings .sub-link", "e => [e.textContent, e.getBoundingClientRect().top > document.querySelector('#view-settings .card:last-of-type').getBoundingClientRect().bottom]")
         self.assertEqual(link, ["仕様関連›", True])  # いちばん下

@@ -53,7 +53,8 @@ const Summary = (() => {
 
   // その日を調べる。events は timedEvents の形、times は毎日の時刻（Routine.timesFor）
   // 返す値：{ busy（起きている間の予定の時間）, free（空き）, problems: [{ kind, text, impact }] }
-  function analyze(day, events, times) {
+  // held：輪に置いた自由時間・そのほか（D-112）。気になる点には数えず、空き・作業に使える時間からだけ引く（予定がある時間として数える）
+  function analyze(day, events, times, held = []) {
     const problems = [];
     const add = (kind, text, impact, fix = null) => problems.push({ kind, text, impact, fix });
     const sleep = atOf(day, times.sleep);
@@ -68,7 +69,7 @@ const Summary = (() => {
       }
     }
     // 予定の間が短い（移動・準備）。重なっていないものだけ
-    const merged0 = merge(events);
+    const merged0 = merge([...events, ...held].sort((a, b) => a.start - b.start));
     for (let i = 0; i < events.length - 1; i++) {
       const a = events[i], b = events[i + 1];
       const gap = b.start - a.end;
@@ -249,7 +250,8 @@ const Summary = (() => {
     $('summary-next').hidden = !ready;
     $('summary-problems-section').hidden = !ready;
     if (!ready) return;
-    const results = days.map((d) => ({ day: d, ...analyze(d, timedEvents(d), Routine.timesFor(d)) }));
+    const held = (d) => Blocks.on(d).filter((b) => b.kind !== 'task').map((b) => Blocks.range(b)); // タスクの時間は見込みで数えるので重ねない
+    const results = days.map((d) => ({ day: d, ...analyze(d, timedEvents(d), Routine.timesFor(d), held(d)) }));
     $('summary-next').replaceChildren(...results.map((r) => dayRow(r.day, r, now)));
     const all = [...results.flatMap((r) => r.problems.map((p) => ({ ...p, day: r.day }))), ...taskProblems(results, logicalDay(now))]
       .sort((a, b) => a.day - b.day);

@@ -778,6 +778,51 @@ function renderCalls() {
   }));
 }
 renderCalls();
+// 1日の輪の色（D-111）：項目ごとに8色から選ぶ。押すと選ぶ画面
+let ringColorKind = null;
+function swatchButton(c, pressed, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'swatch-btn';
+  b.setAttribute('aria-label', RING_COLORS[c]);
+  b.setAttribute('aria-pressed', String(pressed));
+  const sw = document.createElement('span');
+  sw.className = 'swatch ' + c;
+  b.append(sw);
+  b.addEventListener('click', onClick);
+  return b;
+}
+function renderRingColors() {
+  document.getElementById('ring-colors').replaceChildren(...RING_ITEMS.map(([kind, name]) => {
+    const li = document.createElement('li');
+    li.className = 'ring-color-row';
+    const label = document.createElement('span');
+    label.className = 'ring-color-name';
+    label.textContent = name;
+    const b = swatchButton(RingColors.of(kind), false, () => openRingColor(kind, name));
+    b.dataset.ring = kind;
+    b.removeAttribute('aria-pressed');
+    b.setAttribute('aria-label', `${name}の色（今は${RING_COLORS[RingColors.of(kind)]}）を変える`);
+    li.append(label, b);
+    return li;
+  }));
+}
+function openRingColor(kind, name) {
+  ringColorKind = kind;
+  document.getElementById('ring-color-heading').textContent = `${name}の色`;
+  const now = RingColors.of(kind);
+  document.getElementById('ring-color-pick').replaceChildren(...Object.keys(RING_COLORS).map((c) => swatchButton(c, c === now, () => pickRingColor(c))));
+  document.getElementById('ring-color-dialog').showModal();
+}
+function pickRingColor(c) {
+  RingColors.set(ringColorKind, c);
+  document.getElementById('ring-color-dialog').close();
+  renderRingColors();
+  if (typeof Schedule !== 'undefined') Schedule.refresh();
+}
+document.getElementById('ring-color-reset').addEventListener('click', () => pickRingColor(null));
+document.getElementById('ring-color-close').addEventListener('click', () => document.getElementById('ring-color-dialog').close());
+renderRingColors();
 // 週次コメントのオン・オフ（D-058）
 document.getElementById('pref-weekly').addEventListener('click', () => {
   Prefs.set('weekly', !Prefs.get('weekly'));

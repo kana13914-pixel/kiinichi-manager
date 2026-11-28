@@ -71,6 +71,7 @@ const DB = {
   evening: 'db.evening',         // { date } … 夕方の提案をホームで出した日（その日1回だけにするため。D-073。この端末だけ）
   touch: 'db.touch',             // { mutedUntil, stoppedAt, muteLevel, lastAt } … 触る段階の打ち切りの黙る時間（D-087, D-088。閉じても覚える。この端末だけ）
   scenes: 'db.scenes',           // { first, since, shown: { キー: 日付 }, tasksSeen: { date, done } } … ホームを開いたときの場面（D-083。この端末だけ）
+  blocks: 'db.blocks',           // [ { id, date, start, end, kind, title, taskId, color } ] … 1日の輪に置いた時間（D-112。スプレッドシートに控え）
   notify: 'db.notify',           // { 予約したキー: { at, body } } … 送信サーバーに予約した声掛け（D-049。この端末だけ）
 };
 const SCHEMA = 2;
@@ -117,7 +118,8 @@ migrateData();
 // callModes：毎日の時刻の項目ごとの声掛け 'on'（時刻ちょうど）・'late'（30分後、まだ記録がなければ）・'off'（D-098）。はじめは今までと同じ
 const CALL_DEFAULTS = { wake: 'off', breakfast: 'late', work_start: 'off', lunch: 'late', work_end: 'off', dinner: 'late', bath: 'off', sleep: 'on' };
 // routineView：予定の一覧での毎日の時刻の出し方 'all'（ほかの予定と同じ）・'compact'（1行にまとめ、押すと開く）・'hidden'（出さない）（D-101）
-const PREF_DEFAULTS = { screenLines: true, voice: true, weekly: true, taskFolded: [], tone: 'client', callModes: CALL_DEFAULTS, routineView: 'compact' }; // taskFolded：タスクのたたんだ優先度（D-070）。tone：話し方（D-082）
+// ringColors：1日の輪の項目ごとの色（D-111。{ sleep: 'c1', … }。ないものははじめの色）
+const PREF_DEFAULTS = { screenLines: true, voice: true, weekly: true, taskFolded: [], tone: 'client', callModes: CALL_DEFAULTS, routineView: 'compact', ringColors: {} }; // taskFolded：タスクのたたんだ優先度（D-070）。tone：話し方（D-082）
 const Prefs = {
   get(name) {
     const p = Store.read(DB.prefs, {});
