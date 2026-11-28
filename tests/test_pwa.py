@@ -2156,6 +2156,35 @@ class PwaTest(unittest.TestCase):
         page.evaluate("Summary.render()")
         self.assertIn("見つかりませんでした", page.text_content("#summary-problems"))
 
+    def test_summary_fix_routine_conflict_with_approval(self):
+        """調整案（D-103）：食事・入浴と重なる日は「この日だけ◯◯を（予定の終わり）にする」。選んで、確かめてから反映。取り消せる。予定は動かさない"""
+        page = self.clock_page(10, 0, "#summary")
+        page.wait_for_selector("#view-summary", state="visible")
+        page.evaluate(self.SUMMARY_EVENTS, [[18, 11, 30, 12, 52, "昼の打ち合わせ"], [19, 22, 0, 23, 59, "夜の作業"]])
+        page.evaluate("Summary.render()")
+        fixes = page.eval_on_selector_all("#summary-problems .summary-fix", "els => els.map((e) => [e.textContent, e.dataset.fix])")
+        self.assertEqual(fixes, [["案：この日だけ昼食を12:55にする", "2026-11-18|lunch|12:55"]])  # 入浴は就寝より後になるので案なし
+        self.assertTrue(page.is_disabled("#summary-apply"))
+        page.click("#summary-problems .summary-fix")
+        self.assertEqual(page.get_attribute("#summary-problems .summary-fix", "aria-pressed"), "true")
+        self.assertEqual(page.text_content("#summary-apply"), "選んだ案を反映する（1件）")
+        # やめると何も変わらない
+        page.click("#summary-apply")
+        self.assertIn("11/18(水) 昼食 12:00 → 12:55", page.text_content("#confirm-text"))
+        page.click("#confirm-cancel")
+        self.assertEqual(page.evaluate("localStorage.getItem('db.routineOverrides')"), None)
+        page.click("#summary-apply")
+        page.click("#confirm-ok")
+        page.wait_for_function("localStorage.getItem('db.routineOverrides') !== null", timeout=3_000)
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.routineOverrides')")), {"2026-11-18": {"lunch": "12:55"}})
+        self.assertIn("1件を反映しました", page.text_content("#summary-toast"))
+        texts = page.text_content("#summary-problems")
+        self.assertNotIn("昼食の時刻", texts)  # ずらしたので重ならない
+        self.assertTrue(page.is_hidden("#summary-apply"))
+        page.click("#summary-toast .undo")
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.routineOverrides')") or "{}"), {})
+        self.assertIn("昼食の時刻（12:00）", page.text_content("#summary-problems"))
+
     def test_summary_review_and_entry(self):
         """今週の振り返りの数字（D-102）と、ホームの入口（日曜の16時から月曜は目立たせる）"""
         reports = {"2026-11-09": {"mood": "good", "done": "a", "savedAt": 1}, "2026-11-10": {"mood": "tired", "savedAt": 1}}

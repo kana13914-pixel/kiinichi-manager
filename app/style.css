@@ -1026,6 +1026,10 @@ input:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 1
 .summary-problem-day { font-size: var(--fs-caption); font-weight: 700; color: var(--color-text-secondary); }
 .summary-problem-text { margin-top: var(--space-1); font-size: var(--fs-subhead); overflow-wrap: anywhere; }
 .summary-problem-impact { margin-top: var(--space-1); font-size: var(--fs-footnote); color: var(--color-text-secondary); }
+.summary-fix { margin-top: var(--space-2); width: auto; padding: 0 var(--space-3); }
+.summary-apply { margin-top: var(--space-3); }
+.summary-apply:disabled { opacity: 0.5; }
+#confirm-text { white-space: pre-line; } /* 反映する案を1行ずつ並べる（D-103） */
 
 /* ---------- ホームを触ったときの波紋（D-096） ---------- */
 .touch-ripple {

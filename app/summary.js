@@ -2,7 +2,9 @@
 //   ① 今週の振り返り：日報を書いた日・記録できた割合・完了したタスク・調子の並び（数字だけ。AI の文は今ある「先週のひとこと」を出す）
 //   ② 来週の予定：月曜〜日曜を1日1行（予定の数・起きている間の空き・気になる点の数）。押すとその日の中身を開く
 //   ③ 気になる点：予定の重なり・予定の間の短さ（移動・準備）・毎日の時刻との重なり・休憩をはさめない続き
-// 判断は端末の中の決まりだけで行い、外には送らない。予定は変えない（調整案と反映は段階4から。承認したものだけ）。
+// 判断は端末の中の決まりだけで行い、外には送らない。
+// 調整案（D-103。段階4のうち今のデータでできる分）：食事・入浴の時刻と予定が重なる日は「この日だけ◯◯を（予定の終わり）にする」を出す。
+// 選んだ案だけを、確かめてから反映する（毎日の時刻の「その日だけの変更」。取り消せる）。カレンダーの予定は動かさない（仮の答え A1）。
 // Google カレンダーをつないでいないときは、仮の予定では判断しない。
 // util.js・routine.js・calendar.js・app.js（Records・RECORD_KINDS）・tasks.js・report.js の後に読み込む。
 
@@ -53,7 +55,9 @@ const Summary = (() => {
   // 返す値：{ busy（起きている間の予定の時間）, free（空き）, problems: [{ kind, text, impact }] }
   function analyze(day, events, times) {
     const problems = [];
-    const add = (kind, text, impact) => problems.push({ kind, text, impact });
+    const add = (kind, text, impact, fix = null) => problems.push({ kind, text, impact, fix });
+    const sleep = atOf(day, times.sleep);
+    const wake = atOf(day, times.wake);
     // 予定の重なり
     for (let i = 0; i < events.length; i++) {
       for (let j = i + 1; j < events.length; j++) {
@@ -77,10 +81,12 @@ const Summary = (() => {
       const t = atOf(day, times[id]);
       if (t === null) continue;
       const hit = events.find((e) => e.start <= t && t < e.end);
-      if (hit) add('routine', `「${hit.title}」（${span(hit)}）が${label}の時刻（${times[id]}）と重なっています`, `${label}が遅れるか、取れないかもしれません`);
+      if (!hit) continue;
+      // 案：予定が終わった時刻（5分単位に切り上げ）にずらす。就寝より後になるなら案は出さない
+      const to = Math.ceil(hit.end / (5 * MIN)) * 5 * MIN;
+      const fix = sleep === null || to < sleep ? { id, label, day: dateStr(day), from: times[id], value: hm(new Date(to)) } : null;
+      add('routine', `「${hit.title}」（${span(hit)}）が${label}の時刻（${times[id]}）と重なっています`, `${label}が遅れるか、取れないかもしれません`, fix);
     }
-    const sleep = atOf(day, times.sleep);
-    const wake = atOf(day, times.wake);
     const late = sleep === null ? null : events.find((e) => e.end > sleep);
     if (late) add('routine', `「${late.title}」（${span(late)}）が就寝の時刻（${times.sleep}）より遅くまであります`, '寝る時間が短くなります');
     const early = wake === null ? null : events.find((e) => e.start < wake);
@@ -199,12 +205,51 @@ const Summary = (() => {
     $('summary-next').replaceChildren(...results.map((r) => dayRow(r.day, r, now)));
     const all = results.flatMap((r) => r.problems.map((p) => ({ ...p, day: r.day })));
     $('summary-problems-count').textContent = String(all.length);
+    // 選んでいる案のうち、今も出ているものだけ残す
+    const fixes = all.filter((p) => p.fix).map((p) => fixKey(p.fix));
+    for (const k of [...chosen]) if (!fixes.includes(k)) chosen.delete(k);
     $('summary-problems').replaceChildren(...(all.length ? all.map((p) => {
       const li = el('li', 'summary-problem ' + p.kind);
       li.append(el('p', 'summary-problem-day', labelShort(p.day)), el('p', 'summary-problem-text', p.text), el('p', 'summary-problem-impact', p.impact));
+      if (p.fix) {
+        const k = fixKey(p.fix);
+        const b = el('button', 'cut-btn quiet chip summary-fix', `案：この日だけ${p.fix.label}を${p.fix.value}にする`);
+        b.type = 'button';
+        b.dataset.fix = k;
+        b.setAttribute('aria-pressed', String(chosen.has(k)));
+        b.addEventListener('click', () => { if (chosen.has(k)) chosen.delete(k); else chosen.add(k); render(now); });
+        li.append(b);
+      }
       return li;
     }) : [el('li', 'summary-problem none', '来週の予定に、気になる点は見つかりませんでした。')]));
+    lastFixes = all.filter((p) => p.fix).map((p) => p.fix);
+    $('summary-apply').hidden = !fixes.length;
+    $('summary-apply').disabled = chosen.size === 0;
+    $('summary-apply').textContent = chosen.size ? `選んだ案を反映する（${chosen.size}件）` : '案を選ぶと反映できます';
   }
+
+  // ---------- 調整案の反映（D-103） ----------
+  const chosen = new Set(); // 選んでいる案（fixKey）
+  let lastFixes = [];
+  const fixKey = (f) => `${f.day}|${f.id}|${f.value}`;
+  const toast = makeToast($('summary-toast'));
+  $('summary-apply').addEventListener('click', async () => {
+    const picked = lastFixes.filter((f) => chosen.has(fixKey(f)));
+    if (!picked.length) return;
+    const list = picked.map((f) => `・${labelShort(parseDay(f.day))} ${f.label} ${f.from} → ${f.value}`).join('\n');
+    if (!(await confirmDialog(`毎日の時刻を、その日だけ次のように変えます。\n${list}`, '反映する', false))) return;
+    const before = picked.map((f) => ({ f, prev: Routine.overrideOf(parseDay(f.day), f.id) }));
+    const ok = picked.every((f) => Routine.setOverride(parseDay(f.day), f.id, f.value));
+    chosen.clear();
+    window.dispatchEvent(new Event('routinechange')); // 予定・ホーム・声掛けを決め直す
+    render();
+    if (!ok) { toast.show(SAVE_FAILED); return; }
+    toast.show(`${picked.length}件を反映しました`, () => {
+      for (const { f, prev } of before) Routine.setOverride(parseDay(f.day), f.id, prev ? prev.value : undefined);
+      window.dispatchEvent(new Event('routinechange'));
+      render();
+    });
+  });
 
   // ホームの入口：日曜の16時から月曜の終わりまでは目立たせる（週の変わり目。仮の答え D1）
   function markEntry(now = new Date()) {
