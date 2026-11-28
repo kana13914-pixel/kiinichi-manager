@@ -99,20 +99,22 @@ const Schedule = (() => {
   }
 
   // タスクの期限（D-095）：未完了のタスクを、期限の日に「期限」の行・月のマスのタグで出す。予定の数や一言には数えない
+  // やる日（D-105）が期限の日と違えば、やる日にも「やる」の行を出す
   function dueTasks(date) {
     if (typeof Tasks === 'undefined') return [];
     const key = dateStr(date);
-    return Tasks.load().filter((t) => !t.done && t.due === key);
+    return Tasks.load().filter((t) => !t.done && (t.due === key || t.plan === key))
+      .map((t) => ({ ...t, label: t.due === key ? '期限' : 'やる' }));
   }
   function taskRow(t) {
     const li = document.createElement('li');
     li.className = 'schedule-row task-due';
     const time = document.createElement('span');
     time.className = 'schedule-time allday';
-    time.textContent = '期限';
+    time.textContent = t.label || '期限';
     const title = document.createElement('span');
     title.className = 'schedule-title';
-    title.textContent = t.title;
+    title.textContent = t.title + (t.estimate ? `（${Tasks.estimateText(t.estimate)}）` : '');
     const tag = document.createElement('small');
     tag.className = 'tag routine-tag';
     tag.textContent = 'タスク';
@@ -243,7 +245,7 @@ const Schedule = (() => {
     b.className = 'cal-cell' + (date.getMonth() !== cursor.getMonth() ? ' out' : '') + (today ? ' today' : '');
     b.dataset.date = dateStr(date);
     b.setAttribute('aria-pressed', String(picked));
-    b.setAttribute('aria-label', `${today ? '今日 ' : ''}${dayLabel(date)} 予定${events.length}件${tasks.length ? ` タスクの期限${tasks.length}件` : ''}`);
+    b.setAttribute('aria-label', `${today ? '今日 ' : ''}${dayLabel(date)} 予定${events.length}件${tasks.length ? ` タスク${tasks.length}件` : ''}`);
     const num = document.createElement('span');
     num.className = 'cal-date';
     num.textContent = String(date.getDate());

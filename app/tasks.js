@@ -17,8 +17,12 @@ const Tasks = (() => {
   const PRIORITIES = ['high', 'mid', 'low'];
   const SUB_MAX = 10; // 1つの親に足せるミニタスクの数（D-070）
   // 優先度・ミニタスクのない古いデータは「なし」「ミニタスクなし」として読む（D-070）
+  // 見込み時間（分）とやる日（D-105）。ないもの・おかしな値は「なし」（やる日なし＝期限の日にやる）
+  const ESTIMATES = [15, 30, 60, 120, 240];
   function normalize(t) {
     t.priority = PRIORITIES.includes(t.priority) ? t.priority : null;
+    t.estimate = Number.isInteger(t.estimate) && t.estimate > 0 && t.estimate <= 24 * 60 ? t.estimate : null;
+    t.plan = typeof t.plan === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.plan) ? t.plan : null;
     t.subtasks = Array.isArray(t.subtasks)
       ? t.subtasks.filter((s) => s && typeof s.title === 'string' && s.id).map((s) => ({ id: s.id, title: s.title, done: !!s.done, doneAt: s.doneAt || null }))
       : [];
@@ -47,6 +51,16 @@ const Tasks = (() => {
     if (due === tomorrow) return { text: '明日まで', overdue: false };
     return { text: `${label}まで`, overdue: false };
   }
+  // 見込み時間とやる日の表示（D-105）。やる日は期限の日と違うときだけ出す
+  function estimateText(min) { return min >= 60 ? `${min / 60}時間${min % 60 ? `${min % 60}分` : ''}`.replace(/\.5時間/, '時間30分') : `${min}分`; }
+  function planText(t, now = new Date()) {
+    if (!t.plan || t.plan === t.due) return '';
+    const today = todayKey(now);
+    const tomorrow = dateStr(addDays(logicalDay(now), 1));
+    return t.plan === today ? '今日やる' : t.plan === tomorrow ? '明日やる' : `${labelShort(parseDay(t.plan))}にやる`;
+  }
+  // その日にやるタスク（未完了。やる日、なければ期限の日）（D-105）
+  function onDay(key) { return load().filter((t) => !t.done && (t.plan || t.due) === key); }
   // 完了日から7日たったものを除く。完了日のない完了済み（古いデータ）は今日完了したことにする
   function tidy(list, now = new Date()) {
     const limit = dateStr(addDays(logicalDay(now), -KEEP_DONE_DAYS)); // この日までに完了したものを消す
@@ -107,10 +121,11 @@ const Tasks = (() => {
     title.textContent = task.title;
     body.append(title);
     const info = dueInfo(task.due, now);
-    if ((info || task.toReport) && !task.done) {
+    const plan = planText(task, now);
+    if ((info || plan || task.estimate || task.toReport) && !task.done) {
       const due = document.createElement('span');
       due.className = 'task-due' + (info && info.overdue ? ' overdue' : '');
-      due.textContent = [info && info.text, task.toReport && '完了したら日報へ'].filter(Boolean).join(' ・ ');
+      due.textContent = [info && info.text, plan, task.estimate && estimateText(task.estimate), task.toReport && '完了したら日報へ'].filter(Boolean).join(' ・ ');
       body.append(due);
     }
     if (task.done && task.doneAt) {
@@ -391,10 +406,10 @@ const Tasks = (() => {
     });
     return added;
   }
-  function add(title, due, toReport = false, priority = null, subtasks = []) {
+  function add(title, due, toReport = false, priority = null, subtasks = [], estimate = null, plan = null) {
     const list = load();
     const at = Date.now();
-    list.push({ id: newId(), title, due: due || null, priority: PRIORITIES.includes(priority) ? priority : null, subtasks, done: false, doneAt: null, createdAt: at, updatedAt: at, toReport });
+    list.push({ id: newId(), title, due: due || null, priority: PRIORITIES.includes(priority) ? priority : null, subtasks, estimate, plan, done: false, doneAt: null, createdAt: at, updatedAt: at, toReport });
     if (!Store.write(KEY, list)) return false;
     render();
     return true;
@@ -432,7 +447,32 @@ const Tasks = (() => {
     };
   }
 
+  // 見込み時間・やる日の欄（追加フォームと編集で共通。D-105）。scope は '#task-form' か '#task-edit'、date はやる日の入力欄の id
+  // （追加フォームは「今日・明日・期限の日」だけで、日付を選ぶ欄は編集にだけある。フォームが長くなって「追加」が隠れないように）
+  function extraFields(scope, date) {
+    let est = null;
+    let plan = null;
+    const setEst = (v) => { est = v; for (const c of document.querySelectorAll(`${scope} .est-chips .chip`)) c.setAttribute('aria-pressed', String((Number(c.dataset.est) || null) === v)); };
+    const planKind = (v, now = new Date()) => (!v ? 'none' : v === todayKey(now) ? 'today' : v === dateStr(addDays(logicalDay(now), 1)) ? 'tomorrow' : '');
+    const setPlan = (v) => {
+      plan = v;
+      if (date) $(date).value = v || '';
+      const k = planKind(v);
+      for (const c of document.querySelectorAll(`${scope} .plan-chips .chip`)) c.setAttribute('aria-pressed', String(c.dataset.plan === k));
+    };
+    for (const c of document.querySelectorAll(`${scope} .est-chips .chip`)) c.addEventListener('click', () => setEst(Number(c.dataset.est) || null));
+    for (const c of document.querySelectorAll(`${scope} .plan-chips .chip`)) {
+      c.addEventListener('click', () => {
+        const now = new Date();
+        setPlan(c.dataset.plan === 'today' ? todayKey(now) : c.dataset.plan === 'tomorrow' ? dateStr(addDays(logicalDay(now), 1)) : null);
+      });
+    }
+    if (date) $(date).addEventListener('change', () => setPlan($(date).value || null));
+    return { set(e, p) { setEst(e); setPlan(p); }, get: () => ({ estimate: est, plan }) };
+  }
+
   // ---------- 追加フォーム（ミニタスクも作るときに入れられる。D-092） ----------
+  const newExtra = extraFields('#task-form', null);
   const newSubs = subEditor('task-subs', 'task-sub-add', 'task-sub-count');
   let chosenDue = null; // 'YYYY-MM-DD' または null
   let chosenPriority = null; // 'high' | 'mid' | 'low' | null
@@ -448,7 +488,7 @@ const Tasks = (() => {
   }
   $('task-report').addEventListener('click', () => setToReport(!toReport));
   function setChip(kind) {
-    for (const c of document.querySelectorAll('#task-form .due-chips .chip')) c.setAttribute('aria-pressed', String(c.dataset.due === kind));
+    for (const c of document.querySelectorAll('#task-form .due-chips .chip[data-due]')) c.setAttribute('aria-pressed', String(c.dataset.due === kind));
   }
   function openForm(priority, at) {
     formAt = at;
@@ -463,6 +503,7 @@ const Tasks = (() => {
     setPriorityChip('#task-form', priority);
     setToReport(true);
     newSubs.set([]);
+    newExtra.set(null, null);
     $('task-title').focus();
     $('task-form').scrollIntoView({ block: 'nearest' }); // 見えていれば動かさない
   }
@@ -477,7 +518,7 @@ const Tasks = (() => {
     chip.addEventListener('click', () => { chosenPriority = chip.dataset.priority || null; setPriorityChip('#task-form', chosenPriority); });
   }
   $('task-cancel').addEventListener('click', closeForm);
-  for (const chip of document.querySelectorAll('#task-form .due-chips .chip')) {
+  for (const chip of document.querySelectorAll('#task-form .due-chips .chip[data-due]')) {
     chip.addEventListener('click', () => {
       const now = new Date();
       chosenDue = chip.dataset.due === 'today' ? todayKey(now) : chip.dataset.due === 'tomorrow' ? dateStr(addDays(logicalDay(now), 1)) : null;
@@ -496,7 +537,8 @@ const Tasks = (() => {
       $('task-form-status').textContent = 'やることを入力してください';
       return;
     }
-    if (!add(title.slice(0, 100), chosenDue, toReport, chosenPriority, newSubs.get())) { // 入力を残したまま知らせる
+    const extra = newExtra.get();
+    if (!add(title.slice(0, 100), chosenDue, toReport, chosenPriority, newSubs.get(), extra.estimate, extra.plan)) { // 入力を残したまま知らせる
       $('task-form-status').textContent = SAVE_FAILED;
       return;
     }
@@ -534,7 +576,8 @@ const Tasks = (() => {
   let editPriority = null;
   let editReport = false;
   const editSubs = subEditor('edit-subs', 'edit-sub-add', 'edit-sub-count');
-  const editChips = () => document.querySelectorAll('#task-edit .due-chips .chip');
+  const editExtra = extraFields('#task-edit', 'edit-plan-date');
+  const editChips = () => document.querySelectorAll('#task-edit .due-chips .chip[data-due]');
   function setEditDueChip(kind) { for (const c of editChips()) c.setAttribute('aria-pressed', String(c.dataset.due === kind)); }
   function dueKind(due, now = new Date()) {
     if (!due) return 'none';
@@ -559,6 +602,7 @@ const Tasks = (() => {
     setEditReport(!!t.toReport);
     $('task-edit-status').textContent = '';
     editSubs.set(t.subtasks);
+    editExtra.set(t.estimate, t.plan);
     $('task-edit').showModal();
   }
   for (const chip of editChips()) {
@@ -580,7 +624,10 @@ const Tasks = (() => {
     const title = $('edit-title').value.trim();
     if (!title) { $('task-edit-status').textContent = 'やることを入力してください'; return; }
     const subs = editSubs.get();
+    const extra = editExtra.get();
     const ok = update(editId, (t) => {
+      t.estimate = extra.estimate;
+      t.plan = extra.plan;
       t.title = title.slice(0, 100);
       t.due = editDue;
       t.priority = editPriority;
@@ -612,5 +659,10 @@ const Tasks = (() => {
     render(now);
     return n;
   }
-  return { load, dueInfo, sortOpen, tidy, render, dueLeft, postponeToTomorrow };
+  // やる日を変える（週次サマリーの調整案。D-106）。前のやる日を返す（取り消し用）。保存できなければ undefined
+  function setPlan(id, plan) {
+    const before = update(id, (t) => { t.plan = plan; });
+    return before ? before.plan || null : undefined;
+  }
+  return { load, dueInfo, sortOpen, tidy, render, dueLeft, postponeToTomorrow, onDay, estimateText, setPlan };
 })();

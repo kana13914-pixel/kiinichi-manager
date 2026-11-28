@@ -1401,6 +1401,47 @@ class PwaTest(unittest.TestCase):
             page.click("#task-sub-add")
         self.assertTrue(page.is_hidden("#task-sub-add"))  # 10個まで
 
+    def test_task_estimate_and_plan_day(self):
+        """見込み時間とやる日（D-105）：追加フォームでは「今日・明日・期限の日」、編集では日付も選べる。行に「◯にやる」「見込み」を出す"""
+        page = self.tasks_page()  # 2026-11-09（月）
+        page.click(ADD_NONE)
+        self.assertEqual(page.get_attribute("#task-form .est-chips [data-est='']", "aria-pressed"), "true")
+        self.assertEqual(page.get_attribute("#task-form .plan-chips [data-plan=none]", "aria-pressed"), "true")
+        page.fill("#task-title", "資料")
+        page.click("#task-form .due-chips .chip[data-due=tomorrow]")
+        page.click("#task-form .est-chips [data-est='60']")
+        page.click("#task-form .plan-chips [data-plan=today]")
+        self.assertEqual(page.get_attribute("#task-form .due-chips .chip[data-due=tomorrow]", "aria-pressed"), "true")  # 期限の選びは変わらない
+        page.click("#task-submit")
+        t = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
+        self.assertEqual([t["due"], t["estimate"], t["plan"]], ["2026-11-10", 60, "2026-11-09"])
+        self.assertEqual(page.text_content("#task-list .task-due"), "明日まで ・ 今日やる ・ 1時間 ・ 完了したら日報へ")
+        # 編集：やる日を日付で選ぶ・見込みを変える
+        page.click("#task-list .task-main")
+        page.click("#task-act-edit")
+        page.wait_for_selector("#task-edit", state="visible")
+        self.assertEqual(page.get_attribute("#task-edit .est-chips [data-est='60']", "aria-pressed"), "true")
+        self.assertEqual(page.input_value("#edit-plan-date"), "2026-11-09")
+        page.fill("#edit-plan-date", "2026-11-12")
+        page.dispatch_event("#edit-plan-date", "change")
+        page.click("#task-edit .est-chips [data-est='30']")
+        page.click("#task-edit-save")
+        t = json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]
+        self.assertEqual([t["estimate"], t["plan"]], [30, "2026-11-12"])
+        self.assertEqual(page.text_content("#task-list .task-due"), "明日まで ・ 11/12(木)にやる ・ 30分 ・ 完了したら日報へ")
+        # 予定の一覧：やる日に「やる」、期限の日に「期限」
+        page.evaluate("location.hash = '#schedule'")
+        rows = lambda d: [r[:2] for r in self.schedule_rows(page, d)]
+        self.assertEqual(rows("2026-11-12")[0], ["やる", "資料（30分）タスク"])
+        self.assertEqual(rows("2026-11-10")[0], ["期限", "資料（30分）タスク"])
+        # 「期限の日」に戻すと、やる日はなくなる
+        page.evaluate("location.hash = '#tasks'")
+        page.click("#task-list .task-main")
+        page.click("#task-act-edit")
+        page.click("#task-edit .plan-chips [data-plan=none]")
+        page.click("#task-edit-save")
+        self.assertIsNone(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[0]["plan"])
+
     def test_add_task_with_due_chip_and_persist(self):
         page = self.tasks_page()
         page.click(ADD_NONE)
@@ -2285,7 +2326,7 @@ class PwaTest(unittest.TestCase):
         page.click("#schedule-mode-month")
         cell = self.cal_cell(page, "2026-11-12")
         self.assertIn("□ 請求書", cell["tags"])
-        self.assertIn("タスクの期限1件", page.get_attribute("#cal-grid .cal-cell[data-date='2026-11-12']", "aria-label"))
+        self.assertIn("タスク1件", page.get_attribute("#cal-grid .cal-cell[data-date='2026-11-12']", "aria-label"))
         page.click("#cal-grid .cal-cell[data-date='2026-11-12']")
         self.assertEqual(page.eval_on_selector_all("#cal-day-list .schedule-row", "els => els.map((e) => e.textContent)"), ["期限請求書タスク"])
 

@@ -278,6 +278,21 @@
             <button type="button" class="cut-btn quiet chip" data-priority="low" aria-pressed="false">▼ 低</button>
             <button type="button" class="cut-btn quiet chip" data-priority="" aria-pressed="true">なし</button>
           </div>
+          <span class="form-label" id="task-est-label">見込み時間</span>
+          <div class="due-chips est-chips" role="group" aria-labelledby="task-est-label">
+            <button type="button" class="cut-btn quiet chip" data-est="15" aria-pressed="false">15分</button>
+            <button type="button" class="cut-btn quiet chip" data-est="30" aria-pressed="false">30分</button>
+            <button type="button" class="cut-btn quiet chip" data-est="60" aria-pressed="false">1時間</button>
+            <button type="button" class="cut-btn quiet chip" data-est="120" aria-pressed="false">2時間</button>
+            <button type="button" class="cut-btn quiet chip" data-est="240" aria-pressed="false">4時間</button>
+            <button type="button" class="cut-btn quiet chip" data-est="" aria-pressed="true">なし</button>
+          </div>
+          <span class="form-label" id="task-plan-label">やる日</span>
+          <div class="due-chips plan-chips" role="group" aria-labelledby="task-plan-label">
+            <button type="button" class="cut-btn quiet chip" data-plan="today" aria-pressed="false">今日</button>
+            <button type="button" class="cut-btn quiet chip" data-plan="tomorrow" aria-pressed="false">明日</button>
+            <button type="button" class="cut-btn quiet chip" data-plan="none" aria-pressed="true">期限の日</button>
+          </div>
           <div class="pref-row task-report-row">
             <span id="task-report-label">完了したら日報に入れる</span>
             <button id="task-report" type="button" class="cut-btn quiet chip" role="switch" aria-checked="true" aria-labelledby="task-report-label">オン</button>
@@ -626,6 +641,23 @@
         <button type="button" class="cut-btn quiet chip" data-priority="low" aria-pressed="false">▼ 低</button>
         <button type="button" class="cut-btn quiet chip" data-priority="" aria-pressed="true">なし</button>
       </div>
+      <span class="form-label" id="edit-est-label">見込み時間</span>
+      <div class="due-chips est-chips" role="group" aria-labelledby="edit-est-label">
+        <button type="button" class="cut-btn quiet chip" data-est="15" aria-pressed="false">15分</button>
+        <button type="button" class="cut-btn quiet chip" data-est="30" aria-pressed="false">30分</button>
+        <button type="button" class="cut-btn quiet chip" data-est="60" aria-pressed="false">1時間</button>
+        <button type="button" class="cut-btn quiet chip" data-est="120" aria-pressed="false">2時間</button>
+        <button type="button" class="cut-btn quiet chip" data-est="240" aria-pressed="false">4時間</button>
+        <button type="button" class="cut-btn quiet chip" data-est="" aria-pressed="true">なし</button>
+      </div>
+      <span class="form-label" id="edit-plan-label">やる日</span>
+      <div class="due-chips plan-chips" role="group" aria-labelledby="edit-plan-label">
+        <button type="button" class="cut-btn quiet chip" data-plan="today" aria-pressed="false">今日</button>
+        <button type="button" class="cut-btn quiet chip" data-plan="tomorrow" aria-pressed="false">明日</button>
+        <button type="button" class="cut-btn quiet chip" data-plan="none" aria-pressed="true">期限の日</button>
+      </div>
+      <label for="edit-plan-date">やる日を選ぶ</label>
+      <input id="edit-plan-date" type="date">
       <div class="pref-row task-report-row">
         <span id="edit-report-label">完了したら日報に入れる</span>
         <button id="edit-report" type="button" class="cut-btn quiet chip" role="switch" aria-checked="false" aria-labelledby="edit-report-label">オフ</button>

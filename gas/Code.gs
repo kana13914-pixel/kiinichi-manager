@@ -15,7 +15,8 @@ var SHEET = {
   records: ['記録', ['日付', '種類', '名前', '時刻', '回目', '状態', '記録した日時']],
   reports: ['日報', ['日付', '調子', 'できたこと', 'やり残したこと', '明日いちばんにやること', '保存した日時']],
   // 優先度は前からある列の位置を変えないよう、最後に足す（D-070）
-  tasks: ['タスク', ['id', 'やること', '期限', '状態', '完了した日時', '作った日時', '最後に変えた日時', '端末から消えた日時', '優先度']],
+  // 見込み時間（分）・やる日も最後に足す（D-105）
+  tasks: ['タスク', ['id', 'やること', '期限', '状態', '完了した日時', '作った日時', '最後に変えた日時', '端末から消えた日時', '優先度', '見込み（分）', 'やる日']],
   subtasks: ['ミニタスク', ['親のid', '親のやること', 'id', '名前', '状態', '済みにした日時']],
   routine: ['毎日の時刻', ['区分', '起床', '朝食', '仕事開始', '昼食', '仕事終わり', '夕食', '入浴', '就寝']],
   timers: ['タイマー', ['名前', '分', '種類']],
@@ -83,7 +84,7 @@ function writeTasks_(ss, tasks, sentAt) {
   tasks.forEach(function (t) { if (!seen[t.id]) rows.push(taskRow_(t)); });
   replace_(ss, SHEET.tasks, rows);
 }
-function taskRow_(t) { return [t.id, t.title, t.due, t.state, t.doneAt, t.createdAt, t.updatedAt, '', t.priority || '']; }
+function taskRow_(t) { return [t.id, t.title, t.due, t.state, t.doneAt, t.createdAt, t.updatedAt, '', t.priority || '', t.estimate || '', t.plan || '']; }
 
 // カレンダーの予定を読む（読むだけ）。範囲は最大 130 日
 var MAX_RANGE_MS = 130 * 24 * 3600 * 1000;

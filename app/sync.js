@@ -38,6 +38,7 @@ const Sync = (() => {
       id: t.id, title: t.title, due: t.due || '', state: t.done ? '完了' : '未完了',
       doneAt: stamp(t.doneAt), createdAt: stamp(t.createdAt), updatedAt: stamp(t.updatedAt),
       priority: PRIORITY_LABELS[t.priority] || 'なし', // D-070
+      estimate: Number.isInteger(t.estimate) ? t.estimate : '', plan: t.plan || '', // 見込み時間（分）・やる日（D-105）
     }));
     // ミニタスクは別のシート（D-070）。親の id と名前を添える
     const subtasks = taskList.flatMap((t) => (Array.isArray(t.subtasks) ? t.subtasks : []).filter((x) => x && x.id).map((x) => ({

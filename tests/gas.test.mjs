@@ -158,3 +158,11 @@ test('予定を足す・直す・消す（既定のカレンダー。繰り返�
   assert.match(post({ action: 'update', id: i.getId(), title: 'x', start: 1, end: 2 }).error, /直せません/);
   assert.match(g.post({ token: 'wrong', action: 'add', title: 'x', start: 1, end: 2 }).error, /合言葉/);
 });
+
+test('タスクの見込み時間（分）とやる日は、優先度の後ろの列（D-105）。古いアプリからの行は空', () => {
+  const g = loadGas();
+  const t = (id, extra = {}) => ({ id, title: 'x', due: '', state: '未完了', doneAt: '', createdAt: '', updatedAt: '', priority: 'なし', ...extra });
+  g.post(base({ tasks: [t('a', { estimate: 60, plan: '2026-12-01' }), t('b')] }));
+  assert.deepEqual(JSON.parse(JSON.stringify(g.sheets['タスク'].cells()[0].slice(8))), ['優先度', '見込み（分）', 'やる日']);
+  assert.deepEqual(JSON.parse(JSON.stringify(g.rows('タスク').map((x) => [x[0], x[9], x[10]]))), [['a', '60', '2026-12-01'], ['b', '', '']]);
+});
