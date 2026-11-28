@@ -72,10 +72,10 @@
   /* 1日の輪（D-108）：差し色を薄くして面積の決まりを守る。何もない時間はごく薄い地 */
   --ring-free: rgba(244, 241, 232, 0.06);
   /* 輪の色の見本（D-111）。毎日のルーティンは青緑の濃淡（c1〜c4）、自分で入れたものは金の系統（c5〜c7）、c8 は空色 */
-  --ring-c1: rgba(46, 120, 130, 0.75);
-  --ring-c2: rgba(72, 150, 145, 0.55);
-  --ring-c3: rgba(110, 180, 165, 0.50);
-  --ring-c4: rgba(150, 205, 190, 0.40);
+  --ring-c1: rgba(38, 108, 138, 0.85);
+  --ring-c2: rgba(66, 160, 132, 0.55);
+  --ring-c3: rgba(140, 215, 188, 0.62);
+  --ring-c4: rgba(196, 226, 214, 0.30);
   --ring-c5: rgba(232, 196, 92, 0.70);
   --ring-c6: rgba(232, 196, 92, 0.42);
   --ring-c7: rgba(242, 161, 74, 0.55);
@@ -1032,6 +1032,7 @@ input:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 1
 .ring-color-row { display: flex; align-items: center; gap: var(--space-2); min-height: var(--size-record); box-shadow: inset 0 -1px 0 var(--color-gold-faint); }
 .ring-color-row .ring-color-name { flex: 1; }
 .ring-color-row .swatch-btn { flex: none; }
+.block-row .tag { white-space: nowrap; }
 
 /* ---------- 週次サマリー（D-102） ---------- */
 .summary-facts { font-size: var(--fs-subhead); }
