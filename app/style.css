@@ -602,6 +602,8 @@ h1 .label-en { display: block; margin-bottom: var(--space-1); line-height: var(-
 }
 .routine-summary .schedule-title { color: var(--color-text-secondary); font-size: var(--fs-subhead); }
 .routine-summary-mark { flex: none; color: var(--color-text-tertiary); }
+.routine-summary-main { margin-right: var(--space-1); }
+.routine-summary-sub { display: block; font-size: var(--fs-footnote); color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
 .schedule-row.routine-open { padding-left: var(--space-5); }
 
 /* 月表示：7列のマス目。今日は上に金の線、選んだ日は白い縁。タグは最奥の黒に金の細線（色分けはしない） */
@@ -1011,8 +1013,9 @@ input:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 1
   padding: var(--space-2) 0; border: 0; border-radius: 0; background: transparent; color: var(--color-text); font: inherit; text-align: left;
 }
 .summary-day-date { flex: none; min-width: 5.2em; font-weight: 700; font-variant-numeric: tabular-nums; }
-.summary-day-info { flex: 1; min-width: 0; font-size: var(--fs-subhead); color: var(--color-text-secondary); }
-.summary-day-flag { flex: none; font-size: var(--fs-caption); font-weight: 700; color: var(--color-accent); }
+.summary-day-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.summary-day-info { font-size: var(--fs-subhead); color: var(--color-text-secondary); }
+.summary-day-flag { font-size: var(--fs-caption); font-weight: 700; color: var(--color-accent); }
 .summary-day-mark { flex: none; color: var(--color-text-tertiary); }
 .summary-day-items { padding: 0 0 var(--space-2) var(--space-3); }
 .summary-item { padding: var(--space-1) 0; font-size: var(--fs-subhead); overflow-wrap: anywhere; }

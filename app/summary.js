@@ -164,8 +164,11 @@ const Summary = (() => {
     btn.setAttribute('aria-expanded', String(open));
     const events = Calendar.eventsOn(day);
     const typeLabel = Routine.typeOf(day) === 'holiday' ? '休日' : '平日';
-    btn.append(el('span', 'summary-day-date', labelShort(day)), el('span', 'summary-day-info', `予定${events.length}件 ・ 空き${dur(result.free)}`));
-    if (result.problems.length) btn.append(el('span', 'summary-day-flag', `気になる点 ${result.problems.length}`));
+    // 日付 ｜ 1行目「予定◯件 ・ 空き◯」、2行目「気になる点 ◯」（あるときだけ）
+    const body = el('span', 'summary-day-body');
+    body.append(el('span', 'summary-day-info', `予定${events.length}件 ・ 空き${dur(result.free)}`));
+    if (result.problems.length) body.append(el('span', 'summary-day-flag', `気になる点 ${result.problems.length}`));
+    btn.append(el('span', 'summary-day-date', labelShort(day)), body);
     btn.append(el('span', 'summary-day-mark', open ? '▴' : '▾'));
     btn.querySelector('.summary-day-mark').setAttribute('aria-hidden', 'true');
     btn.addEventListener('click', () => { if (openDays.has(key)) openDays.delete(key); else openDays.add(key); render(now); });

@@ -2189,9 +2189,8 @@ class PwaTest(unittest.TestCase):
         page.wait_for_selector("#view-schedule", state="visible")
         rows = lambda d: [r[:2] for r in self.schedule_rows(page, d)]
         today = rows("2026-11-09")
-        self.assertEqual(today[0], ["毎日", "毎日の時刻 8件（07:00〜23:30）"])
+        self.assertEqual(today[0], ["毎日", "毎日の時刻 8件07:00〜23:30 ・ 次 昼食 12:00"])
         self.assertNotIn(["07:00", "起床"], today)
-        self.assertIn("次 ・ 昼食 12:00", page.text_content("#schedule-days .schedule-day[data-date='2026-11-09'] .routine-summary"))
         routine_before = page.evaluate("localStorage.getItem('db.routine')")
         # 押すと開く・もう一度でたたむ
         btn = "#schedule-days .schedule-day[data-date='2026-11-09'] .routine-summary-btn"

@@ -160,10 +160,13 @@ const Schedule = (() => {
     const time = document.createElement('span');
     time.className = 'schedule-time allday';
     time.textContent = '毎日';
+    // 2行：「毎日の時刻 ◯件」と、その下に最初〜最後・次の項目（小さく）
     const title = document.createElement('span');
     title.className = 'schedule-title';
-    const span = routines.length ? `${hm(routines[0].at)}〜${hm(routines[routines.length - 1].at)}` : '';
-    title.textContent = `毎日の時刻 ${routines.length}件${span ? `（${span}）` : ''}`;
+    const main = document.createElement('span');
+    main.className = 'routine-summary-main';
+    main.textContent = `毎日の時刻 ${routines.length}件`;
+    title.append(main);
     if (routines.some((r) => r.overridden) || skipped.length) {
       const tag = document.createElement('small');
       tag.className = 'tag routine-tag';
@@ -171,13 +174,14 @@ const Schedule = (() => {
       title.append(tag);
     }
     const nx = routines.find((r) => sameEvent(r, next));
-    const parts = [time, title];
-    if (nx) {
-      const rest = document.createElement('span');
-      rest.className = 'schedule-rest';
-      rest.textContent = `次 ・ ${nx.title} ${hm(nx.at)}`;
-      parts.push(rest);
+    const sub = [routines.length ? `${hm(routines[0].at)}〜${hm(routines[routines.length - 1].at)}` : '', nx ? `次 ${nx.title} ${hm(nx.at)}` : ''].filter(Boolean).join(' ・ ');
+    if (sub) {
+      const s2 = document.createElement('span');
+      s2.className = 'routine-summary-sub';
+      s2.textContent = sub;
+      title.append(s2);
     }
+    const parts = [time, title];
     const mark = document.createElement('span');
     mark.className = 'routine-summary-mark';
     mark.setAttribute('aria-hidden', 'true');
