@@ -431,29 +431,8 @@
         <p id="report-reply-line" class="line">…</p>
       </section>
 
-      <!-- 先週のひとこと（D-058）。週が明けたら、先週の日報と記録から Claude に書いてもらう（送信サーバー経由）。一言のオン・オフとは別 -->
-      <section id="weekly" class="dialogue dialogue-mini weekly-say" aria-labelledby="weekly-title" hidden>
-        <div class="nameplate" aria-hidden="true">キィニチ</div>
-        <p id="weekly-title" class="weekly-title">先週のひとこと</p>
-        <p id="weekly-line" class="line"></p>
-        <p id="weekly-basis" class="weekly-basis"></p>
-        <!-- 返事をする（D-060 ⑪）。返事は次の週のひとことを作るときに使う。1回だけ書き直せる -->
-        <div id="weekly-reply" class="weekly-reply">
-          <p id="weekly-reply-text" class="weekly-reply-text" hidden></p>
-          <p id="weekly-reply-ack" class="line weekly-reply-ack" hidden></p>
-          <button id="weekly-reply-open" type="button" class="cut-btn quiet chip" hidden>返事をする</button>
-          <form id="weekly-reply-form" class="task-form" hidden>
-            <label for="weekly-reply-input">キィニチへの返事（来週のひとことに活かします）</label>
-            <textarea id="weekly-reply-input" rows="3" maxlength="300"></textarea>
-            <div class="form-actions">
-              <button id="weekly-reply-cancel" type="button" class="cut-btn quiet">やめる</button>
-              <button id="weekly-reply-send" type="submit" class="cut-btn quiet">送る</button>
-            </div>
-            <p id="weekly-reply-status" class="status ng" role="status"></p>
-          </form>
-        </div>
-      </section>
-      <p id="weekly-status" class="status" role="status"></p>
+      <!-- 週のひとこと（AI）は週次サマリーに移した（D-114）。日報の画面は入口だけ -->
+      <a id="weekly-entry" href="#summary" class="cut-btn quiet sub-link weekly-entry" data-view="summary" hidden>今週のひとことは週次サマリーへ<span aria-hidden="true">›</span></a>
 
       <section class="report-history" aria-labelledby="report-history-title">
         <h2 id="report-history-title" class="section-title">これまでの日報</h2>
@@ -502,11 +481,11 @@
       <section class="card">
         <h2>週次コメント</h2>
         <div class="pref-row">
-          <span id="pref-weekly-label">先週の日報へのひとこと</span>
+          <span id="pref-weekly-label">週の日報へのひとこと</span>
           <button id="pref-weekly" type="button" class="cut-btn quiet chip" role="switch" aria-checked="true" aria-labelledby="pref-weekly-label">オン</button>
         </div>
-        <p class="note">週が明けたら、先週の日報からキィニチが短く振り返ります。</p>
-        <details class="more"><summary>詳しく</summary><p class="note">先週の日報が3日分以上あるとき、週が明けて日報を開いたときに作ります。作るときに、先週の日報の中身と記録（声掛けや記録の数を含む）、先週のひとことへの返事が、送信サーバーを通して Anthropic の Claude（AI）に送られます。1週に1回だけ作ります。</p></details>
+        <p class="note">日曜の夜から、その週の日報でキィニチが短く振り返ります（週次サマリー）。</p>
+        <details class="more"><summary>詳しく</summary><p class="note">その週の日報が3日分以上あるとき、日曜の18時から、週次サマリーか日報の画面を開いたときに作ります（日曜に開かなければ、次の週に先週の分として作ります）。作るときに、その週の日報の中身と記録（声掛けや記録の数を含む）、前の週のひとことへの返事が、送信サーバーを通して Anthropic の Claude（AI）に送られます。1週に1回だけ作ります。</p></details>
       </section>
       <section class="card">
         <h2>キィニチの一言</h2>
@@ -542,10 +521,29 @@
         <dl id="summary-facts" class="summary-facts"></dl>
         <span class="form-label" id="summary-moods-label">調子</span>
         <ul id="summary-moods" class="summary-moods" aria-labelledby="summary-moods-label"></ul>
-        <div id="summary-comment" class="summary-comment" hidden>
-          <p class="summary-comment-title">先週のひとこと（キィニチ）</p>
-          <p id="summary-comment-text" class="summary-comment-text"></p>
-        </div>
+        <!-- 週のひとこと（D-058・D-114）。日曜の夜からはその週、それまでは先週の日報と記録から Claude に書いてもらう（送信サーバー経由）。一言のオン・オフとは別 -->
+        <section id="weekly" class="dialogue dialogue-mini weekly-say" aria-labelledby="weekly-title" hidden>
+          <div class="nameplate" aria-hidden="true">キィニチ</div>
+          <p id="weekly-title" class="weekly-title">先週のひとこと</p>
+          <p id="weekly-line" class="line"></p>
+          <p id="weekly-basis" class="weekly-basis"></p>
+          <!-- 返事をする（D-060 ⑪）。返事は次の週のひとことを作るときに使う。1回だけ書き直せる -->
+          <div id="weekly-reply" class="weekly-reply">
+            <p id="weekly-reply-text" class="weekly-reply-text" hidden></p>
+            <p id="weekly-reply-ack" class="line weekly-reply-ack" hidden></p>
+            <button id="weekly-reply-open" type="button" class="cut-btn quiet chip" hidden>返事をする</button>
+            <form id="weekly-reply-form" class="task-form" hidden>
+              <label for="weekly-reply-input">キィニチへの返事（来週のひとことに活かします）</label>
+              <textarea id="weekly-reply-input" rows="3" maxlength="300"></textarea>
+              <div class="form-actions">
+                <button id="weekly-reply-cancel" type="button" class="cut-btn quiet">やめる</button>
+                <button id="weekly-reply-send" type="submit" class="cut-btn quiet">送る</button>
+              </div>
+              <p id="weekly-reply-status" class="status ng" role="status"></p>
+            </form>
+          </div>
+        </section>
+        <p id="weekly-status" class="status" role="status"></p>
       </section>
       <section class="card" aria-labelledby="summary-next-title">
         <h2 id="summary-next-title">来週の予定</h2>

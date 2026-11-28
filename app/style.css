@@ -875,7 +875,8 @@ body:not(.calendar-on) #event-add { display: none; }
 .pref-row .cut-btn { flex: none; min-width: calc(var(--tap) * 2); }
 /* キィニチの一言をオフにしたとき：各機能画面の一言の面を出さない（ホームのセリフは出す） */
 body.no-screen-lines .dialogue-mini:not(.weekly-say) { display: none; } /* 週次コメントは別の設定（D-058） */
-.weekly-say { margin-top: var(--space-6); }
+.weekly-say { margin-top: var(--space-4); } /* 週次サマリーの振り返りの中（D-114） */
+.weekly-entry { margin-top: var(--space-4); }
 .weekly-title { margin: 0 0 var(--space-1); font-size: var(--fs-footnote); color: var(--color-text-secondary); }
 #weekly-status:empty { display: none; }
 
@@ -969,9 +970,7 @@ body:not(.calendar-on) #event-add-open { display: none; }
 
 /* 先週のひとこと（CR-G05）：週が明けて最初に見た日は日報の上に。何から作ったかを小さく添える */
 .weekly-basis { grid-column: 2; margin: var(--space-1) 0 0; font-size: var(--fs-caption); color: var(--color-text-tertiary); }
-.weekly-say.fresh { margin-bottom: var(--space-4); }
 /* その日は一言の面を先週のひとことだけにする（1 画面 1 つ。C10-02） */
-.view.report:has(.weekly-say.fresh:not([hidden])) #report-say { display: none; }
 
 /* 控えの失敗を設定の上に（CR-F11）：失敗したときだけ出す */
 .sync-alert { margin: var(--space-2) 0 0; }
@@ -1042,9 +1041,6 @@ input:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 1
 .summary-mood.good, .summary-mood.normal { color: var(--color-text); }
 .summary-mood.tired { color: var(--color-accent); }
 .summary-mood-day { font-weight: 700; }
-.summary-comment { margin-top: var(--space-3); padding: var(--space-2) var(--space-3); box-shadow: inset 2px 0 0 var(--color-gold-line); background: var(--color-surface-1); }
-.summary-comment-title { margin: 0; font-size: var(--fs-caption); color: var(--color-text-secondary); }
-.summary-comment-text { margin: var(--space-1) 0 0; font-size: var(--fs-subhead); }
 .summary-next, .summary-problems, .summary-day-items { list-style: none; margin: 0; padding: 0; }
 .summary-day { box-shadow: inset 0 -1px 0 var(--color-gold-faint); }
 .summary-day-btn {

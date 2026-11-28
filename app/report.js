@@ -248,14 +248,18 @@ const Report = (() => {
     });
   }
 
-  // ---------- 先週のひとこと（D-058） ----------
-  // 週は月曜はじまり（日付は朝4時区切り）。週が明けたら、先週の日報が3日分以上あれば、送信サーバー経由で Claude に1回だけ書いてもらう
+  // ---------- 週のひとこと（D-058・D-114） ----------
+  // 週は月曜はじまり（日付は朝4時区切り）。日曜の18時からはその週、それまでは先週の日報が3日分以上あれば、送信サーバー経由で Claude に1回だけ書いてもらう。
+  // 出すのは週次サマリー（日報の画面は入口だけ）
   const WEEKLY_MIN_REPORTS = 3;
   const MOOD_WORDS = { good: '元気', normal: 'ふつう', tired: '疲れた' };
   function weekStartOf(day) { return addDays(day, -((day.getDay() + 6) % 7)); }
+  const WEEKLY_SUNDAY_FROM = 18; // 日曜のこの時刻から、その週のひとことを作る（G1）
   function lastWeek(now = new Date()) {
-    const start = addDays(weekStartOf(logicalDay(now)), -7);
-    return { key: dateStr(start), days: [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(start, i)) };
+    const day = logicalDay(now);
+    const thisWeek = day.getDay() === 0 && (now.getHours() >= WEEKLY_SUNDAY_FROM || now.getHours() < DAY_STARTS_AT); // 深夜0〜4時は日曜の夜の続き
+    const start = addDays(weekStartOf(day), thisWeek ? 0 : -7);
+    return { key: dateStr(start), days: [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(start, i)), current: thisWeek };
   }
   // Claude に渡す1週間のまとめ（日報・記録・完了したタスクの数）。長い文は切る
   function weekSummary(week) {
@@ -345,26 +349,17 @@ const Report = (() => {
     const week = lastWeek(now);
     const saved = (Store.read(DB.weekly, {}) || {})[week.key];
     const on = Prefs.get('weekly');
+    const which = week.current ? '今週' : '先週';
     $('weekly').hidden = !(on && saved);
+    $('weekly-entry').hidden = !(on && saved); // 日報の画面の入口（D-114）
+    $('weekly-entry').firstChild.textContent = `${which}のひとことは週次サマリーへ`;
     if (on && saved) {
-      $('weekly-title').textContent = `先週のひとこと（${labelShort(week.days[0])}〜${labelShort(week.days[6])}）`;
+      $('weekly-title').textContent = `${which}のひとこと（${labelShort(week.days[0])}〜${labelShort(week.days[6])}）`;
       $('weekly-line').textContent = saved.text;
       // 何から作ったかを添える（CR-G05。人と AI の関わりの指針 G1・G11）
       const reportsAll = load();
       const n = week.days.filter((d) => reportsAll[dateStr(d)]).length;
-      $('weekly-basis').textContent = `先週の日報 ${n} 日分と記録から、Claude（AI）が書いています`;
-      // 週が明けて最初に見た日（朝4時区切り）は日報の上に出し、次の日からは「これまで」の上に戻す
-      const today = todayKey(now);
-      if (!saved.firstSeen) {
-        const all = Store.read(DB.weekly, {}) || {};
-        all[week.key] = { ...saved, firstSeen: today };
-        Store.write(DB.weekly, all);
-      }
-      const fresh = !saved.firstSeen || saved.firstSeen === today;
-      const box = $('weekly');
-      box.classList.toggle('fresh', fresh);
-      const anchor = fresh ? $('report-form') : $('weekly-status');
-      if (box.nextElementSibling !== anchor) anchor.parentNode.insertBefore(box, anchor);
+      $('weekly-basis').textContent = `${which}の日報 ${n} 日分と記録から、Claude（AI）が書いています`;
       renderReply(week.key, saved.reply);
     }
     if (!on || saved || weeklyTried === week.key) return;
@@ -373,7 +368,7 @@ const Report = (() => {
     if (count < WEEKLY_MIN_REPORTS || !Settings.get('appToken').trim()) return;
     weeklyTried = week.key;
     $('weekly-status').className = 'status';
-    $('weekly-status').textContent = '先週のひとことを書いてもらっています…';
+    $('weekly-status').textContent = `${week.current ? '今週' : '先週'}のひとことを書いてもらっています…`;
     // 前の週のひとことに返事があれば、一緒に送る（言い回しの好み・不満を反映してもらう。D-060 ⑪）
     const prev = (Store.read(DB.weekly, {}) || {})[dateStr(addDays(week.days[0], -7))];
     const previous = prev && prev.reply && prev.reply.text ? { comment: String(prev.text || '').slice(0, 600), reply: prev.reply.text.slice(0, REPLY_MAX) } : undefined;
@@ -387,7 +382,7 @@ const Report = (() => {
       })
       .catch((e) => {
         $('weekly-status').className = 'status ng';
-        $('weekly-status').textContent = `先週のひとことを作れませんでした（${e.message}）。次に開いたときにもう一度試します`;
+        $('weekly-status').textContent = `${week.current ? '今週' : '先週'}のひとことを作れませんでした（${e.message}）。次に開いたときにもう一度試します`;
       });
   }
 
@@ -400,5 +395,5 @@ const Report = (() => {
   onShow('report', () => render());
   render();
 
-  return { load, reportDate, render, lastWeek, weekSummary, addDone, removeDone, setMoodFor };
+  return { load, reportDate, render, lastWeek, weekSummary, addDone, removeDone, setMoodFor, renderWeekly };
 })();

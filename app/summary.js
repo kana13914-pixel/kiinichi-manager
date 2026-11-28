@@ -202,11 +202,7 @@ const Summary = (() => {
       li.append(el('span', 'summary-mood-day', WEEK_LABELS[day.getDay()]), el('span', 'summary-mood-word', mood ? MOODS[mood] : '—'));
       return li;
     }));
-    // AI のひとこと：今ある「先週のひとこと」のうち、いちばん新しいもの（日報の画面と同じ文。D-058）
-    const weekly = Store.read(DB.weekly, {}) || {};
-    const key = Object.keys(weekly).filter((k) => weekly[k] && weekly[k].text).sort().pop();
-    $('summary-comment').hidden = !key;
-    if (key) $('summary-comment-text').textContent = weekly[key].text;
+    Report.renderWeekly(now); // 週のひとこと（AI）。なければここで作ってもらう（D-114）
   }
   function dayRow(day, result, now) {
     const key = dateStr(day);

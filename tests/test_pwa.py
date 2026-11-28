@@ -1100,24 +1100,39 @@ class PwaTest(unittest.TestCase):
         self.assertIn("skip", page.get_attribute(row + " button:text-is('今日はなし')", "class"))
         self.assertIn("rec", page.get_attribute(row + " button:text-is('記録')", "class"))
 
-    def test_weekly_on_top_on_first_day_then_back(self):
-        """先週のひとことは、週が明けて最初に見た日は日報の上、次の日からは「これまで」の上（CR-G05）。何から作ったかを添える。"""
-        page, _ = self.weekly_page(self.WEEK_REPORTS)
-        page.wait_for_selector("#weekly", state="visible", timeout=5_000)
-        order = lambda: page.evaluate("document.getElementById('weekly').compareDocumentPosition(document.getElementById('report-form')) & Node.DOCUMENT_POSITION_FOLLOWING ? 'above' : 'below'")
-        self.assertEqual(order(), "above")
+    def test_weekly_in_summary_and_entry_on_report(self):
+        """週のひとことは週次サマリーの振り返りの中（D-114）。何から作ったかを添える（CR-G05）。日報の画面は入口だけ"""
+        page, calls = self.weekly_page(self.WEEK_REPORTS, view="report")  # 日報の画面を開いても作る
+        page.wait_for_selector("#weekly-entry", state="visible", timeout=5_000)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(page.text_content("#weekly-entry"), "先週のひとことは週次サマリーへ›")
+        self.assertTrue(page.is_hidden("#weekly"))  # 日報の画面には出さない
+        page.click("#weekly-entry")
+        page.wait_for_selector("#view-summary", state="visible")
+        self.assertTrue(page.is_visible("#weekly"))
+        self.assertTrue(page.evaluate("!!document.querySelector('#view-summary #weekly')"))
         self.assertIn("日報 3 日分", page.text_content("#weekly-basis"))
         self.assertIn("Claude（AI）", page.text_content("#weekly-basis"))
-        self.assertTrue(page.is_hidden("#report-say"))  # その日は一言の面を 1 つに
-        self.assertEqual(page.evaluate("JSON.parse(localStorage.getItem('db.weekly'))['2026-11-09'].firstSeen"), "2026-11-16")
-        # 次の日（同じ週の火曜）：「これまで」の上に戻り、上の一言も戻る
-        saved = page.evaluate("localStorage.getItem('db.weekly')")
-        page2, calls2 = self.weekly_page(self.WEEK_REPORTS, day=17, extra_init="localStorage.setItem('db.weekly', %s);" % json.dumps(saved))
-        page2.wait_for_selector("#weekly", state="visible", timeout=5_000)
-        self.assertEqual(page2.evaluate("document.getElementById('weekly').compareDocumentPosition(document.getElementById('report-form')) & Node.DOCUMENT_POSITION_FOLLOWING ? 'above' : 'below'"), "below")
-        self.assertTrue(page2.is_visible("#report-say"))
-        self.assertEqual(calls2, [])
+        self.assertEqual(len(calls), 1)
 
+    def test_weekly_this_week_from_sunday_evening(self):
+        """日曜の18時からは、その週のひとことを作る（G1。D-114）。それより前は先週の分"""
+        reports = {"2026-11-09": {"mood": "good", "done": "a", "savedAt": 1}, "2026-11-11": {"mood": "normal", "done": "b", "savedAt": 2},
+                   "2026-11-13": {"mood": "tired", "done": "c", "savedAt": 3}}
+        page, calls = self.weekly_page(reports, day=15, hour=17)  # 日曜の17時：先週（11/2〜）の日報はないので作らない
+        page.wait_for_timeout(500)
+        self.assertEqual(calls, [])
+        page, calls = self.weekly_page(reports, day=15, hour=19, reply={"ok": True, "week": "2026-11-09", "text": "今週はよく回した。", "cached": False})
+        page.wait_for_selector("#weekly", state="visible", timeout=5_000)
+        self.assertEqual(calls[0]["week"], "2026-11-09")
+        self.assertIn("今週のひとこと（11/9(月)〜11/15(日)）", page.text_content("#weekly-title"))
+        self.assertIn("今週の日報 3 日分", page.text_content("#weekly-basis"))
+        # 次の日（月曜）は同じ週のひとことを「先週」として出し、作り直さない
+        weekly = page.evaluate("localStorage.getItem('db.weekly')")
+        page2, calls2 = self.weekly_page(reports, day=16, hour=9, extra_init="localStorage.setItem('db.weekly', %s);" % json.dumps(weekly))
+        page2.wait_for_selector("#weekly", state="visible", timeout=5_000)
+        self.assertEqual(calls2, [])
+        self.assertIn("先週のひとこと", page2.text_content("#weekly-title"))
     def test_sync_error_shown_on_settings(self):
         """スプレッドシートへの控えが失敗したら、設定のいちばん上に出す（CR-F11）。"""
         init = "localStorage.setItem('db.sync', JSON.stringify({ url: 'https://script.google.com/macros/s/offline/exec', token: 't', lastAt: 0, lastSig: '', dirty: true, error: '通信できません' }));"
@@ -2304,7 +2319,7 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(facts[2:4], ["記録", "19%（3 / 16）"])  # 平日は1日8項目（休憩・歯磨きは数えない）。「今日はなし」も記録に数える
         moods = page.eval_on_selector_all("#summary-moods li", "els => els.map((e) => e.textContent)")
         self.assertEqual(moods, ["月元気", "火疲れた"])
-        self.assertEqual(page.text_content("#summary-comment-text"), "先週はよく回した。")
+        self.assertEqual(page.text_content("#weekly-line"), "先週はよく回した。")  # 週のひとこと（D-114）
         page.click("#view-summary .back")
         page.wait_for_selector("#view-home", state="visible")
         page = self.clock_page(17, 0, day=15)  # 日曜の夕方
@@ -3223,7 +3238,7 @@ class PwaTest(unittest.TestCase):
         return page, calls
 
     # ---------- 先週のひとこと（D-058） ----------
-    def weekly_page(self, reports, day=16, hour=21, reply=None, extra_init="", fail=False):
+    def weekly_page(self, reports, day=16, hour=21, reply=None, extra_init="", fail=False, view="summary"):
         calls = []
         def handler(route):
             req = route.request
@@ -3252,7 +3267,7 @@ class PwaTest(unittest.TestCase):
         page.on("pageerror", lambda e: errors.append(str(e)))
         self.addCleanup(lambda: self.assertEqual(errors, [], "JSエラーが出ている"))
         page.clock.install(time=datetime(2026, 11, day, hour, 0, 0))
-        page.goto(self.base + "index.html?mode=standalone#report")
+        page.goto(self.base + "index.html?mode=standalone#" + view)  # 週のひとことは週次サマリーに出す（D-114）
         page.wait_for_function("dialogue !== null", timeout=3_000)
         return page, calls
 
@@ -3282,11 +3297,11 @@ class PwaTest(unittest.TestCase):
         # 一言をオフにしても、週次コメントは出る（別の設定）
         page.evaluate("location.hash = '#settings'")
         page.click("#pref-lines")
-        page.evaluate("location.hash = '#report'")
+        page.evaluate("location.hash = '#summary'")
         self.assertTrue(page.is_visible("#weekly"))
         page.evaluate("location.hash = '#settings'")
         page.click("#pref-weekly")  # 週次コメントをオフにすると出さない
-        page.evaluate("location.hash = '#report'")
+        page.evaluate("location.hash = '#summary'")
         self.assertTrue(page.is_hidden("#weekly"))
 
     def test_weekly_comment_sends_chosen_tone(self):
@@ -3587,7 +3602,7 @@ class PwaTest(unittest.TestCase):
         self.assertTrue(page.is_hidden("#weekly-reply-open"))
         self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.weekly')"))["2026-11-09"]["reply"]["edits"], 1)
         page.evaluate("location.hash = '#tasks'")  # 開き直しても、もう書き直せない（初期化で控えが戻るので再読み込みはしない）
-        page.evaluate("location.hash = '#report'")
+        page.evaluate("location.hash = '#summary'")
         self.assertTrue(page.is_hidden("#weekly-reply-open"))
         self.assertIn("短めで、具体的に", page.text_content("#weekly-reply-text"))
         self.assertEqual(len(calls), 0)
@@ -4298,7 +4313,7 @@ class PwaTest(unittest.TestCase):
         page = self.clock_page(10, 0, "#settings")
         notes = page.eval_on_selector_all("#view-settings .card > p.note", "els => els.map(e => [e.textContent, Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight || 20))])")
         texts = [t for t, _ in notes]
-        self.assertIn("週が明けたら、先週の日報からキィニチが短く振り返ります。", texts)
+        self.assertIn("日曜の夜から、その週の日報でキィニチが短く振り返ります（週次サマリー）。", texts)
         self.assertIn("アプリを閉じていても声を掛けます。記録すれば取り消します。", texts)
         self.assertIn("オフにすると、タスク・タイマー・予定・日報の一言を出しません。", texts)
         for sel in ("#view-settings .card .more",):
