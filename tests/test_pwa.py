@@ -1129,8 +1129,8 @@ class PwaTest(unittest.TestCase):
 
     # ---------- 機能画面の決まり（R4。CR-F / CR-G） ----------
     def test_tabbar_stays_above_sticky_day_header(self):
-        """予定の貼り付く日付の見出しが、タブバーの上に重ならない（R4 の不具合修正）。"""
-        page = self.clock_page(20, 30, "#schedule", size=(375, 667))
+        """予定の貼り付く日付の見出し（月表示の下の日付）が、タブバーの上に重ならない（R4 の不具合修正）。"""
+        page = self.clock_page(20, 30, "#schedule", size=(375, 667), init_script="localStorage.setItem('schedule.view', 'month')")
         page.wait_for_selector("#view-schedule", state="visible", timeout=3_000)
         page.wait_for_selector(".schedule-day-title", timeout=3_000)
         z = page.evaluate("['.tabbar', '.schedule-day-title'].map(s => Number(getComputedStyle(document.querySelector(s)).zIndex))")
@@ -1138,7 +1138,6 @@ class PwaTest(unittest.TestCase):
         # 画面の下端（タブの位置）にあるのはタブバー
         hit = page.evaluate("document.elementFromPoint(innerWidth / 2, innerHeight - 20).closest('.tabbar') !== null")
         self.assertTrue(hit)
-
     def test_task_groups_follow_priority(self):
         """未完了のタスクは優先度ごとの見出し（▲高・●中・▼低・なし）に分かれ、中は期限の近い順（D-070、CR-G07）。"""
         tasks = [
@@ -2059,12 +2058,18 @@ class PwaTest(unittest.TestCase):
       e.classList.contains('past'), e.classList.contains('next'),
       e.querySelector('.schedule-rest') ? e.querySelector('.schedule-rest').textContent : null])"""
 
+    def show_day(self, page, date):
+        """予定の「1日」でその日を見せる（リストはなくした。D-109）"""
+        page.evaluate("(d) => Schedule.showDay(d)", date)
+
     def schedule_rows(self, page, date):
+        self.show_day(page, date)
         return page.eval_on_selector_all(f"#schedule-days .schedule-day[data-date='{date}'] .schedule-row", self.ROWS)
 
     def test_schedule_routine_rows_are_quieter_than_events(self):
         """毎日の時刻の行は細く小さく一段弱い色、カレンダーの予定は太く大きく。名前の頭はそろい、行の高さは変えない（D-064 ②、CR-G06）"""
         page = self.schedule_page()
+        self.show_day(page, "2026-11-14")
         rows = page.eval_on_selector_all("#schedule-days .schedule-day[data-date='2026-11-14'] .schedule-row", """els => els.map(e => {
           const t = getComputedStyle(e.querySelector('.schedule-time'));
           return [e.querySelector('.schedule-title').firstChild.textContent, e.classList.contains('routine-row-item'), t.fontWeight, parseFloat(t.fontSize), t.color,
@@ -2095,20 +2100,20 @@ class PwaTest(unittest.TestCase):
             self.assertEqual(bg, page.evaluate("(c) => { const d = document.createElement('i'); d.style.color = c; document.body.append(d); const v = getComputedStyle(d).color; d.remove(); return v; }", top), view)
             self.assertGreater(int(z), 1, view)  # 予定の貼り付く日付の見出し（z-index 1）より手前
 
-    def test_schedule_list_shows_eight_days_with_day_headers(self):
+    def test_schedule_day_view_is_default_with_day_rows(self):
+        """予定は「1日」が最初（リストはなくした。D-109）。輪の下にその日の行。‹ › で日を動かす"""
         page = self.schedule_page()
-        self.assertTrue(page.is_visible("#schedule-list-view"))
+        self.assertTrue(page.is_visible("#schedule-day-view"))
         self.assertTrue(page.is_hidden("#schedule-month-view"))
-        titles = page.eval_on_selector_all("#schedule-days .schedule-day-title", "els => els.map(e => e.textContent)")
-        self.assertEqual(titles, ["今日 11月9日(月)", "明日 11月10日(火)", "11月11日(水)", "11月12日(木)",
-                                  "11月13日(金)", "11月14日(土)", "11月15日(日)", "11月16日(月)"])  # 今日から7日先まで
+        self.assertEqual(page.eval_on_selector_all("#view-schedule .schedule-modes:not(.portrait-modes):not(.tone-modes) button", "els => els.map((e) => e.textContent)")[:2], ["1日", "月"])
+        self.assertEqual(page.query_selector_all("#schedule-mode-list"), [])
+        self.assertEqual(page.text_content("#day-title"), "今日 11/9(月)")
         today = self.schedule_rows(page, "2026-11-09")
         self.assertEqual(len(today), 8)
         self.assertEqual(today[0], ["07:00", "起床", True, False, None])
         self.assertEqual(today[1], ["07:30", "朝食", True, False, None])  # 生活の時刻は設定の「毎日の時刻」（D-048）
         self.assertEqual(today[3], ["12:00", "昼食", False, True, "次 ・ あと2時間"])
         self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-row.next")), 1)
-        self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-day:not([data-date='2026-11-09']) .schedule-row.past")), 0)
         # 予定のある日：終日が先、あとは時刻順に生活の時刻と混ざる
         sat = [r[:2] for r in self.schedule_rows(page, "2026-11-14")]
         self.assertEqual(sat[0], ["終日", "部屋の片づけ"])
@@ -2116,14 +2121,15 @@ class PwaTest(unittest.TestCase):
         self.assertNotIn("仕事開始", [r[1] for r in sat])  # 休日（土日）は仕事の時刻なし
         self.assertIn(["19:00", "友人と夕食"], sat)
         self.assertIn("仮", page.text_content("#view-schedule h1"))
-        # 日付の見出しは帯にして、スクロール中も上に残す
-        style = page.eval_on_selector(".schedule-day-title", "e => [getComputedStyle(e).position, getComputedStyle(e).backgroundColor]")
-        self.assertEqual(style[0], "sticky")
-        self.assertNotIn(style[1], ("rgba(0, 0, 0, 0)", "transparent"))
+        page.click("#day-today")
+        page.click("#day-next")
+        self.assertEqual(page.text_content("#day-title"), "11/10(火)")
+        page.click("#day-prev")
+        page.click("#day-prev")
+        self.assertEqual(page.text_content("#day-title"), "11/8(日)")
         # ホームの「次の予定」と同じ予定を指している
         page.evaluate("location.hash = '#home'")
         self.assertIn("昼食", page.text_content("#next-event"))
-
     def test_schedule_next_moves_as_time_passes(self):
         page = self.schedule_page(hour=11, minute=59)
         self.assertEqual(self.schedule_rows(page, "2026-11-09")[3][4], "次 ・ あと1分")
@@ -2139,18 +2145,17 @@ class PwaTest(unittest.TestCase):
 
     def test_schedule_day_without_events_and_all_empty(self):
         page = self.schedule_page()
-        # 1日だけ予定がない：見出しは残り「予定なし」と出る
+        # 1日だけ予定がない：その日は「予定なし」
         page.evaluate("""() => { const orig = SampleData.eventsOn;
           SampleData.eventsOn = (d) => d.getDate() === 11 ? [] : orig(d); Schedule.refresh(); }""")
+        self.show_day(page, "2026-11-11")
         self.assertEqual(page.text_content("#schedule-days .schedule-day[data-date='2026-11-11'] .schedule-row"), "予定なし")
-        self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-day")), 8)
         self.assertEqual(page.text_content("#schedule-say-line"), "今日は何も入っていない。先の分だけ見ておけ。")
         # 8日とも予定がない：空のときの一言（同じ面に出す）
         page.evaluate("SampleData.eventsOn = () => []; Schedule.refresh()")
         page.wait_for_function("document.getElementById('schedule-say-line').textContent === '予定は入っていない。好きに使えばいい。'", timeout=3_000)
         self.assertTrue(page.is_visible("#schedule-say"))
-        self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-row.none")), 8)
-
+        self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-row.none")), 1)
     # ---------- 週次サマリー（D-102） ----------
     SUMMARY_EVENTS = """(evs) => { const ms = (d, h, m = 0) => new Date(2026, 10, d, h, m).getTime();
       const list = evs.map(([d, h1, m1, h2, m2, title]) => ({ title, start: ms(d, h1, m1), end: ms(d, h2, m2), allDay: false }));
@@ -2372,6 +2377,7 @@ class PwaTest(unittest.TestCase):
         page.click("#routine-view [data-rview=hidden]")
         page.evaluate("""() => { const orig = SampleData.eventsOn;
           SampleData.eventsOn = (d) => d.getDate() === 11 ? orig(d).filter((e) => e.kind === 'routine') : orig(d); Schedule.refresh(); }""")
+        self.show_day(page, "2026-11-11")
         self.assertEqual(page.text_content("#schedule-days .schedule-day[data-date='2026-11-11'] .schedule-row"), "予定なし")
         sizes = page.eval_on_selector_all("#routine-view button", "els => els.map((b) => b.getBoundingClientRect().height)")
         self.assertTrue(all(h >= 44 for h in sizes), sizes)
@@ -2428,18 +2434,21 @@ class PwaTest(unittest.TestCase):
 
     def test_schedule_switch_to_month_and_remember(self):
         page = self.schedule_page()
-        self.assertEqual(page.get_attribute("#schedule-mode-list", "aria-pressed"), "true")
+        self.assertEqual(page.get_attribute("#schedule-mode-day", "aria-pressed"), "true")
         page.click("#schedule-mode-month")
         self.assertTrue(page.is_visible("#schedule-month-view"))
-        self.assertTrue(page.is_hidden("#schedule-list-view"))
+        self.assertTrue(page.is_hidden("#schedule-day-view"))
         self.assertEqual(page.get_attribute("#schedule-mode-month", "aria-pressed"), "true")
-        self.assertEqual(page.get_attribute("#schedule-mode-list", "aria-pressed"), "false")
+        self.assertEqual(page.get_attribute("#schedule-mode-day", "aria-pressed"), "false")
         page.reload()  # 選んだ表示を覚えている
         page.wait_for_selector("#schedule-month-view", state="visible", timeout=3_000)
-        page.click("#schedule-mode-list")
-        self.assertTrue(page.is_visible("#schedule-list-view"))
-        self.assertEqual(page.evaluate("localStorage.getItem('schedule.view')"), "list")
-
+        page.click("#schedule-mode-day")
+        self.assertTrue(page.is_visible("#schedule-day-view"))
+        self.assertEqual(page.evaluate("localStorage.getItem('schedule.view')"), "day")
+        # 前に「リスト」を選んでいた人は「1日」（D-109）
+        page.evaluate("localStorage.setItem('schedule.view', 'list')")
+        page.reload()
+        page.wait_for_selector("#schedule-day-view", state="visible", timeout=3_000)
     def test_month_grid_dates_tags_and_today(self):
         page = self.schedule_page(mode="month")
         self.assertEqual(page.text_content("#cal-title"), "2026年11月")
@@ -3923,6 +3932,7 @@ class PwaTest(unittest.TestCase):
                          {"action": "update", "id": "new1", "start": self.ms(10), "end": self.ms(11), "allDay": True})
         self.assertEqual([r[:2] for r in self.schedule_rows(page, "2026-11-10")][0], ["終日", "歯医者"])
         # 消す：確認してから
+        self.show_day(page, "2026-11-10")
         page.click("#schedule-days .schedule-day[data-date='2026-11-10'] .event-edit")
         page.click("#event-delete")
         self.assertIn("消しますか", page.text_content("#confirm-text"))
@@ -3959,6 +3969,7 @@ class PwaTest(unittest.TestCase):
             self.assertIn(["終日", "帰省"], [r[:2] for r in self.schedule_rows(page, d)])
         self.assertNotIn(["終日", "帰省"], [r[:2] for r in self.schedule_rows(page, "2026-11-14")])
         # 直す：終わりの日が戻り、始まりを1日後ろにすると期間ごと動く
+        self.show_day(page, "2026-11-12")
         page.click("#schedule-days .schedule-day[data-date='2026-11-12'] .event-edit")
         self.assertEqual([page.input_value("#event-date"), page.input_value("#event-end-date")], ["2026-11-11", "2026-11-13"])
         page.fill("#event-date", "2026-11-12")
@@ -3971,6 +3982,7 @@ class PwaTest(unittest.TestCase):
         page.click("#event-add-open")
         page.fill("#event-title", "合宿")
         page.click("#event-allday")
+        page.fill("#event-date", "2026-11-09")  # 足すときの日は「1日」で見ている日（11/12）なので、始まりを決めておく
         page.fill("#event-end-date", "2026-11-08")
         page.click("#event-save")
         self.assertIn("始まりの日と同じか後", page.text_content("#event-form-status"))
@@ -4215,6 +4227,7 @@ class PwaTest(unittest.TestCase):
 
     # ---------- 毎日の時刻をその日だけ変える（D-060 ⑭） ----------
     def routine_row(self, page, date, title):
+        self.show_day(page, date)
         return "#schedule-days .schedule-day[data-date='%s'] .routine-row-item:has-text('%s')" % (date, title)
 
     def test_routine_override_for_one_day(self):

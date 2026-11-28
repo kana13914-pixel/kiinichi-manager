@@ -195,8 +195,7 @@
       <!-- 表示の切り替えと「追加」を 1 行に（CR-F10）。追加はカレンダーをつないでいるときだけ -->
       <div class="schedule-bar">
         <div class="schedule-modes" role="group" aria-label="表示の切り替え">
-          <button id="schedule-mode-day" type="button" class="cut-btn quiet chip" aria-pressed="false">1日</button>
-          <button id="schedule-mode-list" type="button" class="cut-btn quiet chip" aria-pressed="true">リスト</button>
+          <button id="schedule-mode-day" type="button" class="cut-btn quiet chip" aria-pressed="true">1日</button>
           <button id="schedule-mode-month" type="button" class="cut-btn quiet chip" aria-pressed="false">月</button>
         </div>
         <button id="event-add-open" type="button" class="cut-btn quiet chip" aria-label="予定を足す">＋ 追加</button>
@@ -240,12 +239,9 @@
         <ul class="day-legend" aria-hidden="true">
           <li><i class="sleep"></i>睡眠</li><li><i class="work"></i>仕事</li><li><i class="life"></i>食事・入浴</li><li><i class="event"></i>予定</li>
         </ul>
-        <ul id="day-list" class="schedule-list" aria-labelledby="day-title"></ul>
-      </div>
-
-      <div id="schedule-list-view">
         <div id="schedule-days"></div>
       </div>
+
 
       <div id="schedule-month-view" hidden>
         <div class="cal-head">

@@ -16,8 +16,8 @@ const Schedule = (() => {
   const dayLabel = labelLong;
   function sameEvent(a, b) { return a && b && a.at.getTime() === b.at.getTime() && a.title === b.title; }
 
-  let mode = 'list';
-  try { const m = localStorage.getItem(MODE_KEY); if (m === 'month' || m === 'day') mode = m; } catch (_) {}
+  let mode = 'day';
+  try { if (localStorage.getItem(MODE_KEY) === 'month') mode = 'month'; } catch (_) {} // 「リスト」はなくした（D-109）。前にリストを選んでいた人は「1日」
   let dayShown = null; // 1日の輪で見ている日（0時）
   let cursor = null;   // 月表示で見ている月の1日
   let selected = null; // 月表示で選んでいる日
@@ -197,40 +197,25 @@ const Schedule = (() => {
     return li;
   }
 
-  function renderList(now) {
-    const next = nextEvent(now);
+  // その日の予定の行（D-109。1日の輪の下の一覧）：期限・やる日のタスク → 終日の予定 → 毎日の時刻（出し方の設定に従う）→ 時刻のある予定
+  function dayRows(date, now, next) {
     const view = routineView();
-    const days = [];
-    for (let i = 0; i < LIST_DAYS; i++) {
-      const date = dayAt(now, i);
-      const events = SampleData.eventsOn(date);
-      const skipped = Routine.skippedFor(date);
-      const tasks = dueTasks(date);
-      const sec = document.createElement('section');
-      sec.className = 'schedule-day';
-      sec.dataset.date = dateStr(date);
-      const h = document.createElement('h2');
-      h.className = 'schedule-day-title';
-      h.textContent = (i === 0 ? '今日 ' : i === 1 ? '明日 ' : '') + dayLabel(date);
-      const ul = document.createElement('ul');
-      ul.className = 'schedule-list';
-      const routines = events.filter((e) => e.kind === 'routine');
-      const others = view === 'all' ? events : events.filter((e) => e.kind !== 'routine');
-      const rows = [...tasks.map(taskRow)];
-      if (view === 'compact') rows.push(...others.filter((e) => e.allDay).map((e) => row(e, now, next))); // 終日 → まとめた行 → 時刻のある予定
-      if (view === 'compact' && (routines.length || skipped.length)) {
-        rows.push(routineSummaryRow(date, routines, skipped, now, next));
-        if (openDays.has(dateStr(date))) rows.push(...routines.map((e) => row(e, now, next)).map((li) => { li.classList.add('routine-open'); return li; }), ...skipped.map(skippedRow));
-      }
-      rows.push(...(view === 'compact' ? others.filter((e) => !e.allDay) : others).map((e) => row(e, now, next)));
-      if (view === 'all') rows.push(...skipped.map(skippedRow));
-      if (!rows.length) rows.push(noneRow());
-      ul.append(...rows);
-      sec.append(h, ul);
-      days.push(sec);
+    const events = SampleData.eventsOn(date);
+    const skipped = Routine.skippedFor(date);
+    const routines = events.filter((e) => e.kind === 'routine');
+    const others = view === 'all' ? events : events.filter((e) => e.kind !== 'routine');
+    const rows = [...dueTasks(date).map(taskRow)];
+    if (view === 'compact') rows.push(...others.filter((e) => e.allDay).map((e) => row(e, now, next))); // 終日 → まとめた行 → 時刻のある予定
+    if (view === 'compact' && (routines.length || skipped.length)) {
+      rows.push(routineSummaryRow(date, routines, skipped, now, next));
+      if (openDays.has(dateStr(date))) rows.push(...routines.map((e) => row(e, now, next)).map((li) => { li.classList.add('routine-open'); return li; }), ...skipped.map(skippedRow));
     }
-    $('schedule-days').replaceChildren(...days);
+    rows.push(...(view === 'compact' ? others.filter((e) => !e.allDay) : others).map((e) => row(e, now, next)));
+    if (view === 'all') rows.push(...skipped.map(skippedRow));
+    if (!rows.length) rows.push(noneRow());
+    return rows;
   }
+
 
   // ---------- 月 ----------
   function cell(date, now) {
@@ -406,14 +391,19 @@ const Schedule = (() => {
       $('event-end').value = `${pad(Math.floor(endMin / 60))}:${pad(endMin % 60)}`;
     });
     $('day-ring').replaceChildren(root);
-    // 下の一覧：その日の予定（リストと同じ行。毎日の時刻の出し方の設定に従う）
-    const next = nextEvent(now);
-    const all = SampleData.eventsOn(date);
-    const view = routineView();
-    const shown = view === 'all' ? all : all.filter((e) => e.kind !== 'routine');
-    const rows = [...dueTasks(date).map(taskRow), ...shown.map((e) => row(e, now, next))];
-    $('day-list').replaceChildren(...(rows.length ? rows : [noneRow()]));
+    // 下の一覧：その日の予定（毎日の時刻の出し方の設定に従う。行を押すと直す・その日だけ変える）
+    const sec = document.createElement('section');
+    sec.className = 'schedule-day';
+    sec.dataset.date = dateStr(date);
+    const ul = document.createElement('ul');
+    ul.className = 'schedule-list';
+    ul.setAttribute('aria-label', `${dayLabel(date)}の予定`);
+    ul.append(...dayRows(date, now, nextEvent(now)));
+    sec.append(ul);
+    $('schedule-days').replaceChildren(sec);
   }
+  // その日を「1日」で見せる（週次サマリーなどから。テストでも使う）
+  function showDay(key) { dayShown = parseDay(key); setMode('day'); }
   function moveDay(n) { dayShown = addDays(dayShown, n); render(new Date(), true); }
 
   function moveMonth(n, now = new Date()) {
@@ -432,14 +422,12 @@ const Schedule = (() => {
     const key = [mode, hm(now), dateStr(now), dateStr(cursor), dateStr(selected), dateStr(dayShown)].join('|');
     if (key === shownKey && !force) return;
     shownKey = key;
-    $('schedule-list-view').hidden = mode !== 'list';
     $('schedule-month-view').hidden = mode !== 'month';
     $('schedule-day-view').hidden = mode !== 'day';
     $('schedule-mode-day').setAttribute('aria-pressed', String(mode === 'day'));
-    $('schedule-mode-list').setAttribute('aria-pressed', String(mode === 'list'));
     $('schedule-mode-month').setAttribute('aria-pressed', String(mode === 'month'));
     say(sayKey(now));
-    if (mode === 'list') renderList(now); else if (mode === 'day') renderDay(now); else renderMonth(now);
+    if (mode === 'day') renderDay(now); else renderMonth(now);
   }
   function setMode(next) {
     mode = next;
@@ -574,7 +562,6 @@ const Schedule = (() => {
     submit('remove', { id: target.id, calendarId: target.calendarId }, `「${target.title}」を消しました`);
   });
 
-  $('schedule-mode-list').addEventListener('click', () => setMode('list'));
   $('schedule-mode-month').addEventListener('click', () => setMode('month'));
   $('schedule-mode-day').addEventListener('click', () => setMode('day'));
   $('day-prev').addEventListener('click', () => moveDay(-1));
@@ -590,5 +577,5 @@ const Schedule = (() => {
   window.addEventListener('routineday', (e) => { $('routine-msg').textContent = e.detail; }); // その日だけ変えた知らせ // 「あと何分」と過ぎた予定を、分が変わったら直す
   render();
 
-  return { render, refresh: () => render(new Date(), true) };
+  return { render, refresh: () => render(new Date(), true), showDay };
 })();
