@@ -2292,6 +2292,55 @@ class PwaTest(unittest.TestCase):
             page = self.clock_page(10, 0, "#summary", size=size)
             self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), size[0])
 
+    def test_schedule_day_ring(self):
+        """予定の「1日」（D-108）：24時間の輪に睡眠・仕事・食事と入浴・予定。前後の日へ動ける。空いている所を押すとその時刻で予定を足す。予定の弧は直す"""
+        page = self.clock_page(9, 41, "#schedule", day=30)  # 2026-11-30（月）
+        page.evaluate(self.SUMMARY_EVENTS.replace("Calendar.eventsOn = (date)", "Calendar.eventsOn = (date)"), [[30, 10, 0, 11, 30, "定例会議"]])
+        page.evaluate("""() => { const orig = Calendar.eventsOn; Calendar.eventsOn = (d) => orig(d).map((e) => ({ ...e, ref: { ...e.ref, id: 'e1', editable: true } }));
+          document.body.classList.add('calendar-on'); }""")  # カレンダーをつないだときと同じ印
+        page.click("#schedule-mode-day")
+        self.assertEqual(page.evaluate("localStorage.getItem('schedule.view')"), "day")
+        self.assertTrue(page.is_visible("#schedule-day-view"))
+        self.assertEqual(page.text_content("#day-title"), "今日 11/30(月)")
+        label = page.get_attribute("#day-ring svg", "aria-label")
+        for part in ("睡眠 00:00〜07:00", "睡眠 23:30〜00:00", "仕事 09:00〜18:30", "朝食 07:30〜08:00", "入浴 22:30〜23:00", "定例会議 10:00〜11:30"):
+            self.assertIn(part, label)
+        self.assertEqual(page.text_content("#day-ring .ring-center"), "09:41")
+        self.assertEqual(page.eval_on_selector_all("#day-ring .ring-now", "els => els.length"), 1)
+        names = page.eval_on_selector_all("#day-ring .ring-name", "els => els.map((e) => e.textContent)")
+        self.assertIn("定例会議", names)
+        self.assertIn("仕事", names)
+        # 押す：輪の上の時刻の位置（0時が上、時計回り）
+        tap = lambda hh, mm: page.evaluate("""([h, m]) => { const svg = document.querySelector('#day-ring svg'); const r = svg.getBoundingClientRect();
+          const a = ((h * 60 + m) / 1440) * 2 * Math.PI - Math.PI / 2, rr = 114 / 320 * r.width;
+          const x = r.left + r.width / 2 + rr * Math.cos(a), y = r.top + r.height / 2 + rr * Math.sin(a);
+          svg.dispatchEvent(new MouseEvent('click', { clientX: x, clientY: y, bubbles: true })); }""", [hh, mm])
+        tap(10, 45)  # 予定の弧 → 直す
+        self.assertTrue(page.is_visible("#event-form"))
+        self.assertEqual(page.text_content("#event-form-title"), "予定を直す")
+        page.click("#event-cancel")
+        tap(16, 10)  # 仕事の時間の中の空き → 16:00〜17:00 で足す
+        self.assertEqual(page.text_content("#event-form-title"), "予定を足す")
+        self.assertEqual([page.input_value("#event-date"), page.input_value("#event-start"), page.input_value("#event-end")], ["2026-11-30", "16:00", "17:00"])
+        page.click("#event-cancel")
+        tap(9, 45)  # 次の予定（10:00）の手前まで
+        self.assertEqual([page.input_value("#event-start"), page.input_value("#event-end")], ["09:30", "10:00"])
+        page.click("#event-cancel")
+        tap(12, 10)  # 昼食 → その日だけ変える
+        self.assertTrue(page.is_visible("#routine-day"))
+        self.assertEqual(page.text_content("#routine-day-title"), "11/30(月)の昼食")
+        page.click("#routine-day-close")
+        # 次の日へ
+        page.click("#day-next")
+        self.assertEqual(page.text_content("#day-title"), "12/1(火)")
+        self.assertEqual(page.text_content("#day-ring .ring-center"), "12/1")
+        self.assertEqual(page.eval_on_selector_all("#day-ring .ring-now", "els => els.length"), 0)
+        page.click("#day-today")
+        self.assertEqual(page.text_content("#day-title"), "今日 11/30(月)")
+        for size in ((393, 852), (375, 667)):
+            page.set_viewport_size({"width": size[0], "height": size[1]})
+            self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), size[0])
+
     def test_routine_view_compact_hidden_all(self):
         """予定の一覧での毎日の時刻の出し方（D-101）：はじめは「まとめる」（1行。押すと開く）。「出さない」「すべて」に切り替えられる。データは変えない"""
         init = "localStorage.setItem('db.prefs', JSON.stringify({ voice: false }))"  # routineView なし＝はじめの状態

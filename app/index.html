@@ -195,6 +195,7 @@
       <!-- 表示の切り替えと「追加」を 1 行に（CR-F10）。追加はカレンダーをつないでいるときだけ -->
       <div class="schedule-bar">
         <div class="schedule-modes" role="group" aria-label="表示の切り替え">
+          <button id="schedule-mode-day" type="button" class="cut-btn quiet chip" aria-pressed="false">1日</button>
           <button id="schedule-mode-list" type="button" class="cut-btn quiet chip" aria-pressed="true">リスト</button>
           <button id="schedule-mode-month" type="button" class="cut-btn quiet chip" aria-pressed="false">月</button>
         </div>
@@ -226,6 +227,21 @@
         </div>
         <p id="routine-status" class="status" role="status"></p>
       </section>
+
+      <!-- 1日の輪（D-108）：0時を上にした24時間の輪。睡眠・仕事・食事と入浴・予定を弧で出し、今の時刻に印。空いている所を押すと予定を足す -->
+      <div id="schedule-day-view" hidden>
+        <div class="cal-head">
+          <button id="day-prev" type="button" class="cal-nav" aria-label="前の日">‹</button>
+          <h2 id="day-title" aria-live="polite">-</h2>
+          <button id="day-next" type="button" class="cal-nav" aria-label="次の日">›</button>
+          <button id="day-today" type="button" class="cut-btn quiet chip">今日</button>
+        </div>
+        <div id="day-ring" class="day-ring"></div>
+        <ul class="day-legend" aria-hidden="true">
+          <li><i class="sleep"></i>睡眠</li><li><i class="work"></i>仕事</li><li><i class="life"></i>食事・入浴</li><li><i class="event"></i>予定</li>
+        </ul>
+        <ul id="day-list" class="schedule-list" aria-labelledby="day-title"></ul>
+      </div>
 
       <div id="schedule-list-view">
         <div id="schedule-days"></div>

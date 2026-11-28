@@ -69,6 +69,13 @@
   --size-dialog: 320px;    /* 確認ダイアログの最大幅 */
   --size-cal-cell: 76px;   /* 月表示の1マスの高さ（日付＋タグ2つ＋「+n」） */
   --size-mini-emblem: 40px; /* 各画面の一言の面に添える紋章（D-059） */
+  /* 1日の輪（D-108）：差し色を薄くして面積の決まりを守る。何もない時間はごく薄い地 */
+  --ring-free: rgba(244, 241, 232, 0.06);
+  --ring-sleep: rgba(98, 184, 224, 0.30);
+  --ring-work: rgba(185, 227, 95, 0.28);
+  --ring-life: rgba(242, 161, 74, 0.55);
+  --ring-event: rgba(232, 196, 92, 0.70);
+  --size-day-ring: 320px;
 
   /* 効果・動き */
   --blur-dialogue: 6px;
@@ -994,6 +1001,26 @@ input:focus-visible, textarea:focus-visible { outline: none; box-shadow: 0 0 0 1
   padding-bottom: var(--space-2);
   background: linear-gradient(90deg, var(--color-gold-line), transparent) left bottom / 100% 1px no-repeat;
 }
+
+/* ---------- 予定の「1日」：24時間の輪（D-108）。文字の大きさは輪の座標（320 四方）で JS が付ける ---------- */
+.day-ring { width: 100%; max-width: var(--size-day-ring); margin: var(--space-2) auto 0; }
+.day-ring-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.ring-seg.free { fill: var(--ring-free); }
+.ring-seg.sleep { fill: var(--ring-sleep); }
+.ring-seg.work { fill: var(--ring-work); }
+.ring-seg.life { fill: var(--ring-life); }
+.ring-seg.event { fill: var(--ring-event); }
+.ring-name { fill: var(--color-text); font-weight: 700; pointer-events: none; }
+.ring-hour { fill: var(--color-text-secondary); font-variant-numeric: tabular-nums; }
+.ring-tick { stroke: var(--color-gold-line); stroke-width: 1; }
+.ring-now { stroke: var(--color-accent); stroke-width: 2; }
+.ring-now-dot { fill: var(--color-accent); }
+.ring-center { fill: var(--color-text); font-weight: 300; font-variant-numeric: tabular-nums; }
+.ring-sub { fill: var(--color-text-secondary); }
+.day-legend { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-1) var(--space-3); margin: var(--space-2) 0 var(--space-3); padding: 0; font-size: var(--fs-caption); color: var(--color-text-secondary); }
+.day-legend i { display: inline-block; width: var(--size-mood-s); height: var(--size-mood-s); margin-right: var(--space-1); vertical-align: -1px; }
+.day-legend i.sleep { background: var(--ring-sleep); } .day-legend i.work { background: var(--ring-work); }
+.day-legend i.life { background: var(--ring-life); } .day-legend i.event { background: var(--ring-event); }
 
 /* ---------- 週次サマリー（D-102） ---------- */
 .summary-facts { font-size: var(--fs-subhead); }

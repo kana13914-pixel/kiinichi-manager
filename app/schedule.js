@@ -17,7 +17,8 @@ const Schedule = (() => {
   function sameEvent(a, b) { return a && b && a.at.getTime() === b.at.getTime() && a.title === b.title; }
 
   let mode = 'list';
-  try { if (localStorage.getItem(MODE_KEY) === 'month') mode = 'month'; } catch (_) {}
+  try { const m = localStorage.getItem(MODE_KEY); if (m === 'month' || m === 'day') mode = m; } catch (_) {}
+  let dayShown = null; // 1日の輪で見ている日（0時）
   let cursor = null;   // 月表示で見ている月の1日
   let selected = null; // 月表示で選んでいる日
 
@@ -282,6 +283,139 @@ const Schedule = (() => {
     $('cal-day-title').textContent = dayLabel(selected);
     $('cal-day-list').replaceChildren(...tasks.map(taskRow), ...(events.length || tasks.length ? events.map((e) => row(e, now, next)) : [noneRow()]));
   }
+  // ---------- 1日の輪（D-108） ----------
+  const SVG = 'http://www.w3.org/2000/svg';
+  const RING = { c: 160, r0: 98, r1: 130, label: 146 };
+  const LIFE_MIN = 30; // 食事・入浴は終わりの時刻がないので30分として描く
+  function svg(tag, attrs = {}) {
+    const e = document.createElementNS(SVG, tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    return e;
+  }
+  const pt = (min, r) => { const a = (min / 1440) * 2 * Math.PI - Math.PI / 2; return [RING.c + r * Math.cos(a), RING.c + r * Math.sin(a)]; };
+  function arc(m0, m1, r0 = RING.r0, r1 = RING.r1) {
+    const span = Math.min(m1 - m0, 1439.9);
+    const large = span > 720 ? 1 : 0;
+    const [x0, y0] = pt(m0, r1), [x1, y1] = pt(m0 + span, r1), [x2, y2] = pt(m0 + span, r0), [x3, y3] = pt(m0, r0);
+    return `M${x0} ${y0}A${r1} ${r1} 0 ${large} 1 ${x1} ${y1}L${x2} ${y2}A${r0} ${r0} 0 ${large} 0 ${x3} ${y3}Z`;
+  }
+  // 'HH:MM' → その日（朝4時区切りの日）の時点。深夜0〜4時は次の暦日
+  function routineAt(day, hhmm) {
+    if (!hhmm) return null;
+    const [h, m] = hhmm.split(':').map(Number);
+    const d = new Date(day);
+    if (h < DAY_STARTS_AT) d.setDate(d.getDate() + 1);
+    d.setHours(h, m, 0, 0);
+    return d.getTime();
+  }
+  // その暦日（0〜24時）に描く弧：{ kind, title, start, end, ref?, routine? }。重なるものは後ろのものが上に描かれる
+  function dayBlocks(date) {
+    const d0 = startOfDay(date).getTime(), d1 = addDays(startOfDay(date), 1).getTime();
+    const out = [];
+    const push = (b) => { const start = Math.max(b.start, d0), end = Math.min(b.end, d1); if (end > start) out.push({ ...b, start, end }); };
+    for (const day of [addDays(startOfDay(date), -1), startOfDay(date)]) { // 前の日の就寝〜この日の起床、この日の就寝〜次の日の起床
+      const sleep = routineAt(day, Routine.timesFor(day).sleep);
+      const wake = routineAt(addDays(day, 1), Routine.timesFor(addDays(day, 1)).wake);
+      if (sleep !== null && wake !== null && wake > sleep) push({ kind: 'sleep', title: '睡眠', start: sleep, end: wake });
+    }
+    const t = Routine.timesFor(startOfDay(date));
+    const ws = routineAt(startOfDay(date), t.work_start), we = routineAt(startOfDay(date), t.work_end);
+    if (ws !== null && we !== null && we > ws) push({ kind: 'work', title: '仕事', start: ws, end: we });
+    for (const [id, title] of [['breakfast', '朝食'], ['lunch', '昼食'], ['dinner', '夕食'], ['bath', '入浴']]) {
+      const at = routineAt(startOfDay(date), t[id]);
+      if (at !== null) push({ kind: 'life', title, start: at, end: at + LIFE_MIN * 60000, routine: { id, title, day: dateStr(date) } });
+    }
+    for (const e of SampleData.eventsOn(date)) {
+      if (e.kind !== 'event' || e.allDay) continue;
+      const start = e.ref ? e.ref.start : e.at.getTime();
+      const end = e.ref ? Math.max(e.ref.end, start) : start + 60 * 60000;
+      push({ kind: 'event', title: e.title, start, end, ref: e.ref || null });
+    }
+    return out;
+  }
+  function renderDay(now) {
+    const date = dayShown;
+    const d0 = date.getTime();
+    const isToday = dateStr(date) === dateStr(now);
+    $('day-title').textContent = (isToday ? '今日 ' : '') + labelShort(date);
+    const blocks = dayBlocks(date);
+    const root = svg('svg', { viewBox: '0 0 320 320', class: 'day-ring-svg', role: 'img', 'aria-label': `${dayLabel(date)}の1日の輪。${blocks.map((b) => `${b.title} ${hm(new Date(b.start))}〜${hm(new Date(b.end))}`).join('、') || '予定なし'}` });
+    root.append(svg('path', { d: arc(0, 1439.99), class: 'ring-seg free' }));
+    const order = { sleep: 0, work: 1, life: 2, event: 3 };
+    for (const b of [...blocks].sort((a, c) => order[a.kind] - order[c.kind])) {
+      const m0 = (b.start - d0) / 60000, m1 = (b.end - d0) / 60000;
+      const seg = svg('path', { d: arc(m0, m1), class: 'ring-seg ' + b.kind });
+      root.append(seg);
+      // 名前：上に重なるもの（睡眠・仕事の上の予定や食事）を除いた、いちばん長い所の真ん中に書く。1時間未満なら書かない
+      const covers = blocks.filter((o) => order[o.kind] > order[b.kind] && o.end > b.start && o.start < b.end).sort((x, y) => x.start - y.start);
+      let best = [b.start, b.start], from = b.start;
+      for (const o of [...covers, { start: b.end, end: b.end }]) {
+        if (o.start - from > best[1] - best[0]) best = [from, Math.min(o.start, b.end)];
+        from = Math.max(from, o.end);
+      }
+      const l0 = (best[0] - d0) / 60000, l1 = (best[1] - d0) / 60000;
+      if (l1 - l0 >= 60) {
+        const [x, y] = pt((l0 + l1) / 2, (RING.r0 + RING.r1) / 2);
+        const text = svg('text', { x, y, class: 'ring-name', 'font-size': 10, 'text-anchor': 'middle', 'dominant-baseline': 'central' });
+        text.textContent = b.title.length > 5 ? b.title.slice(0, 5) + '…' : b.title;
+        root.append(text);
+      }
+    }
+    for (let h = 0; h < 24; h++) { // 目盛りと、3時間ごとの数字
+      const [x0, y0] = pt(h * 60, RING.r1 + 2), [x1, y1] = pt(h * 60, RING.r1 + (h % 3 ? 5 : 8));
+      root.append(svg('line', { x1: x0, y1: y0, x2: x1, y2: y1, class: 'ring-tick' }));
+      if (h % 3 === 0) {
+        const [x, y] = pt(h * 60, RING.label);
+        const t = svg('text', { x, y, class: 'ring-hour', 'font-size': 11, 'text-anchor': 'middle', 'dominant-baseline': 'central' });
+        t.textContent = String(h);
+        root.append(t);
+      }
+    }
+    const center = svg('text', { x: RING.c, y: RING.c - 6, class: 'ring-center', 'font-size': 40, 'text-anchor': 'middle', 'dominant-baseline': 'central' });
+    const sub = svg('text', { x: RING.c, y: RING.c + 26, class: 'ring-sub', 'font-size': 12, 'text-anchor': 'middle', 'dominant-baseline': 'central' });
+    const events = blocks.filter((b) => b.kind === 'event').length;
+    if (isToday) { // 今の時刻：中央の時刻と、輪の上の金の印
+      center.textContent = hm(now);
+      const m = (now - d0) / 60000;
+      const [x0, y0] = pt(m, RING.r0 - 6), [x1, y1] = pt(m, RING.r1 + 2);
+      root.append(svg('line', { x1: x0, y1: y0, x2: x1, y2: y1, class: 'ring-now' }), svg('circle', { cx: x1, cy: y1, r: 4, class: 'ring-now-dot' }));
+    } else {
+      center.textContent = `${date.getMonth() + 1}/${date.getDate()}`;
+    }
+    sub.textContent = `予定${events}件`;
+    root.append(center, sub);
+    // 押した所：予定の弧は直す、食事・入浴は「その日だけ変える」、空いている所は予定を足す（カレンダーをつないでいるとき）
+    root.addEventListener('click', (e) => {
+      const r = root.getBoundingClientRect();
+      const x = ((e.clientX - r.left) / r.width) * 320 - RING.c, y = ((e.clientY - r.top) / r.height) * 320 - RING.c;
+      const dist = Math.hypot(x, y);
+      if (dist < RING.r0 - 8 || dist > RING.r1 + 12) return;
+      const min = ((Math.atan2(y, x) + Math.PI / 2 + 2 * Math.PI) % (2 * Math.PI)) / (2 * Math.PI) * 1440;
+      const at = d0 + min * 60000;
+      const hit = [...blocks].sort((a, c) => order[c.kind] - order[a.kind]).find((b) => b.start <= at && at < b.end && b.kind !== 'sleep' && b.kind !== 'work');
+      if (hit && hit.kind === 'event') { if (hit.ref && hit.ref.editable) openForm(hit.ref); return; }
+      if (hit && hit.routine) { RoutineDay.open(hit.routine); return; }
+      if (!Calendar.ready()) return;
+      openForm();
+      const startMin = Math.floor(min / 30) * 30;
+      const nextBusy = blocks.filter((b) => b.kind === 'event' && b.start > d0 + startMin * 60000).map((b) => (b.start - d0) / 60000).sort((a, c) => a - c)[0];
+      const endMin = Math.min(startMin + 60, nextBusy || Infinity, 1439);
+      $('event-date').value = dateStr(date);
+      $('event-end-date').value = dateStr(date);
+      $('event-start').value = `${pad(Math.floor(startMin / 60))}:${pad(startMin % 60)}`;
+      $('event-end').value = `${pad(Math.floor(endMin / 60))}:${pad(endMin % 60)}`;
+    });
+    $('day-ring').replaceChildren(root);
+    // 下の一覧：その日の予定（リストと同じ行。毎日の時刻の出し方の設定に従う）
+    const next = nextEvent(now);
+    const all = SampleData.eventsOn(date);
+    const view = routineView();
+    const shown = view === 'all' ? all : all.filter((e) => e.kind !== 'routine');
+    const rows = [...dueTasks(date).map(taskRow), ...shown.map((e) => row(e, now, next))];
+    $('day-list').replaceChildren(...(rows.length ? rows : [noneRow()]));
+  }
+  function moveDay(n) { dayShown = addDays(dayShown, n); render(new Date(), true); }
+
   function moveMonth(n, now = new Date()) {
     cursor = new Date(cursor.getFullYear(), cursor.getMonth() + n, 1);
     // 今月なら今日、ほかの月なら1日を選ぶ
@@ -294,15 +428,18 @@ const Schedule = (() => {
   function render(now = new Date(), force = false) {
     if (!cursor) { cursor = new Date(now.getFullYear(), now.getMonth(), 1); selected = startOfDay(now); }
     // 分が変わるか、表示・月・選んだ日が変わったときだけ作り直す（P3-04）
-    const key = [mode, hm(now), dateStr(now), dateStr(cursor), dateStr(selected)].join('|');
+    if (!dayShown) dayShown = startOfDay(now);
+    const key = [mode, hm(now), dateStr(now), dateStr(cursor), dateStr(selected), dateStr(dayShown)].join('|');
     if (key === shownKey && !force) return;
     shownKey = key;
     $('schedule-list-view').hidden = mode !== 'list';
     $('schedule-month-view').hidden = mode !== 'month';
+    $('schedule-day-view').hidden = mode !== 'day';
+    $('schedule-mode-day').setAttribute('aria-pressed', String(mode === 'day'));
     $('schedule-mode-list').setAttribute('aria-pressed', String(mode === 'list'));
     $('schedule-mode-month').setAttribute('aria-pressed', String(mode === 'month'));
     say(sayKey(now));
-    if (mode === 'list') renderList(now); else renderMonth(now);
+    if (mode === 'list') renderList(now); else if (mode === 'day') renderDay(now); else renderMonth(now);
   }
   function setMode(next) {
     mode = next;
@@ -356,7 +493,7 @@ const Schedule = (() => {
       $('event-end-date').value = ref.allDay ? dateStr(addDays(startOfDay(new Date(Math.max(ref.start + 1, ref.end))), -1)) : dateStr(st);
       setAllDay(ref.allDay);
     } else {
-      const day = mode === 'month' && selected ? selected : now;
+      const day = mode === 'month' && selected ? selected : mode === 'day' && dayShown ? dayShown : now;
       const h = Math.min(22, now.getHours() + 1);
       $('event-title').value = '';
       $('event-date').value = dateStr(day);
@@ -439,6 +576,10 @@ const Schedule = (() => {
 
   $('schedule-mode-list').addEventListener('click', () => setMode('list'));
   $('schedule-mode-month').addEventListener('click', () => setMode('month'));
+  $('schedule-mode-day').addEventListener('click', () => setMode('day'));
+  $('day-prev').addEventListener('click', () => moveDay(-1));
+  $('day-next').addEventListener('click', () => moveDay(1));
+  $('day-today').addEventListener('click', () => { dayShown = startOfDay(new Date()); render(new Date(), true); });
   $('cal-prev').addEventListener('click', () => moveMonth(-1));
   $('cal-next').addEventListener('click', () => moveMonth(1));
   $('cal-today').addEventListener('click', () => { cursor = null; render(new Date(), true); });
