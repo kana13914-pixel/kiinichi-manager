@@ -212,6 +212,12 @@
           <span id="routine-public-label">祝日も休日にする</span>
           <button id="routine-public" type="button" class="cut-btn quiet chip" role="switch" aria-checked="true" aria-labelledby="routine-public-label">オン</button>
         </div>
+        <span class="form-label" id="routine-view-label">予定の一覧での出し方</span>
+        <div id="routine-view" class="due-chips" role="group" aria-labelledby="routine-view-label">
+          <button type="button" class="cut-btn quiet chip" data-rview="all" aria-pressed="false">すべて</button>
+          <button type="button" class="cut-btn quiet chip" data-rview="compact" aria-pressed="true">まとめる</button>
+          <button type="button" class="cut-btn quiet chip" data-rview="hidden" aria-pressed="false">出さない</button>
+        </div>
         <p id="routine-status" class="status" role="status"></p>
       </section>
 

@@ -143,8 +143,58 @@ const Schedule = (() => {
   }
 
   // ---------- リスト ----------
+  // 毎日の時刻の出し方（D-101）。表示だけの設定で、データ（毎日の時刻・その日だけの変更）は変えない
+  const ROUTINE_VIEWS = ['all', 'compact', 'hidden'];
+  function routineView() { const v = Prefs.get('routineView'); return ROUTINE_VIEWS.includes(v) ? v : 'compact'; }
+  const openDays = new Set(); // まとめた行を開いている日（開き直すとたたむ）
+  // まとめた1行：「毎日の時刻 ◯件」と、最初と最後、次の項目、その日だけの変更の有無。押すと開く・たたむ
+  function routineSummaryRow(date, routines, skipped, now, next) {
+    const key = dateStr(date);
+    const open = openDays.has(key);
+    const li = document.createElement('li');
+    li.className = 'schedule-row routine-summary';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'routine-summary-btn';
+    btn.setAttribute('aria-expanded', String(open));
+    const time = document.createElement('span');
+    time.className = 'schedule-time allday';
+    time.textContent = '毎日';
+    const title = document.createElement('span');
+    title.className = 'schedule-title';
+    const span = routines.length ? `${hm(routines[0].at)}〜${hm(routines[routines.length - 1].at)}` : '';
+    title.textContent = `毎日の時刻 ${routines.length}件${span ? `（${span}）` : ''}`;
+    if (routines.some((r) => r.overridden) || skipped.length) {
+      const tag = document.createElement('small');
+      tag.className = 'tag routine-tag';
+      tag.textContent = 'この日だけ';
+      title.append(tag);
+    }
+    const nx = routines.find((r) => sameEvent(r, next));
+    const parts = [time, title];
+    if (nx) {
+      const rest = document.createElement('span');
+      rest.className = 'schedule-rest';
+      rest.textContent = `次 ・ ${nx.title} ${hm(nx.at)}`;
+      parts.push(rest);
+    }
+    const mark = document.createElement('span');
+    mark.className = 'routine-summary-mark';
+    mark.setAttribute('aria-hidden', 'true');
+    mark.textContent = open ? '▴' : '▾';
+    parts.push(mark);
+    btn.append(...parts);
+    btn.addEventListener('click', () => {
+      if (openDays.has(key)) openDays.delete(key); else openDays.add(key);
+      render(new Date(), true);
+    });
+    li.append(btn);
+    return li;
+  }
+
   function renderList(now) {
     const next = nextEvent(now);
+    const view = routineView();
     const days = [];
     for (let i = 0; i < LIST_DAYS; i++) {
       const date = dayAt(now, i);
@@ -159,7 +209,18 @@ const Schedule = (() => {
       h.textContent = (i === 0 ? '今日 ' : i === 1 ? '明日 ' : '') + dayLabel(date);
       const ul = document.createElement('ul');
       ul.className = 'schedule-list';
-      ul.append(...tasks.map(taskRow), ...(events.length ? events.map((e) => row(e, now, next)) : tasks.length ? [] : [noneRow()]), ...skipped.map(skippedRow));
+      const routines = events.filter((e) => e.kind === 'routine');
+      const others = view === 'all' ? events : events.filter((e) => e.kind !== 'routine');
+      const rows = [...tasks.map(taskRow)];
+      if (view === 'compact') rows.push(...others.filter((e) => e.allDay).map((e) => row(e, now, next))); // 終日 → まとめた行 → 時刻のある予定
+      if (view === 'compact' && (routines.length || skipped.length)) {
+        rows.push(routineSummaryRow(date, routines, skipped, now, next));
+        if (openDays.has(dateStr(date))) rows.push(...routines.map((e) => row(e, now, next)).map((li) => { li.classList.add('routine-open'); return li; }), ...skipped.map(skippedRow));
+      }
+      rows.push(...(view === 'compact' ? others.filter((e) => !e.allDay) : others).map((e) => row(e, now, next)));
+      if (view === 'all') rows.push(...skipped.map(skippedRow));
+      if (!rows.length) rows.push(noneRow());
+      ul.append(...rows);
       sec.append(h, ul);
       days.push(sec);
     }

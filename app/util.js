@@ -116,7 +116,8 @@ migrateData();
 // ---------- 端末ごとの好み（D-047）。決まっていないものは既定値 ----------
 // callModes：毎日の時刻の項目ごとの声掛け 'on'（時刻ちょうど）・'late'（30分後、まだ記録がなければ）・'off'（D-098）。はじめは今までと同じ
 const CALL_DEFAULTS = { wake: 'off', breakfast: 'late', work_start: 'off', lunch: 'late', work_end: 'off', dinner: 'late', bath: 'off', sleep: 'on' };
-const PREF_DEFAULTS = { screenLines: true, voice: true, weekly: true, taskFolded: [], tone: 'client', callModes: CALL_DEFAULTS }; // taskFolded：タスクのたたんだ優先度（D-070）。tone：話し方（D-082）
+// routineView：予定の一覧での毎日の時刻の出し方 'all'（ほかの予定と同じ）・'compact'（1行にまとめ、押すと開く）・'hidden'（出さない）（D-101）
+const PREF_DEFAULTS = { screenLines: true, voice: true, weekly: true, taskFolded: [], tone: 'client', callModes: CALL_DEFAULTS, routineView: 'compact' }; // taskFolded：タスクのたたんだ優先度（D-070）。tone：話し方（D-082）
 const Prefs = {
   get(name) {
     const p = Store.read(DB.prefs, {});

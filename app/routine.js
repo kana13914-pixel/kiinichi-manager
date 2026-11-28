@@ -229,6 +229,19 @@ Routine.prune();
     $('routine-public').textContent = r.publicHolidays ? 'オン' : 'オフ';
   }
   $('routine-public').addEventListener('click', () => { update((x) => { x.publicHolidays = !x.publicHolidays; }); render(); });
+  // 予定の一覧での出し方（D-101）。表示の好みだけを変え、毎日の時刻のデータは変えない
+  function renderView() {
+    const v = Prefs.get('routineView');
+    for (const b of document.querySelectorAll('#routine-view [data-rview]')) b.setAttribute('aria-pressed', String(b.dataset.rview === v));
+  }
+  for (const b of document.querySelectorAll('#routine-view [data-rview]')) {
+    b.addEventListener('click', () => {
+      if (!Prefs.set('routineView', b.dataset.rview)) { $('routine-status').textContent = SAVE_FAILED; return; }
+      renderView();
+      if (typeof Schedule !== 'undefined') Schedule.refresh();
+    });
+  }
+  renderView();
   $('routine-mode-weekday').addEventListener('click', () => { mode = 'weekday'; render(); });
   $('routine-mode-holiday').addEventListener('click', () => { mode = 'holiday'; render(); });
   // 予定の画面の「毎日の時刻」のボタンで開く・閉じる（D-060 ⑭）

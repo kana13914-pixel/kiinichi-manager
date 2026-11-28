@@ -30,6 +30,9 @@ Object.defineProperty(Document.prototype, 'hidden', { configurable: true, get() 
 """
 # 設定済み（ready）の状態を作る
 READY = "localStorage.setItem('setup.done','1')"
+# 予定の一覧の毎日の時刻は、はじめは「まとめる」（D-101）。それより前に書いたテストは「すべて」で確かめる（まとめる・出さないは専用のテスト）
+ROUTINE_ALL = """(() => { const p = JSON.parse(localStorage.getItem('db.prefs') || '{}');
+  if (!('routineView' in p)) { p.routineView = 'all'; localStorage.setItem('db.prefs', JSON.stringify(p)); } })()"""
 # 読み込んでよいものの決まり（CSP。D-076 ③）に反したら、その画面の JS エラーとして数える（どのテストでも見張る）。
 # テストで見た目を足すときは、style タグではなく CSSOM（setProperty・insertRule）を使う（CSP で止められるため）
 CSP_GUARD = """
@@ -369,6 +372,7 @@ class PwaTest(unittest.TestCase):
             ctx.route(pattern, handler)
         ctx.add_init_script(READY)
         ctx.add_init_script(VISIBILITY)
+        ctx.add_init_script(ROUTINE_ALL)
         if init_script:
             ctx.add_init_script(init_script)
         page = ctx.new_page()
@@ -2100,6 +2104,42 @@ class PwaTest(unittest.TestCase):
         page.wait_for_function("document.getElementById('schedule-say-line').textContent === '予定は入っていない。好きに使えばいい。'", timeout=3_000)
         self.assertTrue(page.is_visible("#schedule-say"))
         self.assertEqual(len(page.query_selector_all("#schedule-days .schedule-row.none")), 8)
+
+    def test_routine_view_compact_hidden_all(self):
+        """予定の一覧での毎日の時刻の出し方（D-101）：はじめは「まとめる」（1行。押すと開く）。「出さない」「すべて」に切り替えられる。データは変えない"""
+        init = "localStorage.setItem('db.prefs', JSON.stringify({ voice: false }))"  # routineView なし＝はじめの状態
+        page = self.clock_page(10, 0, "#schedule", init_script=init)
+        page.wait_for_selector("#view-schedule", state="visible")
+        rows = lambda d: [r[:2] for r in self.schedule_rows(page, d)]
+        today = rows("2026-11-09")
+        self.assertEqual(today[0], ["毎日", "毎日の時刻 8件（07:00〜23:30）"])
+        self.assertNotIn(["07:00", "起床"], today)
+        self.assertIn("次 ・ 昼食 12:00", page.text_content("#schedule-days .schedule-day[data-date='2026-11-09'] .routine-summary"))
+        routine_before = page.evaluate("localStorage.getItem('db.routine')")
+        # 押すと開く・もう一度でたたむ
+        btn = "#schedule-days .schedule-day[data-date='2026-11-09'] .routine-summary-btn"
+        page.click(btn)
+        self.assertEqual(page.get_attribute(btn, "aria-expanded"), "true")
+        self.assertIn(["07:00", "起床"], rows("2026-11-09"))
+        page.click(btn)
+        self.assertNotIn(["07:00", "起床"], rows("2026-11-09"))
+        # 毎日の時刻の欄で切り替える
+        page.click("#routine-open")
+        self.assertEqual(page.get_attribute("#routine-view [data-rview=compact]", "aria-pressed"), "true")
+        page.click("#routine-view [data-rview=hidden]")
+        texts = page.eval_on_selector_all("#schedule-days .schedule-day[data-date='2026-11-09'] .schedule-row", "els => els.map((e) => e.textContent)")
+        self.assertFalse(any("毎日" in t or "起床" in t for t in texts), texts)
+        page.click("#routine-view [data-rview=all]")
+        self.assertIn(["07:00", "起床"], rows("2026-11-09"))
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.prefs')"))["routineView"], "all")
+        self.assertEqual(page.evaluate("localStorage.getItem('db.routine')"), routine_before)  # データはそのまま
+        # 出さない日でも、ほかの予定がなければ「予定なし」
+        page.click("#routine-view [data-rview=hidden]")
+        page.evaluate("""() => { const orig = SampleData.eventsOn;
+          SampleData.eventsOn = (d) => d.getDate() === 11 ? orig(d).filter((e) => e.kind === 'routine') : orig(d); Schedule.refresh(); }""")
+        self.assertEqual(page.text_content("#schedule-days .schedule-day[data-date='2026-11-11'] .schedule-row"), "予定なし")
+        sizes = page.eval_on_selector_all("#routine-view button", "els => els.map((b) => b.getBoundingClientRect().height)")
+        self.assertTrue(all(h >= 44 for h in sizes), sizes)
 
     def test_schedule_line_ignores_all_day_events(self):
         """終日の予定は「今日の分はまだ残っている」に数えない（D-093）"""
