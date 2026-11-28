@@ -107,7 +107,54 @@ const Summary = (() => {
       busy = merged0.reduce((s, e) => s + Math.max(0, Math.min(e.end, sleep) - Math.max(e.start, wake)), 0);
       free = sleep - wake - busy;
     }
-    return { busy, free, problems };
+    // 作業に使える時間（D-105）：仕事の時間（なければ起床〜就寝）から予定を引いたもの
+    const [cs, ce] = ws !== null && we !== null && we > ws ? [ws, we] : [wake, sleep];
+    let cap = 0;
+    if (cs !== null && ce !== null && ce > cs) {
+      cap = ce - cs - merged0.reduce((s, e) => s + Math.max(0, Math.min(e.end, ce) - Math.max(e.start, cs)), 0);
+    }
+    return { busy, free, cap, problems };
+  }
+
+  // ---------- タスクの見込み（D-105・D-106） ----------
+  // 1日に入れてよいのは、作業に使える時間の8割まで（残りは段取り・休憩・遅れの分）。見込み時間のないタスクは数えない
+  const FILL = 0.8;
+  const RANK = { low: 0, null: 1, mid: 2, high: 3 }; // 動かす案を出す順（優先度の低いものから）
+  const est = (list) => list.reduce((s, t) => s + (t.estimate || 0) * MIN, 0);
+  // 来週のタスクの気になる点と案。results は日ごとの analyze の結果（day・cap を使う）。today より前の日には動かさない
+  function taskProblems(results, today) {
+    const out = [];
+    const byDay = results.map((r) => ({ ...r, key: dateStr(r.day), tasks: Tasks.onDay(dateStr(r.day)) }));
+    const room = (d) => d.cap * FILL - est(d.tasks);
+    for (const d of byDay) {
+      const need = est(d.tasks);
+      if (!need || need <= d.cap * FILL) continue;
+      const counted = d.tasks.filter((t) => t.estimate).length;
+      const p = { day: d.day, kind: 'load', text: `作業に使える時間${dur(d.cap)}に、タスクの見込みが${dur(need)}（${counted}件）入っています`, impact: 'やり切れずに残るか、夜まで延びるかもしれません', fix: null };
+      // 案：優先度の低いもの（同じなら期限の遅いもの）から1件、期限までで空きのいちばん大きい日へ
+      const movable = d.tasks.filter((t) => t.estimate).sort((a, b) => RANK[a.priority] - RANK[b.priority] || String(b.due || '9').localeCompare(String(a.due || '9')));
+      for (const t of movable) {
+        const targets = byDay.filter((x) => x !== d && x.day >= today && (!t.due || x.key <= t.due) && room(x) >= t.estimate * MIN);
+        if (!targets.length) continue;
+        // 平日を先に（休日は起床〜就寝を全部数えるので空きが大きく見えるため）。同じなら空きの大きい日、早い日
+        const weekday = (x) => (Routine.typeOf(x.day) === 'weekday' ? 0 : 1);
+        const to = targets.sort((a, b) => weekday(a) - weekday(b) || room(b) - room(a) || a.day - b.day)[0];
+        p.fix = { type: 'task', id: t.id, label: t.title, day: to.key, from: t.plan, value: to.key };
+        break;
+      }
+      out.push(p);
+    }
+    // 期限までの見込みの合計が、それまでに使える時間を超える（最初の日だけ）
+    let cap = 0, need = 0;
+    for (const d of byDay) {
+      cap += d.cap * FILL;
+      need += est(Tasks.load().filter((t) => !t.done && t.due === d.key));
+      if (need > cap) {
+        out.push({ day: d.day, kind: 'short', text: `${labelShort(d.day)}までが期限のタスクの見込みが${dur(need)}で、それまでに使える時間（${dur(cap)}）を超えています`, impact: '期限に間に合わないかもしれません。期限を延ばすか、優先度の低いものを後に回すことを考えてください', fix: null });
+        break;
+      }
+    }
+    return out;
   }
 
   // ---------- 今週の振り返り（数字だけ） ----------
@@ -172,7 +219,8 @@ const Summary = (() => {
     const typeLabel = Routine.typeOf(day) === 'holiday' ? '休日' : '平日';
     // 日付 ｜ 1行目「予定◯件 ・ 空き◯」、2行目「気になる点 ◯」（あるときだけ）
     const body = el('span', 'summary-day-body');
-    body.append(el('span', 'summary-day-info', `予定${events.length}件 ・ 空き${dur(result.free)}`));
+    const taskMin = est(Tasks.onDay(key));
+    body.append(el('span', 'summary-day-info', [`予定${events.length}件`, taskMin && `タスク${dur(taskMin)}`, `空き${dur(result.free)}`].filter(Boolean).join(' ・ ')));
     if (result.problems.length) body.append(el('span', 'summary-day-flag', `気になる点 ${result.problems.length}`));
     btn.append(el('span', 'summary-day-date', labelShort(day)), body);
     btn.append(el('span', 'summary-day-mark', open ? '▴' : '▾'));
@@ -186,7 +234,9 @@ const Summary = (() => {
       const last = [...ROUTINE_ITEMS].reverse().find(([id]) => times[id]);
       if (first) ul.append(el('li', 'summary-item routine', `毎日の時刻（${typeLabel}）：${first[1]} ${times[first[0]]} 〜 ${last[1]} ${times[last[0]]}`));
       for (const e of events) ul.append(el('li', 'summary-item', e.allDay ? `終日　${e.title}` : `${span(e.ref)}　${e.title}`));
-      for (const t of Tasks.load().filter((x) => !x.done && x.due === key)) ul.append(el('li', 'summary-item task', `期限　${t.title}`));
+      for (const t of Tasks.load().filter((x) => !x.done && (x.due === key || x.plan === key))) {
+        ul.append(el('li', 'summary-item task', `${t.due === key ? '期限' : 'やる'}　${t.title}${t.estimate ? `（${Tasks.estimateText(t.estimate)}）` : ''}`));
+      }
       if (!ul.children.length) ul.append(el('li', 'summary-item', '予定なし'));
       li.append(ul);
     }
@@ -203,7 +253,8 @@ const Summary = (() => {
     if (!ready) return;
     const results = days.map((d) => ({ day: d, ...analyze(d, timedEvents(d), Routine.timesFor(d)) }));
     $('summary-next').replaceChildren(...results.map((r) => dayRow(r.day, r, now)));
-    const all = results.flatMap((r) => r.problems.map((p) => ({ ...p, day: r.day })));
+    const all = [...results.flatMap((r) => r.problems.map((p) => ({ ...p, day: r.day }))), ...taskProblems(results, logicalDay(now))]
+      .sort((a, b) => a.day - b.day);
     $('summary-problems-count').textContent = String(all.length);
     // 選んでいる案のうち、今も出ているものだけ残す
     const fixes = all.filter((p) => p.fix).map((p) => fixKey(p.fix));
@@ -213,7 +264,7 @@ const Summary = (() => {
       li.append(el('p', 'summary-problem-day', labelShort(p.day)), el('p', 'summary-problem-text', p.text), el('p', 'summary-problem-impact', p.impact));
       if (p.fix) {
         const k = fixKey(p.fix);
-        const b = el('button', 'cut-btn quiet chip summary-fix', `案：この日だけ${p.fix.label}を${p.fix.value}にする`);
+        const b = el('button', 'cut-btn quiet chip summary-fix', fixText(p.fix));
         b.type = 'button';
         b.dataset.fix = k;
         b.setAttribute('aria-pressed', String(chosen.has(k)));
@@ -231,21 +282,34 @@ const Summary = (() => {
   // ---------- 調整案の反映（D-103） ----------
   const chosen = new Set(); // 選んでいる案（fixKey）
   let lastFixes = [];
-  const fixKey = (f) => `${f.day}|${f.id}|${f.value}`;
+  const fixKey = (f) => `${f.day}|${f.type === 'task' ? 'task:' : ''}${f.id}|${f.value}`;
+  const fixText = (f) => (f.type === 'task' ? `案：「${f.label}」を${labelShort(parseDay(f.value))}にやる` : `案：この日だけ${f.label}を${f.value}にする`);
+  const fixLine = (f) => (f.type === 'task' ? `・「${f.label}」のやる日 → ${labelShort(parseDay(f.value))}` : `・${labelShort(parseDay(f.day))} ${f.label} ${f.from} → ${f.value}`);
   const toast = makeToast($('summary-toast'));
   $('summary-apply').addEventListener('click', async () => {
     const picked = lastFixes.filter((f) => chosen.has(fixKey(f)));
     if (!picked.length) return;
-    const list = picked.map((f) => `・${labelShort(parseDay(f.day))} ${f.label} ${f.from} → ${f.value}`).join('\n');
-    if (!(await confirmDialog(`毎日の時刻を、その日だけ次のように変えます。\n${list}`, '反映する', false))) return;
-    const before = picked.map((f) => ({ f, prev: Routine.overrideOf(parseDay(f.day), f.id) }));
-    const ok = picked.every((f) => Routine.setOverride(parseDay(f.day), f.id, f.value));
+    if (!(await confirmDialog(`次のように変えます。\n${picked.map(fixLine).join('\n')}`, '反映する', false))) return;
+    // 毎日の時刻はその日だけの変更、タスクはやる日（D-103・D-106）。取り消せるように前の値を覚えておく
+    const undo = [];
+    let ok = true;
+    for (const f of picked) {
+      if (f.type === 'task') {
+        const prev = Tasks.setPlan(f.id, f.value);
+        if (prev === undefined) { ok = false; continue; }
+        undo.push(() => Tasks.setPlan(f.id, prev));
+      } else {
+        const prev = Routine.overrideOf(parseDay(f.day), f.id);
+        if (!Routine.setOverride(parseDay(f.day), f.id, f.value)) { ok = false; continue; }
+        undo.push(() => Routine.setOverride(parseDay(f.day), f.id, prev ? prev.value : undefined));
+      }
+    }
     chosen.clear();
     window.dispatchEvent(new Event('routinechange')); // 予定・ホーム・声掛けを決め直す
     render();
     if (!ok) { toast.show(SAVE_FAILED); return; }
     toast.show(`${picked.length}件を反映しました`, () => {
-      for (const { f, prev } of before) Routine.setOverride(parseDay(f.day), f.id, prev ? prev.value : undefined);
+      for (const fn of undo.reverse()) fn();
       window.dispatchEvent(new Event('routinechange'));
       render();
     });

@@ -2226,6 +2226,41 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.routineOverrides')") or "{}"), {})
         self.assertIn("昼食の時刻（12:00）", page.text_content("#summary-problems"))
 
+    def test_summary_task_load_and_move_proposal(self):
+        """タスクの見込み（D-105・D-106）：1日の作業に使える時間の8割を超えたら気になる点。優先度の低いものを、期限までで空きの大きい日へ動かす案。
+        反映するとやる日が変わり、取り消せる。期限までの合計が足りないときも出す"""
+        tasks = [
+            {"id": "a", "title": "企画書", "due": "2026-11-16", "estimate": 240, "priority": "high", "done": False, "createdAt": 1},
+            {"id": "b", "title": "経費精算", "due": None, "plan": "2026-11-16", "estimate": 240, "priority": "low", "done": False, "createdAt": 2},
+            {"id": "c", "title": "見積もり", "due": "2026-11-16", "estimate": 120, "priority": None, "done": False, "createdAt": 3},
+            {"id": "d", "title": "見込みなし", "due": "2026-11-16", "done": False, "createdAt": 4},
+        ]
+        init = "localStorage.setItem('db.tasks', %s)" % json.dumps(json.dumps(tasks))
+        page = self.clock_page(10, 0, "#summary", init_script=init)
+        page.wait_for_selector("#view-summary", state="visible")
+        page.evaluate(self.SUMMARY_EVENTS, [[16, 10, 0, 11, 0, "会議"]])  # 月曜：仕事 9:00〜18:30 の 9時間30分 − 1時間 ＝ 8時間30分
+        page.evaluate("Summary.render()")
+        self.assertEqual(page.text_content("#summary-next .summary-day[data-date='2026-11-16'] .summary-day-info"), "予定1件 ・ タスク10時間 ・ 空き15時間30分")
+        probs = page.eval_on_selector_all("#summary-problems .summary-problem", "els => els.map((e) => [e.className.split(' ')[1], e.querySelector('.summary-problem-text').textContent])")
+        load = [t for k, t in probs if k == "load"]
+        self.assertEqual(load, ["作業に使える時間8時間30分に、タスクの見込みが10時間（3件）入っています"])
+        short = [t for k, t in probs if k == "short"]
+        self.assertEqual(short, [])  # 11/16 が期限の見込みは 6時間で、使える時間の8割（6時間48分）に収まる
+        fix = page.eval_on_selector("#summary-problems .summary-problem.load .summary-fix", "e => [e.textContent, e.dataset.fix]")
+        self.assertEqual(fix, ["案：「経費精算」を11/17(火)にやる", "2026-11-17|task:b|2026-11-17"])  # 優先度の低いものを、空きのいちばん大きい日（期限なし）へ
+        page.click("#summary-problems .summary-problem.load .summary-fix")
+        page.click("#summary-apply")
+        self.assertIn("「経費精算」のやる日 → 11/17(火)", page.text_content("#confirm-text"))
+        page.click("#confirm-ok")
+        page.wait_for_function("JSON.parse(localStorage.getItem('db.tasks')).find((t) => t.id === 'b').plan === '2026-11-17'", timeout=3_000)
+        self.assertEqual(page.eval_on_selector_all("#summary-problems .summary-problem.load", "els => els.length"), 0)
+        page.click("#summary-toast .undo")
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.tasks')"))[1]["plan"], "2026-11-16")
+        # 期限までに足りない：月曜が期限の見込みを増やす
+        page.evaluate("""() => { const l = JSON.parse(localStorage.getItem('db.tasks')); l[2].estimate = 240; localStorage.setItem('db.tasks', JSON.stringify(l)); Summary.render(); }""")
+        short = page.eval_on_selector_all("#summary-problems .summary-problem.short .summary-problem-text", "els => els.map((e) => e.textContent)")
+        self.assertEqual(short, ["11/16(月)までが期限のタスクの見込みが8時間で、それまでに使える時間（6時間48分）を超えています"])
+
     def test_summary_review_and_entry(self):
         """今週の振り返りの数字（D-102）と、ホームの入口（日曜の16時から月曜は目立たせる）"""
         reports = {"2026-11-09": {"mood": "good", "done": "a", "savedAt": 1}, "2026-11-10": {"mood": "tired", "savedAt": 1}}
