@@ -76,7 +76,7 @@ const DB = {
 };
 const SCHEMA = 2;
 // スプレッドシートに控えるデータ（D-050）
-const SYNCED = [DB.tasks, DB.reports, DB.records, DB.routine, DB.routineOverrides, DB.timer];
+const SYNCED = [DB.tasks, DB.reports, DB.records, DB.routine, DB.routineOverrides, DB.timer, DB.blocks]; // blocks：1日の輪に置いた時間（D-112）
 const MIGRATIONS = {
   // 1（フェーズ1の仮の保存先）→ 2：キーを db.* に移す。記録は当日分だけだったものを、日付ごとの履歴にする
   2() {

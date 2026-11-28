@@ -2271,6 +2271,13 @@ class PwaTest(unittest.TestCase):
         short = page.eval_on_selector_all("#summary-problems .summary-problem.short .summary-problem-text", "els => els.map((e) => e.textContent)")
         self.assertEqual(short, ["11/16(月)までが期限のタスクの見込みが8時間で、それまでに使える時間（6時間48分）を超えています"])
 
+    def test_blocks_change_triggers_sync(self):
+        """輪に置いた時間を変えたら、スプレッドシートへの控えを送り直す合図（datachange）を出す（D-112）"""
+        page = self.clock_page(10, 0)
+        page.evaluate("window.__keys = []; addEventListener('datachange', (e) => window.__keys.push(e.detail))")
+        page.evaluate("Blocks.put({ date: '2026-11-09', start: '14:00', end: '15:00', kind: 'free', title: '自由時間' })")
+        self.assertEqual(page.evaluate("window.__keys"), ["db.blocks"])
+
     def test_summary_counts_held_time_as_busy(self):
         """輪に置いた自由時間・そのほか（D-112）は、作業に使える時間から引く（気になる点には数えない）"""
         page = self.clock_page(10, 0, "#summary")
