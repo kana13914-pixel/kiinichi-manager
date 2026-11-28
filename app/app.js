@@ -227,6 +227,7 @@ function endNotificationState() {
 // 触る段階の打ち切りで黙っている間は、ほかのどの一言よりも先に打ち切りの文を出す（D-089。touch.js）
 const showMuted = (now = new Date()) => typeof Touch !== 'undefined' && Touch.showMuted(now.getTime());
 function applyOpenParams(params, now = new Date()) {
+  if (openToRecord(params, now)) return;
   if (showMuted(now)) { markPrimary(now); return; }
   const trigger = params.get('trigger');
   const index = params.has('line') ? Number(params.get('line')) : undefined; // Number(null) は 0 になるため has を確かめる
@@ -242,11 +243,25 @@ function applyOpenParams(params, now = new Date()) {
   markPrimary(now);
 }
 
+// 通知を押して開いたら、その項目をその場で記録する（押した時刻。D-099）。記録の反応のセリフと「取り消す」を出す。
+// 通知の日（朝4時区切り）と今日が違えば記録しない（前の日の通知を押したとき）。記録済みなら新しく記録せず、取り消しを出し直す
+function openToRecord(params, now = new Date()) {
+  const id = params.get('record');
+  if (params.get('source') !== 'webpush' || !id || !kindOf(id) || params.get('day') !== todayKey(now)) return false;
+  document.body.classList.remove('from-notification');
+  if (location.hash && location.hash !== '#home') location.hash = '#home';
+  pressRecord(id);
+  markPrimary(now);
+  return true;
+}
+
 // 通知から開いた印（trigger・line・source=webpush）は、使い終えたら URL から外す。
 // 残したままだと、再読み込みのたびに同じ通知のセリフと金の上辺が出直す（D-033）
 function clearOpenParams() {
   const params = new URLSearchParams(location.search);
-  if (!params.has('trigger') && !params.has('line') && !params.has('title') && params.get('source') !== 'webpush') return;
+  if (!params.has('trigger') && !params.has('line') && !params.has('title') && !params.has('record') && params.get('source') !== 'webpush') return;
+  params.delete('record'); // 残すと、開き直すたびに記録し直してしまう（D-099）
+  params.delete('day');
   params.delete('trigger');
   params.delete('line');
   params.delete('h');

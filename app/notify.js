@@ -32,12 +32,15 @@ const Voice = (() => {
     const index = h % lines.length;
     return { text: lines[index], index, trigger };
   }
-  function item(key, at, trigger, vars = null) {
+  // record：押すと記録する項目（D-099）。題名に「押すと◯◯を記録」と書き、URL に項目と日付を付ける（別の日に押したら記録しない）
+  function item(key, at, trigger, vars = null, record = null) {
     const line = lineFor(trigger, key);
     if (!line) return null;
-    const extra = vars && vars.title ? `&title=${encodeURIComponent(vars.title)}` : '';
+    let extra = vars && vars.title ? `&title=${encodeURIComponent(vars.title)}` : '';
+    if (record) extra += `&record=${record.id}&day=${todayKey(new Date(at))}`;
     const url = new URL(`index.html?source=webpush&trigger=${trigger}&line=${line.index}&h=${lineHash(line.text)}${extra}`, location.href).href;
-    return [key, { at, title: 'キィニチ', body: kinichOnly(fillLine(line.text, vars || {})), url }]; // 通知にはアハウを入れない（D-085）
+    const title = record ? `キィニチ｜押すと${record.label}を記録` : 'キィニチ';
+    return [key, { at, title, body: kinichOnly(fillLine(line.text, vars || {})), url }]; // 通知にはアハウを入れない（D-085）
   }
   // 予定の印（キーに使える文字だけ。id がなければ名前と時刻から）
   function mark(ev) {
@@ -55,21 +58,21 @@ const Voice = (() => {
     const planned = plannedMinutes(now);
     const st = (id) => Records.status(id, day).state; // none / done / skipped
     const add = (entry) => { if (entry && entry[1].at > now.getTime() + MIN_LEAD_MS) out[entry[0]] = entry[1]; };
-    for (const [id] of ROUTINE_ITEMS) {
+    for (const [id, label] of ROUTINE_ITEMS) {
       const mode = Prefs.callMode(id);
       if (mode === 'off' || planned[id] === null || st(id) !== 'none') continue;
       const meal = MEALS.some(([m]) => m === id);
       const key = meal ? `meal:${date}:${id}` : id === 'sleep' ? `sleep:${date}` : `call:${date}:${id}`;
       const trigger = meal && mode === 'late' ? 'midday_check.meal_overdue'
         : id === 'sleep' && mode === 'on' ? 'before_sleep.default' : `call_${mode === 'on' ? 'on_time' : 'late'}.${id}`;
-      add(item(key, atOf(now, planned[id] + (mode === 'late' ? LATE_AFTER : 0)), trigger));
+      add(item(key, atOf(now, planned[id] + (mode === 'late' ? LATE_AFTER : 0)), trigger, null, { id, label }));
     }
     if (planned.work_start !== null && planned.work_end !== null && st('work_start') === 'done' && st('work_end') === 'none') {
       const v = day.break;
       const lastBreak = Array.isArray(v) && v.length ? v[v.length - 1].at : 0;
       const base = Math.max(day.work_start.at, lastBreak);
       const at = base + BREAK_AFTER * 60000;
-      if (at < atOf(now, planned.work_end)) add(item(`break:${date}`, at, 'midday_check.break_overdue'));
+      if (at < atOf(now, planned.work_end)) add(item(`break:${date}`, at, 'midday_check.break_overdue', null, { id: 'break', label: '休憩' }));
     }
     if (planned.sleep !== null && st('sleep') === 'none') {
       const left = ['dinner', 'bath', 'brush'].filter((id) => (id === 'brush' || planned[id] !== null) && st(id) === 'none').length;

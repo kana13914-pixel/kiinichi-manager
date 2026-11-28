@@ -3263,7 +3263,9 @@ class PwaTest(unittest.TestCase):
         self.assertEqual(sched["night:2026-11-09"]["at"], self.at_ms(9, 22, 30))
         self.assertEqual(sched["night:2026-11-09"]["body"], "結構残ってるな。今日はここまでにするかどうかは、自分で決めろ。")  # 夕食・入浴・歯磨きの3つ
         self.assertEqual(sched["sleep:2026-11-09"]["at"], self.at_ms(9, 23, 30))
-        self.assertEqual(sched["sleep:2026-11-09"]["title"], "キィニチ")
+        self.assertEqual(sched["sleep:2026-11-09"]["title"], "キィニチ｜押すと就寝を記録")  # D-099
+        self.assertIn("&record=sleep&day=2026-11-09", sched["sleep:2026-11-09"]["url"])
+        self.assertEqual(sched["night:2026-11-09"]["title"], "キィニチ")  # 夜の残りの声掛けは開くだけ
         page.reload()  # 変わっていなければ送り直さない
         page.wait_for_function("dialogue !== null")
         page.wait_for_timeout(1200)
@@ -3312,6 +3314,39 @@ class PwaTest(unittest.TestCase):
         self.assertLessEqual(page.evaluate("document.documentElement.scrollWidth"), 375)
         rows = page.eval_on_selector_all("#call-list li", "els => els.map((li) => li.scrollWidth <= li.clientWidth)")
         self.assertTrue(all(rows))
+
+    def test_tap_notification_records_now(self):
+        """通知を押して開くと、その項目を押した時刻で記録する（D-099）。取り消せる。開き直しても記録し直さない。別の日の通知では記録しない"""
+        q = "index.html?mode=standalone&source=webpush&trigger=midday_check.meal_overdue&line=0&record=lunch&day=%s"
+        page = self.clock_page(12, 40)
+        page.goto(self.base + q % "2026-11-09")
+        page.wait_for_function("dialogue !== null")
+        page.wait_for_function("JSON.parse(localStorage.getItem('db.records') || '{}')['2026-11-09']?.lunch", timeout=3_000)
+        rec = json.loads(page.evaluate("localStorage.getItem('db.records')"))["2026-11-09"]["lunch"]
+        self.assertEqual(rec["time"], "12:40")
+        self.assertIn(self.bubble(page), self.lines_of("record_done", "lunch"))  # 記録の反応のセリフ
+        self.assertIn("「昼食」を記録しました", page.text_content("#toast"))
+        self.assertNotIn("record=", page.url)
+        page.reload()
+        page.wait_for_function("dialogue !== null")
+        page.wait_for_timeout(300)
+        self.assertEqual(json.loads(page.evaluate("localStorage.getItem('db.records')"))["2026-11-09"]["lunch"]["time"], "12:40")
+        # 取り消す
+        page.goto(self.base + q % "2026-11-09")
+        page.wait_for_function("dialogue !== null")
+        page.wait_for_selector("#toast .undo", state="visible", timeout=3_000)  # 記録済み：取り消しを出し直す
+        page.click("#toast .undo")
+        self.assertNotIn("lunch", json.loads(page.evaluate("localStorage.getItem('db.records')") or "{}").get("2026-11-09", {}))
+        # 前の日の通知を押した：記録しない（セリフは出す）
+        page.goto(self.base + q % "2026-11-08")
+        page.wait_for_function("dialogue !== null")
+        page.wait_for_timeout(300)
+        self.assertNotIn("lunch", json.loads(page.evaluate("localStorage.getItem('db.records')") or "{}").get("2026-11-09", {}))
+        self.assertIn(self.bubble(page), self.lines_of("midday_check", "meal_overdue"))
+        # 休憩の通知は押すたびに記録（何度でも記録できる項目）
+        page.goto(self.base + "index.html?mode=standalone&source=webpush&trigger=midday_check.break_overdue&line=0&record=break&day=2026-11-09")
+        page.wait_for_function("dialogue !== null")
+        page.wait_for_function("JSON.parse(localStorage.getItem('db.records') || '{}')['2026-11-09']?.break", timeout=3_000)
 
     def test_voice_updates_when_recording(self):
         page, calls = self.voice_page(10, 0)
